@@ -54,8 +54,8 @@ export default async function ListsPage() {
             <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Shared with me</h2>
             <ul className="space-y-2">
               {sharedLists.map(list => (
-                <li key={list.id} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
-                  <Link href={`/lists/${list.id}`} className="font-medium text-gray-900 hover:text-blue-600">
+                <li key={list.id} className="bg-white rounded-xl border border-gray-200">
+                  <Link href={`/lists/${list.id}`} className="block px-4 py-3 font-medium text-gray-900 hover:text-blue-600">
                     {list.name}
                   </Link>
                 </li>
