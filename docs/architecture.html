@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shoplist — Architecture</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      line-height: 1.6;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #f8fafc;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      color: #64748b;
+      font-size: 0.95rem;
+      margin-bottom: 2.5rem;
+    }
+
+    h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 1.25rem;
+    }
+
+    section {
+      margin-bottom: 3rem;
+    }
+
+    /* ── Architecture diagram ── */
+    .arch {
+      display: grid;
+      grid-template-rows: auto auto auto;
+      gap: 0;
+      max-width: 860px;
+    }
+
+    .layer {
+      border: 1.5px solid #334155;
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem 1.5rem;
+      position: relative;
+      background: #1e293b;
+    }
+
+    .layer + .layer {
+      margin-top: -1px;
+      border-top-left-radius: 0;
+      border-top-right-radius: 0;
+    }
+
+    .layer:first-child {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+
+    .layer:not(:first-child):not(:last-child) {
+      border-radius: 0;
+    }
+
+    .layer-label {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.15rem 0.6rem;
+      border-radius: 999px;
+      margin-bottom: 1rem;
+    }
+
+    .label-browser  { background: #1e3a5f; color: #60a5fa; border: 1px solid #2563eb44; }
+    .label-server   { background: #1c3a2a; color: #4ade80; border: 1px solid #16a34a44; }
+    .label-supabase { background: #2d1b44; color: #c084fc; border: 1px solid #9333ea44; }
+
+    .boxes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .box {
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 0.6rem 0.9rem;
+      font-size: 0.82rem;
+      background: #0f172a;
+      min-width: 140px;
+    }
+
+    .box-title {
+      font-weight: 600;
+      font-size: 0.78rem;
+      color: #f1f5f9;
+      margin-bottom: 0.3rem;
+    }
+
+    .box-items {
+      list-style: none;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      line-height: 1.7;
+    }
+
+    .box-items li::before { content: "· "; color: #475569; }
+
+    .arrow-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 2rem;
+      color: #475569;
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      gap: 0.5rem;
+    }
+
+    .arrow-row svg { color: #334155; }
+
+    /* ── Data model ── */
+    .erd {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      align-items: flex-start;
+      max-width: 860px;
+    }
+
+    .table-card {
+      border: 1px solid #334155;
+      border-radius: 10px;
+      background: #1e293b;
+      overflow: hidden;
+      min-width: 180px;
+    }
+
+    .table-header {
+      padding: 0.5rem 0.9rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid #334155;
+    }
+
+    .th-auth     { background: #1e3a5f; color: #60a5fa; }
+    .th-lists    { background: #1c3a2a; color: #4ade80; }
+    .th-members  { background: #3a2a1c; color: #fb923c; }
+    .th-items    { background: #2d1b44; color: #c084fc; }
+    .th-history  { background: #1e3a3a; color: #2dd4bf; }
+
+    .table-fields {
+      padding: 0.5rem 0.9rem 0.75rem;
+      list-style: none;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      line-height: 2;
+    }
+
+    .table-fields li { display: flex; justify-content: space-between; gap: 1rem; }
+    .field-name { color: #e2e8f0; }
+    .field-type { color: #475569; font-family: monospace; }
+    .pk  { color: #fbbf24; }
+    .fk  { color: #818cf8; }
+
+    .erd-connector {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #475569;
+      font-size: 1.2rem;
+      padding-top: 2.2rem;
+    }
+
+    /* ── Flow diagram ── */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      max-width: 760px;
+    }
+
+    .flow-step {
+      display: flex;
+      gap: 1rem;
+      padding: 0.9rem 0;
+      position: relative;
+    }
+
+    .flow-step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 1.05rem;
+      top: 2.8rem;
+      bottom: 0;
+      width: 2px;
+      background: #1e293b;
+    }
+
+    .step-num {
+      width: 2.1rem;
+      height: 2.1rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.78rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      z-index: 1;
+    }
+
+    .c-blue   { background: #1e3a5f; color: #60a5fa; border: 1px solid #2563eb55; }
+    .c-green  { background: #1c3a2a; color: #4ade80; border: 1px solid #16a34a55; }
+    .c-purple { background: #2d1b44; color: #c084fc; border: 1px solid #9333ea55; }
+    .c-orange { background: #3a2a1c; color: #fb923c; border: 1px solid #ea580c55; }
+    .c-teal   { background: #1e3a3a; color: #2dd4bf; border: 1px solid #0d948455; }
+
+    .step-body { flex: 1; padding-top: 0.2rem; }
+    .step-title { font-weight: 600; font-size: 0.9rem; color: #f1f5f9; margin-bottom: 0.25rem; }
+    .step-desc  { font-size: 0.82rem; color: #94a3b8; }
+    .step-desc code {
+      font-family: "SF Mono", "Fira Code", monospace;
+      background: #0f172a;
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      color: #a5b4fc;
+      border: 1px solid #1e293b;
+    }
+
+    /* ── File table ── */
+    .file-group {
+      margin-bottom: 2rem;
+    }
+
+    .file-group-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #475569;
+      margin-bottom: 0.6rem;
+      padding-left: 0.25rem;
+    }
+
+    table {
+      width: 100%;
+      max-width: 860px;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      color: #64748b;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      border-bottom: 1px solid #1e293b;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid #1e293b;
+      transition: background 0.15s;
+    }
+
+    tbody tr:hover { background: #1e293b55; }
+
+    td { padding: 0.55rem 0.75rem; vertical-align: top; }
+
+    .td-file {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 0.76rem;
+      color: #a5b4fc;
+      white-space: nowrap;
+    }
+
+    .td-file .dir { color: #475569; }
+
+    .badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      margin-right: 0.3rem;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
+    .b-server  { background: #1c3a2a; color: #4ade80; border: 1px solid #16a34a44; }
+    .b-client  { background: #1e3a5f; color: #60a5fa; border: 1px solid #2563eb44; }
+    .b-action  { background: #2d1b44; color: #c084fc; border: 1px solid #9333ea44; }
+    .b-config  { background: #3a2a1c; color: #fb923c; border: 1px solid #ea580c44; }
+    .b-db      { background: #1e3a3a; color: #2dd4bf; border: 1px solid #0d948444; }
+
+    .td-desc { color: #94a3b8; line-height: 1.5; }
+    .highlight { color: #e2e8f0; }
+  </style>
+</head>
+<body>
+
+  <h1>Shoplist — Architecture</h1>
+  <p class="subtitle">Next.js · Supabase · Tailwind · Vercel</p>
+
+  <!-- ═══════════════════════════════════════════════════════ ARCHITECTURE -->
+  <section>
+    <h2>Architecture</h2>
+
+    <div class="arch">
+
+      <div class="layer">
+        <span class="layer-label label-browser">Browser</span>
+        <div class="boxes">
+          <div class="box">
+            <div class="box-title">Auth UI</div>
+            <ul class="box-items">
+              <li>AuthForm</li>
+            </ul>
+          </div>
+          <div class="box">
+            <div class="box-title">Lists UI</div>
+            <ul class="box-items">
+              <li>CreateListForm</li>
+              <li>DeleteListButton</li>
+            </ul>
+          </div>
+          <div class="box">
+            <div class="box-title">List Detail UI</div>
+            <ul class="box-items">
+              <li>ItemList (realtime)</li>
+              <li>InviteForm</li>
+              <li>LeaveListButton</li>
+            </ul>
+          </div>
+          <div class="box">
+            <div class="box-title">Supabase Browser Client</div>
+            <ul class="box-items">
+              <li>lib/supabase/client.ts</li>
+              <li>Realtime WebSocket</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow-row">
+        <svg width="12" height="14" viewBox="0 0 12 14" fill="none"><path d="M6 0v11M1 8l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        HTTP requests · Server Actions · Realtime WebSocket
+      </div>
+
+      <div class="layer">
+        <span class="layer-label label-server">Vercel / Next.js</span>
+        <div class="boxes">
+          <div class="box">
+            <div class="box-title">Middleware</div>
+            <ul class="box-items">
+              <li>proxy.ts</li>
+              <li>updateSession()</li>
+              <li>Auth gate + redirect</li>
+            </ul>
+          </div>
+          <div class="box">
+            <div class="box-title">Server Components</div>
+            <ul class="box-items">
+              <li>layout.tsx</li>
+              <li>page.tsx (root redirect)</li>
+              <li>lists/page.tsx</li>
+              <li>lists/[id]/page.tsx</li>
+            </ul>
+          </div>
+          <div class="box">
+            <div class="box-title">Server Actions</div>
+            <ul class="box-items">
+              <li>auth/actions.ts</li>
+              <li>lists/actions.ts</li>
+              <li>lists/[id]/actions.ts</li>
+            </ul>
+          </div>
+          <div class="box">
+            <div class="box-title">Supabase Server Client</div>
+            <ul class="box-items">
+              <li>lib/supabase/server.ts</li>
+              <li>Cookie-based JWT</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow-row">
+        <svg width="12" height="14" viewBox="0 0 12 14" fill="none"><path d="M6 0v11M1 8l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Supabase SDK over HTTPS · Realtime over WSS
+      </div>
+
+      <div class="layer">
+        <span class="layer-label label-supabase">Supabase</span>
+        <div class="boxes">
+          <div class="box">
+            <div class="box-title">Auth</div>
+            <ul class="box-items">
+              <li>auth.users</li>
+              <li>Email + password</li>
+              <li>JWT sessions</li>
+            </ul>
+          </div>
+          <div class="box">
+            <div class="box-title">Postgres + RLS</div>
+            <ul class="box-items">
+              <li>lists</li>
+              <li>list_members</li>
+              <li>items</li>
+              <li>user_item_history</li>
+            </ul>
+          </div>
+          <div class="box">
+            <div class="box-title">Functions &amp; Triggers</div>
+            <ul class="box-items">
+              <li>has_list_access()</li>
+              <li>find_user_by_email()</li>
+              <li>bump_item_history trigger</li>
+            </ul>
+          </div>
+          <div class="box">
+            <div class="box-title">Realtime</div>
+            <ul class="box-items">
+              <li>items (INSERT/UPDATE/DELETE)</li>
+              <li>lists</li>
+              <li>list_members</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ DATA MODEL -->
+  <section>
+    <h2>Data Model</h2>
+
+    <div class="erd">
+
+      <div class="table-card">
+        <div class="table-header th-auth">auth.users</div>
+        <ul class="table-fields">
+          <li><span class="field-name pk">id</span><span class="field-type">uuid PK</span></li>
+          <li><span class="field-name">email</span><span class="field-type">text</span></li>
+        </ul>
+      </div>
+
+      <div class="erd-connector">⟶</div>
+
+      <div class="table-card">
+        <div class="table-header th-lists">lists</div>
+        <ul class="table-fields">
+          <li><span class="field-name pk">id</span><span class="field-type">uuid PK</span></li>
+          <li><span class="field-name">name</span><span class="field-type">text</span></li>
+          <li><span class="field-name fk">owner_id</span><span class="field-type">uuid FK</span></li>
+          <li><span class="field-name">is_shared</span><span class="field-type">bool</span></li>
+          <li><span class="field-name">created_at</span><span class="field-type">timestamptz</span></li>
+        </ul>
+      </div>
+
+      <div class="erd-connector">⟶</div>
+
+      <div style="display:flex;flex-direction:column;gap:0.75rem;">
+        <div class="table-card">
+          <div class="table-header th-members">list_members</div>
+          <ul class="table-fields">
+            <li><span class="field-name fk">list_id</span><span class="field-type">uuid FK</span></li>
+            <li><span class="field-name fk">user_id</span><span class="field-type">uuid FK</span></li>
+            <li><span class="field-name">added_at</span><span class="field-type">timestamptz</span></li>
+          </ul>
+        </div>
+        <div class="table-card">
+          <div class="table-header th-items">items</div>
+          <ul class="table-fields">
+            <li><span class="field-name pk">id</span><span class="field-type">uuid PK</span></li>
+            <li><span class="field-name fk">list_id</span><span class="field-type">uuid FK</span></li>
+            <li><span class="field-name fk">added_by</span><span class="field-type">uuid FK</span></li>
+            <li><span class="field-name">name</span><span class="field-type">text</span></li>
+            <li><span class="field-name">is_checked</span><span class="field-type">bool</span></li>
+            <li><span class="field-name">created_at</span><span class="field-type">timestamptz</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="erd-connector">⟶</div>
+
+      <div class="table-card">
+        <div class="table-header th-history">user_item_history</div>
+        <ul class="table-fields">
+          <li><span class="field-name fk">user_id</span><span class="field-type">uuid FK</span></li>
+          <li><span class="field-name">name</span><span class="field-type">text</span></li>
+          <li><span class="field-name">use_count</span><span class="field-type">int</span></li>
+          <li><span class="field-name">last_used_at</span><span class="field-type">timestamptz</span></li>
+        </ul>
+      </div>
+
+    </div>
+
+    <p style="margin-top:0.75rem;font-size:0.75rem;color:#475569;">
+      <span style="color:#fbbf24;">■</span> Primary key &nbsp;
+      <span style="color:#818cf8;">■</span> Foreign key &nbsp;
+      Items insert triggers <code style="background:#0f172a;padding:0.1rem 0.3rem;border-radius:4px;font-size:0.72rem;color:#a5b4fc;border:1px solid #1e293b;">bump_item_history</code> which upserts user_item_history for autocomplete
+    </p>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ FLOW -->
+  <section>
+    <h2>Request &amp; Data Flow</h2>
+
+    <div class="flow">
+
+      <div class="flow-step">
+        <div class="step-num c-blue">1</div>
+        <div class="step-body">
+          <div class="step-title">Browser navigates to any route</div>
+          <div class="step-desc">
+            Every request hits <code>proxy.ts</code> (Next.js middleware). It calls <code>updateSession()</code>
+            which refreshes the Supabase JWT cookie. If no valid session exists the request is redirected
+            to <code>/auth/login</code>. Authenticated users visiting <code>/auth/*</code> are redirected to <code>/lists</code>.
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-num c-green">2</div>
+        <div class="step-body">
+          <div class="step-title">Server Component renders the page</div>
+          <div class="step-desc">
+            <code>lists/page.tsx</code> or <code>lists/[id]/page.tsx</code> runs on the server.
+            It creates a cookie-based Supabase client (<code>lib/supabase/server.ts</code>), queries the
+            database (RLS automatically filters rows the user may access), and returns fully-rendered HTML
+            with initial data baked in.
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-num c-purple">3</div>
+        <div class="step-body">
+          <div class="step-title">User triggers a mutation</div>
+          <div class="step-desc">
+            Client component (e.g. <code>ItemList</code>) calls a Server Action
+            (e.g. <code>addItem()</code>). The server action runs with full server privileges,
+            creates a Supabase server client, writes to the database, then calls
+            <code>revalidatePath()</code> to invalidate the Next.js cache for that route.
+            The client applies an <span class="highlight">optimistic update</span> immediately so the
+            UI feels instant, and rolls back on error.
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-num c-orange">4</div>
+        <div class="step-body">
+          <div class="step-title">Realtime sync (shared lists)</div>
+          <div class="step-desc">
+            <code>ItemList</code> subscribes to Supabase Realtime on mount via the browser client
+            (<code>lib/supabase/client.ts</code>). It listens for <code>postgres_changes</code>
+            on the <code>items</code> table filtered by <code>list_id</code>.
+            When another user adds, checks, or deletes an item, the event arrives over WebSocket
+            and <code>setItems()</code> updates local React state — no page refresh required.
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-num c-teal">5</div>
+        <div class="step-body">
+          <div class="step-title">Autocomplete</div>
+          <div class="step-desc">
+            <code>lists/[id]/page.tsx</code> fetches the user's <code>user_item_history</code>
+            (ordered by <code>use_count</code> desc, limited to 200) at render time and passes it as
+            a <code>suggestions</code> prop to <code>ItemList</code>. As the user types, the list is
+            filtered client-side — no extra network call. Each successful item insert causes the
+            <code>bump_item_history</code> DB trigger to upsert that item name into
+            <code>user_item_history</code>, incrementing the use count.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ FILE REFERENCE -->
+  <section>
+    <h2>Source File Reference</h2>
+
+    <div class="file-group">
+      <div class="file-group-title">Config &amp; Database</div>
+      <table>
+        <thead>
+          <tr><th>File</th><th>Type</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-file"><span class="dir">supabase/migrations/</span>0001_init.sql</td>
+            <td><span class="badge b-db">DB</span></td>
+            <td class="td-desc">Entire database schema in one migration. Creates all 4 tables, indexes, RLS policies for every operation, the <span class="highlight">bump_item_history</span> trigger (autocomplete), <span class="highlight">has_list_access()</span> helper (used inside RLS to avoid recursion), <span class="highlight">find_user_by_email()</span> RPC (invite flow), and enables Realtime on items, lists, and list_members.</td>
+          </tr>
+          <tr>
+            <td class="td-file">next.config.ts</td>
+            <td><span class="badge b-config">Config</span></td>
+            <td class="td-desc">Next.js configuration. Currently empty — no custom options needed.</td>
+          </tr>
+          <tr>
+            <td class="td-file">tsconfig.json</td>
+            <td><span class="badge b-config">Config</span></td>
+            <td class="td-desc">TypeScript configuration. Defines the <code>@/</code> path alias pointing to <code>src/</code>.</td>
+          </tr>
+          <tr>
+            <td class="td-file">postcss.config.mjs</td>
+            <td><span class="badge b-config">Config</span></td>
+            <td class="td-desc">Enables Tailwind CSS via PostCSS.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="file-group">
+      <div class="file-group-title">Middleware &amp; Supabase Clients</div>
+      <table>
+        <thead>
+          <tr><th>File</th><th>Type</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-file"><span class="dir">src/</span>proxy.ts</td>
+            <td><span class="badge b-server">Middleware</span></td>
+            <td class="td-desc">Next.js middleware entry point. Matches all non-static routes and delegates to <code>updateSession()</code>. Acts as the application's authentication gate on every request.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/lib/supabase/</span>middleware.ts</td>
+            <td><span class="badge b-server">Middleware</span></td>
+            <td class="td-desc"><code>updateSession()</code> — refreshes the Supabase JWT cookie on every request to keep sessions alive. Enforces route rules: unauthenticated users are redirected to <code>/auth/login</code>; authenticated users on <code>/auth/*</code> are redirected to <code>/lists</code>.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/lib/supabase/</span>server.ts</td>
+            <td><span class="badge b-server">Server</span></td>
+            <td class="td-desc">Factory for the <span class="highlight">server-side</span> Supabase client. Reads and writes the JWT via Next.js <code>cookies()</code>. Used by all Server Components and Server Actions.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/lib/supabase/</span>client.ts</td>
+            <td><span class="badge b-client">Client</span></td>
+            <td class="td-desc">Factory for the <span class="highlight">browser-side</span> Supabase client. Used only by <code>ItemList</code> to open a Realtime WebSocket subscription.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/lib/</span>types.ts</td>
+            <td><span class="badge b-config">Types</span></td>
+            <td class="td-desc">Shared TypeScript interfaces for <code>List</code>, <code>ListMember</code>, and <code>Item</code>. Single source of truth for data shapes used across client and server code.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="file-group">
+      <div class="file-group-title">App Shell</div>
+      <table>
+        <thead>
+          <tr><th>File</th><th>Type</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/</span>layout.tsx</td>
+            <td><span class="badge b-server">Server</span></td>
+            <td class="td-desc">Root HTML layout. Sets page title and description metadata, loads Geist Sans and Geist Mono fonts, and wraps all pages in a full-height <code>&lt;body&gt;</code>.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/</span>page.tsx</td>
+            <td><span class="badge b-server">Server</span></td>
+            <td class="td-desc">Root route <code>/</code>. Contains a single <code>redirect('/lists')</code> — the real entry point is the lists page.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/</span>globals.css</td>
+            <td><span class="badge b-config">CSS</span></td>
+            <td class="td-desc">Imports Tailwind base, components, and utilities. Applied globally via <code>layout.tsx</code>.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="file-group">
+      <div class="file-group-title">Auth Feature — <code>/auth</code></div>
+      <table>
+        <thead>
+          <tr><th>File</th><th>Type</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/auth/</span>actions.ts</td>
+            <td><span class="badge b-action">Action</span></td>
+            <td class="td-desc">Server actions: <code>login</code> calls <code>signInWithPassword</code>, <code>signup</code> calls <code>signUp</code>, <code>logout</code> calls <code>signOut</code> and redirects to login. All return <code>{ error }</code> on failure.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/auth/</span>AuthForm.tsx</td>
+            <td><span class="badge b-client">Client</span></td>
+            <td class="td-desc">Shared email/password form used by both login and signup pages. Accepts a <code>mode</code> prop to switch labels and actions. Manages loading and inline error state.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/auth/login/</span>page.tsx</td>
+            <td><span class="badge b-server">Server</span></td>
+            <td class="td-desc">Login page. Renders <code>&lt;AuthForm mode="login" /&gt;</code>.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/auth/signup/</span>page.tsx</td>
+            <td><span class="badge b-server">Server</span></td>
+            <td class="td-desc">Signup page. Renders <code>&lt;AuthForm mode="signup" /&gt;</code>.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="file-group">
+      <div class="file-group-title">Lists Feature — <code>/lists</code></div>
+      <table>
+        <thead>
+          <tr><th>File</th><th>Type</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/lists/</span>page.tsx</td>
+            <td><span class="badge b-server">Server</span></td>
+            <td class="td-desc">Lists index page. Fetches all accessible lists, splits into "My lists" (owner) and "Shared with me" (member) sections. Renders <code>CreateListForm</code> and a <code>DeleteListButton</code> per owned list.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/lists/</span>actions.ts</td>
+            <td><span class="badge b-action">Action</span></td>
+            <td class="td-desc">Server actions: <code>createList</code> inserts a new list owned by the current user. <code>deleteList</code> removes it. <code>inviteMember</code> resolves an email to a user ID via the <code>find_user_by_email</code> RPC then inserts into <code>list_members</code>. <code>leaveList</code> deletes the caller's membership row.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/lists/</span>CreateListForm.tsx</td>
+            <td><span class="badge b-client">Client</span></td>
+            <td class="td-desc">Collapsible form to create a new list. Starts as a "+ New list" dashed button; expands to show a name input and a "Shared list" checkbox. Calls the <code>createList</code> server action on submit.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/lists/</span>DeleteListButton.tsx</td>
+            <td><span class="badge b-client">Client</span></td>
+            <td class="td-desc">Renders an × button per list. On first click it switches to inline "Delete / Cancel" confirmation, requiring a second click before calling <code>deleteList</code> — prevents accidental deletes.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="file-group">
+      <div class="file-group-title">List Detail Feature — <code>/lists/[id]</code></div>
+      <table>
+        <thead>
+          <tr><th>File</th><th>Type</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/lists/[id]/</span>page.tsx</td>
+            <td><span class="badge b-server">Server</span></td>
+            <td class="td-desc">List detail page. Fetches the list, its items (ascending by created_at), and the user's item history for autocomplete (top 200 by use_count). Passes data as props to <code>ItemList</code>. Shows <code>InviteForm</code> only for the list owner on shared lists; shows <code>LeaveListButton</code> for non-owners.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/lists/[id]/</span>actions.ts</td>
+            <td><span class="badge b-action">Action</span></td>
+            <td class="td-desc">Server actions: <code>addItem</code> inserts a new item (triggering the history upsert). <code>toggleItem</code> flips <code>is_checked</code>. <code>deleteCheckedItems</code> bulk-deletes all checked items for the list in one query.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/lists/[id]/</span>ItemList.tsx</td>
+            <td><span class="badge b-client">Client</span></td>
+            <td class="td-desc"><span class="highlight">The most complex component.</span> Manages local item state. For shared lists, subscribes to Supabase Realtime on mount and handles INSERT/UPDATE/DELETE postgres_changes to keep state in sync across all connected users. Implements keyboard-navigable autocomplete (arrow keys, Enter, Escape) filtered client-side from the suggestions prop. All mutations use optimistic updates that roll back on error.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/lists/[id]/</span>InviteForm.tsx</td>
+            <td><span class="badge b-client">Client</span></td>
+            <td class="td-desc">Email input that calls the <code>inviteMember</code> server action. Displays inline success ("Invited!") or error feedback. Only rendered for the list owner on shared lists.</td>
+          </tr>
+          <tr>
+            <td class="td-file"><span class="dir">src/app/lists/[id]/</span>LeaveListButton.tsx</td>
+            <td><span class="badge b-client">Client</span></td>
+            <td class="td-desc">"Leave" button for non-owners of a shared list. Shows a <code>confirm()</code> dialog before calling <code>leaveList</code>, then navigates back to <code>/lists</code>. Only rendered when the current user is not the owner.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </section>
+
+</body>
+</html>
