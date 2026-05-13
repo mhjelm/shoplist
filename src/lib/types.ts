@@ -19,6 +19,7 @@ export interface Item {
   name: string
   is_checked: boolean
   created_at: string
+  picture_url: string | null
 }
 
 export type Theme = 'light' | 'dark'

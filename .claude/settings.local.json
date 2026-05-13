@@ -11,7 +11,11 @@
       "Bash(Select-Object Name, PSIsContainer)",
       "Bash(Format-Table -AutoSize)",
       "PowerShell(npm run *)",
-      "PowerShell(Get-Command *)"
+      "PowerShell(Get-Command *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\proj\\\\shoplist\\\\src\\\\app\" -Recurse -Filter \"*.tsx\" -File)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "PowerShell(& \"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" run lint 2>&1)",
+      "PowerShell(& \"C:\\\\Program Files\\\\nodejs\\\\node.exe\" \"C:\\\\Program Files\\\\nodejs\\\\node_modules\\\\npm\\\\bin\\\\npm-cli.js\" run lint 2>&1)"
     ]
   }
 }
