@@ -236,7 +236,11 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
         </div>
 
         {showUrlInput && (
-          <PictureInput value={urlInput} onChange={setUrlInput} />
+          <PictureInput
+            value={urlInput}
+            onChange={setUrlInput}
+            onSuggestName={name => setInput(prev => prev.trim() ? prev : name)}
+          />
         )}
       </div>
 

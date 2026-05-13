@@ -1,30 +1,45 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { uploadImage } from './actions'
+import { suggestItemName, uploadImage } from './actions'
 import { resizeImage } from '@/lib/resize-image'
 
 interface Props {
   value: string
   onChange: (v: string) => void
   placeholder?: string
+  onSuggestName?: (name: string) => void
 }
 
-export default function PictureInput({ value, onChange, placeholder }: Props) {
+export default function PictureInput({ value, onChange, placeholder, onSuggestName }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function handleFile(file: File) {
+    console.log('[picture] handleFile start, file:', file.name, file.size, 'bytes, onSuggestName:', !!onSuggestName)
     setError(null)
     setUploading(true)
     try {
       const blob = await resizeImage(file)
-      const fd = new FormData()
-      fd.append('image', new File([blob], 'image.jpg', { type: 'image/jpeg' }))
-      const result = await uploadImage(fd)
-      if (result.error) setError(result.error)
-      else if (result.url) onChange(result.url)
+      const buildFd = () => {
+        const fd = new FormData()
+        fd.append('image', new File([blob], 'image.jpg', { type: 'image/jpeg' }))
+        return fd
+      }
+      const [uploadResult, suggestResult] = await Promise.all([
+        uploadImage(buildFd()),
+        onSuggestName
+          ? suggestItemName(buildFd())
+          : Promise.resolve({} as { name?: string; error?: string }),
+      ])
+      console.log('[picture] upload:', uploadResult)
+      console.log('[picture] suggest:', suggestResult)
+      if (uploadResult.error) setError(uploadResult.error)
+      else if (uploadResult.url) onChange(uploadResult.url)
+      if (onSuggestName && 'name' in suggestResult && suggestResult.name) {
+        onSuggestName(suggestResult.name)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed')
     } finally {
