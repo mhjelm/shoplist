@@ -60,6 +60,16 @@ export async function deleteItem(itemId: string, listId: string) {
   revalidatePath(`/lists/${listId}`)
 }
 
+export async function reorderItem(itemId: string, listId: string, sortOrder: number) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('items')
+    .update({ sort_order: sortOrder })
+    .eq('id', itemId)
+  if (error) return { error: error.message }
+  revalidatePath(`/lists/${listId}`)
+}
+
 export async function restoreItem(itemId: string, listId: string) {
   const supabase = await createClient()
   const { error } = await supabase

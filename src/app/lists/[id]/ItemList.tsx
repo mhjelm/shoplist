@@ -3,8 +3,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Item, ListTextSize } from '@/lib/types'
-import { addItem, clearDeletedItems, clearShoppedItems, deleteItem, restoreItem, toggleItem, updateItem } from './actions'
+import { addItem, clearDeletedItems, clearShoppedItems, deleteItem, reorderItem, restoreItem, toggleItem, updateItem } from './actions'
 import PictureInput from './PictureInput'
+import {
+  DndContext,
+  type DragEndEvent,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 interface Props {
   initialItems: Item[]
@@ -85,9 +101,33 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     return () => window.removeEventListener('keydown', onKey)
   }, [lightboxUrl])
 
-  const toShop = useMemo(() => items.filter(i => !i.deleted_at && !i.is_checked), [items])
-  const shopped = useMemo(() => items.filter(i => !i.deleted_at && i.is_checked), [items])
-  const deleted = useMemo(() => items.filter(i => !!i.deleted_at), [items])
+  const sortByOrder = (a: Item, b: Item) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity)
+  const toShop = useMemo(() => items.filter(i => !i.deleted_at && !i.is_checked).sort(sortByOrder), [items])
+  const shopped = useMemo(() => items.filter(i => !i.deleted_at && i.is_checked).sort(sortByOrder), [items])
+  const deleted = useMemo(() => items.filter(i => !!i.deleted_at).sort(sortByOrder), [items])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+  )
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = toShop.findIndex(i => i.id === active.id)
+    const newIndex = toShop.findIndex(i => i.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const reordered = arrayMove(toShop, oldIndex, newIndex)
+    const moved = reordered[newIndex]
+    const before = reordered[newIndex - 1]
+    const after = reordered[newIndex + 1]
+    let newSortOrder: number
+    if (!before) newSortOrder = (after?.sort_order ?? 1) - 1
+    else if (!after) newSortOrder = (before.sort_order ?? 0) + 1
+    else newSortOrder = ((before.sort_order ?? 0) + (after.sort_order ?? 0)) / 2
+    setItems(prev => prev.map(i => i.id === moved.id ? { ...i, sort_order: newSortOrder } : i))
+    reorderItem(moved.id, listId, newSortOrder)
+  }
 
   function handleInputChange(value: string) {
     setInput(value)
@@ -121,6 +161,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
       created_at: new Date().toISOString(),
       picture_url: pictureUrl ?? null,
       deleted_at: null,
+      sort_order: null,
     }
     setItems(prev => [...prev, optimistic])
     const result = await addItem(listId, name, pictureUrl)
@@ -250,44 +291,24 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
           {isEmpty ? 'No items yet.' : 'Everything shopped'}
         </p>
       ) : (
-        <ul className="space-y-1">
-          {toShop.map(item => (
-            <li
-              key={item.id}
-              onClick={() => handleToggle(item)}
-              className="flex items-center gap-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors select-none cursor-pointer"
-            >
-              {item.picture_url && (
-                <img
-                  src={item.picture_url}
-                  alt=""
-                  onClick={e => { e.stopPropagation(); setLightboxUrl(item.picture_url!) }}
-                  onError={e => { e.currentTarget.style.display = 'none' }}
-                  className={`${thumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0`}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={toShop.map(i => i.id)} strategy={verticalListSortingStrategy}>
+            <ul className="space-y-1">
+              {toShop.map(item => (
+                <SortableRow
+                  key={item.id}
+                  item={item}
+                  itemTextClass={itemTextClass}
+                  thumbSizeClass={thumbSizeClass}
+                  onToggle={() => handleToggle(item)}
+                  onEdit={() => setEditingItem(item)}
+                  onDelete={() => handleDeleteItem(item)}
+                  onPicture={() => item.picture_url && setLightboxUrl(item.picture_url)}
                 />
-              )}
-              <span className={`${itemTextClass} flex-1 text-gray-800 dark:text-gray-200`}>
-                {item.name}
-              </span>
-              <button
-                onClick={e => { e.stopPropagation(); setEditingItem(item) }}
-                className="text-gray-300 dark:text-gray-600 hover:text-blue-400 dark:hover:text-blue-400 transition-colors"
-                aria-label="Edit item"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
-                </svg>
-              </button>
-              <button
-                onClick={e => { e.stopPropagation(); handleDeleteItem(item) }}
-                className="text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none"
-                aria-label="Delete item"
-              >
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
+              ))}
+            </ul>
+          </SortableContext>
+        </DndContext>
       )}
 
       {/* Shopped */}
@@ -386,6 +407,74 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
         </div>
       )}
     </div>
+  )
+}
+
+function SortableRow({
+  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onDelete, onPicture,
+}: {
+  item: Item
+  itemTextClass: string
+  thumbSizeClass: string
+  onToggle: () => void
+  onEdit: () => void
+  onDelete: () => void
+  onPicture: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+  }
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      onClick={onToggle}
+      className="flex items-center gap-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors select-none cursor-pointer"
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        onClick={e => e.stopPropagation()}
+        aria-label="Reorder item"
+        className="touch-none cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 -ml-1 px-1 py-1"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+        </svg>
+      </button>
+      {item.picture_url && (
+        <img
+          src={item.picture_url}
+          alt=""
+          onClick={e => { e.stopPropagation(); onPicture() }}
+          onError={e => { e.currentTarget.style.display = 'none' }}
+          className={`${thumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0`}
+        />
+      )}
+      <span className={`${itemTextClass} flex-1 text-gray-800 dark:text-gray-200`}>
+        {item.name}
+      </span>
+      <button
+        onClick={e => { e.stopPropagation(); onEdit() }}
+        className="text-gray-300 dark:text-gray-600 hover:text-blue-400 dark:hover:text-blue-400 transition-colors"
+        aria-label="Edit item"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+        </svg>
+      </button>
+      <button
+        onClick={e => { e.stopPropagation(); onDelete() }}
+        className="text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none"
+        aria-label="Delete item"
+      >
+        ×
+      </button>
+    </li>
   )
 }
 

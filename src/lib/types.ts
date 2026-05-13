@@ -21,6 +21,7 @@ export interface Item {
   created_at: string
   picture_url: string | null
   deleted_at: string | null
+  sort_order: number | null
 }
 
 export type Theme = 'light' | 'dark'

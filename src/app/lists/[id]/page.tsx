@@ -23,6 +23,7 @@ export default async function ListPage({ params }: Props) {
     .from('items')
     .select('*')
     .eq('list_id', id)
+    .order('sort_order', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true })
 
   const { data: history } = await supabase
