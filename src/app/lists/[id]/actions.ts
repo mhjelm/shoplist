@@ -78,6 +78,24 @@ export async function clearShoppedItems(listId: string) {
   revalidatePath(`/lists/${listId}`)
 }
 
+export async function uploadImage(formData: FormData) {
+  const file = formData.get('image')
+  if (!(file instanceof File) || file.size === 0) return { error: 'No image provided' }
+  if (file.size > 5 * 1024 * 1024) return { error: 'Image too large (max 5 MB)' }
+
+  const apiKey = process.env.IMGBB_API_KEY
+  if (!apiKey) return { error: 'IMGBB_API_KEY not configured' }
+
+  const body = new FormData()
+  body.append('image', file)
+
+  const res = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, { method: 'POST', body })
+  if (!res.ok) return { error: `ImgBB upload failed (${res.status})` }
+  const json = (await res.json()) as { success?: boolean; data?: { url?: string }; error?: { message?: string } }
+  if (!json.success || !json.data?.url) return { error: json.error?.message ?? 'Upload failed' }
+  return { url: json.data.url }
+}
+
 export async function clearDeletedItems(listId: string) {
   const supabase = await createClient()
   const { error } = await supabase
