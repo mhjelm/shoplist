@@ -50,7 +50,16 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
             console.log('[realtime] event:', payload.eventType, payload)
             if (payload.eventType === 'INSERT') {
               const incoming = payload.new as Item
-              setItems(prev => prev.some(i => i.id === incoming.id) ? prev : [...prev, incoming])
+              setItems(prev => {
+                if (prev.some(i => i.id === incoming.id)) return prev
+                const optIdx = prev.findIndex(i => i.added_by === '' && i.name === incoming.name)
+                if (optIdx >= 0) {
+                  const next = [...prev]
+                  next[optIdx] = incoming
+                  return next
+                }
+                return [...prev, incoming]
+              })
             } else if (payload.eventType === 'UPDATE') {
               setItems(prev => prev.map(i => i.id === (payload.new as Item).id ? payload.new as Item : i))
             } else if (payload.eventType === 'DELETE') {
@@ -102,8 +111,9 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     setFiltered([])
     const pictureUrl = urlInput.trim() || undefined
     setUrlInput('')
+    const tempId = crypto.randomUUID()
     const optimistic: Item = {
-      id: crypto.randomUUID(),
+      id: tempId,
       list_id: listId,
       added_by: '',
       name,
@@ -114,7 +124,17 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     }
     setItems(prev => [...prev, optimistic])
     const result = await addItem(listId, name, pictureUrl)
-    if (result?.error) setItems(prev => prev.filter(i => i.id !== optimistic.id))
+    if (result?.error) {
+      setItems(prev => prev.filter(i => i.id !== tempId))
+    } else if (result?.item) {
+      const real = result.item as Item
+      setItems(prev => {
+        if (prev.some(i => i.id === real.id)) {
+          return prev.filter(i => i.id !== tempId)
+        }
+        return prev.map(i => i.id === tempId ? real : i)
+      })
+    }
     setLoading(false)
   }
 

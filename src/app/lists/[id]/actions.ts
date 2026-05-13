@@ -8,15 +8,20 @@ export async function addItem(listId: string, name: string, pictureUrl?: string)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
-  const { error } = await supabase.from('items').insert({
-    list_id: listId,
-    added_by: user.id,
-    name: name.trim(),
-    picture_url: pictureUrl?.trim() || null,
-  })
+  const { data, error } = await supabase
+    .from('items')
+    .insert({
+      list_id: listId,
+      added_by: user.id,
+      name: name.trim(),
+      picture_url: pictureUrl?.trim() || null,
+    })
+    .select()
+    .single()
 
   if (error) return { error: error.message }
   revalidatePath(`/lists/${listId}`)
+  return { item: data }
 }
 
 export async function updateItem(
