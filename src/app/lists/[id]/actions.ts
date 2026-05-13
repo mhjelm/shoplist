@@ -93,6 +93,97 @@ export async function clearShoppedItems(listId: string) {
   revalidatePath(`/lists/${listId}`)
 }
 
+export async function addItems(listId: string, names: string[]) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const rows = names
+    .map(n => n.trim())
+    .filter(n => n.length > 0)
+    .map(n => ({ list_id: listId, added_by: user.id, name: n }))
+
+  if (rows.length === 0) return { error: 'No items to add' }
+
+  const { data, error } = await supabase.from('items').insert(rows).select()
+  if (error) return { error: error.message }
+  revalidatePath(`/lists/${listId}`)
+  return { items: data }
+}
+
+async function fetchRecipeText(input: string): Promise<{ text?: string; error?: string }> {
+  const trimmed = input.trim()
+  if (/^https?:\/\//i.test(trimmed) && !trimmed.includes('\n')) {
+    try {
+      const res = await fetch(trimmed, {
+        signal: AbortSignal.timeout(10000),
+        headers: { 'User-Agent': 'Mozilla/5.0 ShoplistBot' },
+      })
+      if (!res.ok) return { error: `Failed to fetch URL (${res.status})` }
+      const html = await res.text()
+      const stripped = html
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .slice(0, 30000)
+      return { text: stripped }
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Fetch failed' }
+    }
+  }
+  return { text: trimmed }
+}
+
+export async function extractRecipeItems(input: string) {
+  if (!input.trim()) return { error: 'No input' }
+  if (input.length > 50000) return { error: 'Input too long' }
+
+  const fetched = await fetchRecipeText(input)
+  if (fetched.error) return { error: fetched.error }
+
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) return { error: 'GEMINI_API_KEY not configured' }
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: `Extract grocery shopping list items from this recipe. Return only items someone needs to buy at a store. Skip common pantry staples like water, salt, pepper, basic cooking oil. Reply in Swedish. Keep names short (1-4 words each). Do not include quantities. Return JSON only in this exact shape: {"items": ["Item 1", "Item 2"]}.\n\nRecipe:\n${fetched.text}`,
+          }],
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 1000,
+          thinkingConfig: { thinkingBudget: 0 },
+          responseMimeType: 'application/json',
+        },
+      }),
+    }
+  )
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    console.error('[gemini] recipe error', res.status, body)
+    return { error: `Gemini failed (${res.status}): ${body.slice(0, 200)}` }
+  }
+  type GemResp = { candidates?: { content?: { parts?: { text?: string }[] } }[] }
+  const data = (await res.json()) as GemResp
+  const text = data.candidates?.[0]?.content?.parts?.map(p => p.text ?? '').join('').trim() ?? ''
+  try {
+    const parsed = JSON.parse(text) as { items?: unknown }
+    if (!Array.isArray(parsed.items)) return { items: [] }
+    const items = parsed.items
+      .filter((i): i is string => typeof i === 'string')
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+    return { items }
+  } catch {
+    return { error: 'Could not parse Gemini response' }
+  }
+}
+
 export async function suggestItemName(formData: FormData) {
   const file = formData.get('image')
   if (!(file instanceof File) || file.size === 0) return { error: 'No image' }

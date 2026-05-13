@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Item, ListTextSize } from '@/lib/types'
 import { addItem, clearDeletedItems, clearShoppedItems, deleteItem, reorderItem, restoreItem, toggleItem, updateItem } from './actions'
 import PictureInput from './PictureInput'
+import RecipeImportModal from './RecipeImportModal'
 import {
   DndContext,
   type DragEndEvent,
@@ -42,6 +43,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   const [urlInput, setUrlInput] = useState('')
   const [editingItem, setEditingItem] = useState<Item | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+  const [showRecipe, setShowRecipe] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -245,11 +247,20 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
             />
             <button
               onClick={() => setShowUrlInput(v => !v)}
-              title="Add picture URL"
+              title="Lägg till bild"
               className={`border rounded-lg px-3 transition-colors ${showUrlInput ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'}`}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setShowRecipe(true)}
+              title="Importera från recept"
+              className="border border-gray-300 dark:border-gray-700 rounded-lg px-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4" />
               </svg>
             </button>
             <button
@@ -390,6 +401,17 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
           item={editingItem}
           onSave={(name, pictureUrl) => handleUpdate(editingItem, name, pictureUrl)}
           onClose={() => setEditingItem(null)}
+        />
+      )}
+
+      {showRecipe && (
+        <RecipeImportModal
+          listId={listId}
+          onClose={() => setShowRecipe(false)}
+          onItemsAdded={incoming => setItems(prev => {
+            const have = new Set(prev.map(i => i.id))
+            return [...prev, ...incoming.filter(i => !have.has(i.id))]
+          })}
         />
       )}
 
