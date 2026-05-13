@@ -9,7 +9,9 @@
       "Bash(npm run *)",
       "Bash(Get-ChildItem -Path \"C:\\\\proj\\\\shoplist\" -Force)",
       "Bash(Select-Object Name, PSIsContainer)",
-      "Bash(Format-Table -AutoSize)"
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell(npm run *)",
+      "PowerShell(Get-Command *)"
     ]
   }
 }

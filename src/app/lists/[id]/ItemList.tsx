@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Item } from '@/lib/types'
+import type { Item, ListTextSize } from '@/lib/types'
 import { addItem, deleteCheckedItems, deleteItem, toggleItem } from './actions'
 
 interface Props {
@@ -10,9 +10,12 @@ interface Props {
   listId: string
   isShared: boolean
   suggestions: string[]
+  textSize: ListTextSize
 }
 
-export default function ItemList({ initialItems, listId, isShared, suggestions }: Props) {
+export default function ItemList({ initialItems, listId, isShared, suggestions, textSize }: Props) {
+  const itemTextClass = textSize === 'large' ? 'text-base' : 'text-sm'
+  const checkboxSizeClass = textSize === 'large' ? 'w-6 h-6' : 'w-5 h-5'
   const [items, setItems] = useState<Item[]>(initialItems)
   const [input, setInput] = useState('')
   const [filtered, setFiltered] = useState<string[]>([])
@@ -109,7 +112,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions }
               else if (e.key === 'Escape') setFiltered([])
             }}
             placeholder="Add an item…"
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button
             onClick={handleAdd}
@@ -121,12 +124,12 @@ export default function ItemList({ initialItems, listId, isShared, suggestions }
         </div>
 
         {filtered.length > 0 && (
-          <ul className="absolute z-10 top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden">
+          <ul className="absolute z-10 top-full mt-1 left-0 right-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-md overflow-hidden">
             {filtered.map((s, idx) => (
               <li
                 key={s}
                 onMouseDown={() => selectSuggestion(s)}
-                className={`px-3 py-2 text-sm cursor-pointer ${idx === highlightIdx ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}
+                className={`px-3 py-2 text-sm cursor-pointer ${idx === highlightIdx ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
               >
                 {s}
               </li>
@@ -137,17 +140,17 @@ export default function ItemList({ initialItems, listId, isShared, suggestions }
 
       {/* Items */}
       {items.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-8">No items yet.</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">No items yet.</p>
       ) : (
         <ul className="space-y-1">
           {items.map(item => (
             <li
               key={item.id}
-              className="flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3 hover:bg-gray-50 transition-colors select-none"
+              className="flex items-center gap-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors select-none"
             >
               <span
                 onClick={() => handleToggle(item)}
-                className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors cursor-pointer ${item.is_checked ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}
+                className={`${checkboxSizeClass} rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors cursor-pointer ${item.is_checked ? 'bg-green-500 border-green-500' : 'border-gray-300 dark:border-gray-600'}`}
               >
                 {item.is_checked && (
                   <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
@@ -157,13 +160,13 @@ export default function ItemList({ initialItems, listId, isShared, suggestions }
               </span>
               <span
                 onClick={() => handleToggle(item)}
-                className={`text-sm flex-1 cursor-pointer ${item.is_checked ? 'line-through text-gray-400' : 'text-gray-800'}`}
+                className={`${itemTextClass} flex-1 cursor-pointer ${item.is_checked ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}
               >
                 {item.name}
               </span>
               <button
                 onClick={() => handleDeleteItem(item)}
-                className="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none"
+                className="text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none"
                 aria-label="Delete item"
               >
                 ×
@@ -176,7 +179,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions }
       {hasChecked && (
         <button
           onClick={handleDeleteChecked}
-          className="w-full text-sm text-red-500 hover:text-red-700 py-2 border border-dashed border-red-200 rounded-xl hover:border-red-400 transition-colors"
+          className="w-full text-sm text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 py-2 border border-dashed border-red-200 dark:border-red-900 rounded-xl hover:border-red-400 dark:hover:border-red-700 transition-colors"
         >
           Delete checked items
         </button>

@@ -27,7 +27,7 @@ export default function CreateListForm() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="w-full border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors"
+        className="w-full border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl py-3 text-sm text-gray-500 dark:text-gray-400 hover:border-blue-400 dark:hover:border-blue-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
       >
         + New list
       </button>
@@ -35,17 +35,17 @@ export default function CreateListForm() {
   }
 
   return (
-    <form action={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+    <form action={handleSubmit} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 space-y-3">
       <input
         name="name"
         type="text"
         placeholder="List name"
         required
         autoFocus
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
 
-      <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+      <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none">
         <input
           type="checkbox"
           checked={isShared}
@@ -55,7 +55,7 @@ export default function CreateListForm() {
         Shared list (invite members)
       </label>
 
-      {error && <p className="text-red-600 text-sm">{error}</p>}
+      {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}
 
       <div className="flex gap-2">
         <button
@@ -68,7 +68,7 @@ export default function CreateListForm() {
         <button
           type="button"
           onClick={() => { setOpen(false); setError(null) }}
-          className="px-4 text-sm text-gray-500 hover:text-gray-700"
+          className="px-4 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
         >
           Cancel
         </button>

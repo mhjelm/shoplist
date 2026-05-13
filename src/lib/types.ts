@@ -20,3 +20,13 @@ export interface Item {
   is_checked: boolean
   created_at: string
 }
+
+export type Theme = 'light' | 'dark'
+export type ListTextSize = 'normal' | 'large'
+
+export interface UserPreferences {
+  user_id: string
+  theme: Theme
+  list_text_size: ListTextSize
+  updated_at: string
+}

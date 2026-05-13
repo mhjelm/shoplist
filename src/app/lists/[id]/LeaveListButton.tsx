@@ -13,7 +13,7 @@ export default function LeaveListButton({ listId }: { listId: string }) {
   }
 
   return (
-    <button onClick={handleLeave} className="text-sm text-gray-400 hover:text-red-500 transition-colors">
+    <button onClick={handleLeave} className="text-sm text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors">
       Leave
     </button>
   )

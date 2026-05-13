@@ -75,6 +75,14 @@ The item list is a Client Component that:
 
 Private lists skip the realtime subscription. When changing mutation logic, update both the optimistic path *and* ensure the eventual server response/realtime echo doesn't double-apply.
 
+### User preferences are server-side, read in layout
+
+User-level UI preferences (theme, list text size) live in the `user_preferences` table (one row per user, lazily upserted). `src/lib/preferences.ts` exposes `getUserPreferences()` — wrapped in `React.cache` so multiple Server Components in the same request share one query, and returns `DEFAULT_PREFERENCES` for unauthenticated users or users without a row.
+
+- **Theme** is applied by adding `dark` to `<html>` in `src/app/layout.tsx`. Tailwind v4 uses class-based dark mode via `@custom-variant dark` in `globals.css`. Reading the theme server-side avoids any flash-of-wrong-theme on first paint.
+- **List text size** is read in `src/app/lists/[id]/page.tsx` and passed as a `textSize` prop to `ItemList`, which scales the item rows only (the rest of the chrome stays at its normal size).
+- **Writes** go through `src/app/settings/actions.ts` and call `revalidatePath('/', 'layout')` so the next render reflects the new preference without a reload.
+
 ### Autocomplete is server-driven, populated by a trigger
 
 `user_item_history` is filled by an `AFTER INSERT` trigger on `items` (`bump_item_history`) — never written directly by app code. The list page fetches the user's top ~200 items by `use_count` and passes them as `suggestions` to `ItemList`; filtering happens client-side. Dedupe is case-insensitive via a unique index on `(user_id, lower(name))`.
