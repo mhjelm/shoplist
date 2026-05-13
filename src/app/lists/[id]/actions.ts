@@ -47,18 +47,44 @@ export async function toggleItem(itemId: string, listId: string, checked: boolea
 
 export async function deleteItem(itemId: string, listId: string) {
   const supabase = await createClient()
-  const { error } = await supabase.from('items').delete().eq('id', itemId)
+  const { error } = await supabase
+    .from('items')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', itemId)
   if (error) return { error: error.message }
   revalidatePath(`/lists/${listId}`)
 }
 
-export async function deleteCheckedItems(listId: string) {
+export async function restoreItem(itemId: string, listId: string) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('items')
+    .update({ is_checked: false, deleted_at: null })
+    .eq('id', itemId)
+  if (error) return { error: error.message }
+  revalidatePath(`/lists/${listId}`)
+}
+
+export async function clearShoppedItems(listId: string) {
   const supabase = await createClient()
   const { error } = await supabase
     .from('items')
     .delete()
     .eq('list_id', listId)
     .eq('is_checked', true)
+    .is('deleted_at', null)
+
+  if (error) return { error: error.message }
+  revalidatePath(`/lists/${listId}`)
+}
+
+export async function clearDeletedItems(listId: string) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('items')
+    .delete()
+    .eq('list_id', listId)
+    .not('deleted_at', 'is', null)
 
   if (error) return { error: error.message }
   revalidatePath(`/lists/${listId}`)

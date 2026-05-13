@@ -20,6 +20,7 @@ export interface Item {
   is_checked: boolean
   created_at: string
   picture_url: string | null
+  deleted_at: string | null
 }
 
 export type Theme = 'light' | 'dark'

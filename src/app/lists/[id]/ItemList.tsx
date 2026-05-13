@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Item, ListTextSize } from '@/lib/types'
-import { addItem, deleteCheckedItems, deleteItem, toggleItem, updateItem } from './actions'
+import { addItem, clearDeletedItems, clearShoppedItems, deleteItem, restoreItem, toggleItem, updateItem } from './actions'
 
 interface Props {
   initialItems: Item[]
@@ -54,6 +54,10 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     return () => window.removeEventListener('keydown', onKey)
   }, [lightboxUrl])
 
+  const toShop = useMemo(() => items.filter(i => !i.deleted_at && !i.is_checked), [items])
+  const shopped = useMemo(() => items.filter(i => !i.deleted_at && i.is_checked), [items])
+  const deleted = useMemo(() => items.filter(i => !!i.deleted_at), [items])
+
   function handleInputChange(value: string) {
     setInput(value)
     setHighlightIdx(-1)
@@ -84,6 +88,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
       is_checked: false,
       created_at: new Date().toISOString(),
       picture_url: pictureUrl ?? null,
+      deleted_at: null,
     }
     setItems(prev => [...prev, optimistic])
     const result = await addItem(listId, name, pictureUrl)
@@ -97,13 +102,23 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   }
 
   async function handleDeleteItem(item: Item) {
-    setItems(prev => prev.filter(i => i.id !== item.id))
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, deleted_at: new Date().toISOString() } : i))
     await deleteItem(item.id, listId)
   }
 
-  async function handleDeleteChecked() {
-    setItems(prev => prev.filter(i => !i.is_checked))
-    await deleteCheckedItems(listId)
+  async function handleRestore(item: Item) {
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, is_checked: false, deleted_at: null } : i))
+    await restoreItem(item.id, listId)
+  }
+
+  async function handleClearShopped() {
+    setItems(prev => prev.filter(i => i.deleted_at || !i.is_checked))
+    await clearShoppedItems(listId)
+  }
+
+  async function handleClearDeleted() {
+    setItems(prev => prev.filter(i => !i.deleted_at))
+    await clearDeletedItems(listId)
   }
 
   async function handleUpdate(item: Item, name: string, pictureUrl: string) {
@@ -121,7 +136,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     }
   }
 
-  const hasChecked = items.some(i => i.is_checked)
+  const isEmpty = toShop.length === 0 && shopped.length === 0 && deleted.length === 0
 
   return (
     <div className="space-y-4">
@@ -188,26 +203,20 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
         )}
       </div>
 
-      {/* Items */}
-      {items.length === 0 ? (
+      {/* Items to shop (no header) */}
+      {isEmpty ? (
         <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">No items yet.</p>
       ) : (
         <ul className="space-y-1">
-          {items.map(item => (
+          {toShop.map(item => (
             <li
               key={item.id}
               className="flex items-center gap-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors select-none"
             >
               <span
                 onClick={() => handleToggle(item)}
-                className={`${checkboxSizeClass} rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors cursor-pointer ${item.is_checked ? 'bg-green-500 border-green-500' : 'border-gray-300 dark:border-gray-600'}`}
-              >
-                {item.is_checked && (
-                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
-                  </svg>
-                )}
-              </span>
+                className={`${checkboxSizeClass} rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors cursor-pointer border-gray-300 dark:border-gray-600`}
+              />
               {item.picture_url && (
                 <img
                   src={item.picture_url}
@@ -219,7 +228,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
               )}
               <span
                 onClick={() => handleToggle(item)}
-                className={`${itemTextClass} flex-1 cursor-pointer ${item.is_checked ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}
+                className={`${itemTextClass} flex-1 cursor-pointer text-gray-800 dark:text-gray-200`}
               >
                 {item.name}
               </span>
@@ -244,13 +253,83 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
         </ul>
       )}
 
-      {hasChecked && (
-        <button
-          onClick={handleDeleteChecked}
-          className="w-full text-sm text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 py-2 border border-dashed border-red-200 dark:border-red-900 rounded-xl hover:border-red-400 dark:hover:border-red-700 transition-colors"
-        >
-          Delete checked items
-        </button>
+      {/* Shopped */}
+      {shopped.length > 0 && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Shopped</span>
+            <button
+              onClick={handleClearShopped}
+              className="text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none"
+              aria-label="Clear shopped items"
+            >
+              ×
+            </button>
+          </div>
+          <ul className="space-y-1">
+            {shopped.map(item => (
+              <li
+                key={item.id}
+                onClick={() => handleToggle(item)}
+                className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800/50 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors select-none cursor-pointer"
+              >
+                <span className={`${checkboxSizeClass} rounded border-2 flex-shrink-0 flex items-center justify-center bg-green-500 border-green-500`}>
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+                  </svg>
+                </span>
+                {item.picture_url && (
+                  <img
+                    src={item.picture_url}
+                    alt=""
+                    onError={e => { e.currentTarget.style.display = 'none' }}
+                    className={`${thumbSizeClass} rounded object-cover flex-shrink-0 opacity-60`}
+                  />
+                )}
+                <span className={`${itemTextClass} flex-1 text-gray-400 dark:text-gray-500`}>
+                  {item.name}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Deleted */}
+      {deleted.length > 0 && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-300 dark:text-gray-600">Deleted</span>
+            <button
+              onClick={handleClearDeleted}
+              className="text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none"
+              aria-label="Clear deleted items"
+            >
+              ×
+            </button>
+          </div>
+          <ul className="space-y-1">
+            {deleted.map(item => (
+              <li
+                key={item.id}
+                onClick={() => handleRestore(item)}
+                className="flex items-center gap-3 bg-gray-50/50 dark:bg-gray-900/30 rounded-xl border border-gray-100/50 dark:border-gray-800/30 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors select-none cursor-pointer opacity-50 hover:opacity-75"
+              >
+                {item.picture_url && (
+                  <img
+                    src={item.picture_url}
+                    alt=""
+                    onError={e => { e.currentTarget.style.display = 'none' }}
+                    className={`${thumbSizeClass} rounded object-cover flex-shrink-0`}
+                  />
+                )}
+                <span className={`${itemTextClass} flex-1 text-gray-400 dark:text-gray-500 line-through`}>
+                  {item.name}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {editingItem && (
