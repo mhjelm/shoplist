@@ -114,7 +114,11 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     setEditingItem(null)
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, ...patch } : i))
     const result = await updateItem(item.id, listId, patch)
-    if (result?.error) setItems(prev => prev.map(i => i.id === item.id ? item : i))
+    if (result?.error) {
+      setItems(prev => prev.map(i => i.id === item.id ? item : i))
+    } else {
+      setItems(prev => prev.map(i => i.id === item.id ? { ...i, ...patch } : i))
+    }
   }
 
   const hasChecked = items.some(i => i.is_checked)
@@ -265,8 +269,8 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
           <img
             src={lightboxUrl}
             alt=""
-            onClick={e => e.stopPropagation()}
-            className="max-w-[90vw] max-h-[90vh] rounded-lg object-contain"
+            onClick={() => setLightboxUrl(null)}
+            className="max-w-[90vw] max-h-[90vh] rounded-lg object-contain cursor-pointer"
           />
         </div>
       )}
@@ -305,12 +309,24 @@ function EditModal({ item, onSave, onClose }: {
           autoFocus
           className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
-        <input
-          value={pictureUrl}
-          onChange={e => setPictureUrl(e.target.value)}
-          placeholder="Picture URL (optional)…"
-          className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+        <div className="relative">
+          <input
+            value={pictureUrl}
+            onChange={e => setPictureUrl(e.target.value)}
+            placeholder="Picture URL (optional)…"
+            className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-8"
+          />
+          {pictureUrl && (
+            <button
+              type="button"
+              onClick={() => setPictureUrl('')}
+              aria-label="Clear picture URL"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-lg leading-none"
+            >
+              ×
+            </button>
+          )}
+        </div>
         <div className="flex gap-2 justify-end">
           <button
             onClick={onClose}
