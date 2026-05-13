@@ -15,7 +15,6 @@ interface Props {
 
 export default function ItemList({ initialItems, listId, isShared, suggestions, textSize }: Props) {
   const itemTextClass = textSize === 'large' ? 'text-base' : 'text-sm'
-  const checkboxSizeClass = textSize === 'large' ? 'w-6 h-6' : 'w-5 h-5'
   const thumbSizeClass = textSize === 'large' ? 'w-16 h-16' : 'w-12 h-12'
   const [items, setItems] = useState<Item[]>(initialItems)
   const [input, setInput] = useState('')
@@ -216,7 +215,6 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
               onClick={() => handleToggle(item)}
               className="flex items-center gap-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors select-none cursor-pointer"
             >
-              <span className={`${checkboxSizeClass} rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors border-gray-300 dark:border-gray-600`} />
               {item.picture_url && (
                 <img
                   src={item.picture_url}
@@ -270,11 +268,6 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
                 onClick={() => handleToggle(item)}
                 className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800/50 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors select-none cursor-pointer"
               >
-                <span className={`${checkboxSizeClass} rounded border-2 flex-shrink-0 flex items-center justify-center bg-green-500 border-green-500`}>
-                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
-                  </svg>
-                </span>
                 {item.picture_url && (
                   <img
                     src={item.picture_url}
