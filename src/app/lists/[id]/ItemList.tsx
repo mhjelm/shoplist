@@ -30,20 +30,42 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   useEffect(() => {
     if (!isShared) return
     const supabase = createClient()
-    const channel = supabase
-      .channel(`list-${listId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: `list_id=eq.${listId}` },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setItems(prev => [...prev, payload.new as Item])
-          } else if (payload.eventType === 'UPDATE') {
-            setItems(prev => prev.map(i => i.id === (payload.new as Item).id ? payload.new as Item : i))
-          } else if (payload.eventType === 'DELETE') {
-            setItems(prev => prev.filter(i => i.id !== (payload.old as Item).id))
-          }
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let cancelled = false
+
+    ;(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (cancelled) return
+      console.log('[realtime] session user:', session?.user?.id ?? '(none)')
+      if (session?.access_token) {
+        supabase.realtime.setAuth(session.access_token)
+      }
+
+      channel = supabase
+        .channel(`list-${listId}`)
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'items', filter: `list_id=eq.${listId}` },
+          (payload) => {
+            console.log('[realtime] event:', payload.eventType, payload)
+            if (payload.eventType === 'INSERT') {
+              const incoming = payload.new as Item
+              setItems(prev => prev.some(i => i.id === incoming.id) ? prev : [...prev, incoming])
+            } else if (payload.eventType === 'UPDATE') {
+              setItems(prev => prev.map(i => i.id === (payload.new as Item).id ? payload.new as Item : i))
+            } else if (payload.eventType === 'DELETE') {
+              setItems(prev => prev.filter(i => i.id !== (payload.old as Item).id))
+            }
+          })
+        .subscribe((status, err) => {
+          if (err) console.error('[realtime] subscribe error', err)
+          else console.log('[realtime] status:', status)
         })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    })()
+
+    return () => {
+      cancelled = true
+      if (channel) supabase.removeChannel(channel)
+    }
   }, [listId, isShared])
 
   useEffect(() => {
