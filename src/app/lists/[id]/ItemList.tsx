@@ -204,36 +204,33 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
       </div>
 
       {/* Items to shop (no header) */}
-      {isEmpty ? (
-        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">No items yet.</p>
+      {toShop.length === 0 ? (
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">
+          {isEmpty ? 'No items yet.' : 'Everything shopped'}
+        </p>
       ) : (
         <ul className="space-y-1">
           {toShop.map(item => (
             <li
               key={item.id}
-              className="flex items-center gap-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors select-none"
+              onClick={() => handleToggle(item)}
+              className="flex items-center gap-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors select-none cursor-pointer"
             >
-              <span
-                onClick={() => handleToggle(item)}
-                className={`${checkboxSizeClass} rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors cursor-pointer border-gray-300 dark:border-gray-600`}
-              />
+              <span className={`${checkboxSizeClass} rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors border-gray-300 dark:border-gray-600`} />
               {item.picture_url && (
                 <img
                   src={item.picture_url}
                   alt=""
-                  onClick={() => setLightboxUrl(item.picture_url!)}
+                  onClick={e => { e.stopPropagation(); setLightboxUrl(item.picture_url!) }}
                   onError={e => { e.currentTarget.style.display = 'none' }}
                   className={`${thumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0`}
                 />
               )}
-              <span
-                onClick={() => handleToggle(item)}
-                className={`${itemTextClass} flex-1 cursor-pointer text-gray-800 dark:text-gray-200`}
-              >
+              <span className={`${itemTextClass} flex-1 text-gray-800 dark:text-gray-200`}>
                 {item.name}
               </span>
               <button
-                onClick={() => setEditingItem(item)}
+                onClick={e => { e.stopPropagation(); setEditingItem(item) }}
                 className="text-gray-300 dark:text-gray-600 hover:text-blue-400 dark:hover:text-blue-400 transition-colors"
                 aria-label="Edit item"
               >
@@ -242,7 +239,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
                 </svg>
               </button>
               <button
-                onClick={() => handleDeleteItem(item)}
+                onClick={e => { e.stopPropagation(); handleDeleteItem(item) }}
                 className="text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none"
                 aria-label="Delete item"
               >
