@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Item } from '@/lib/types'
-import { addItem, deleteCheckedItems, toggleItem } from './actions'
+import { addItem, deleteCheckedItems, deleteItem, toggleItem } from './actions'
 
 interface Props {
   initialItems: Item[]
@@ -78,6 +78,11 @@ export default function ItemList({ initialItems, listId, isShared, suggestions }
     await toggleItem(item.id, listId, !item.is_checked)
   }
 
+  async function handleDeleteItem(item: Item) {
+    setItems(prev => prev.filter(i => i.id !== item.id))
+    await deleteItem(item.id, listId)
+  }
+
   async function handleDeleteChecked() {
     setItems(prev => prev.filter(i => !i.is_checked))
     await deleteCheckedItems(listId)
@@ -138,19 +143,31 @@ export default function ItemList({ initialItems, listId, isShared, suggestions }
           {items.map(item => (
             <li
               key={item.id}
-              onClick={() => handleToggle(item)}
-              className="flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors select-none"
+              className="flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3 hover:bg-gray-50 transition-colors select-none"
             >
-              <span className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${item.is_checked ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}>
+              <span
+                onClick={() => handleToggle(item)}
+                className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors cursor-pointer ${item.is_checked ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}
+              >
                 {item.is_checked && (
                   <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
                   </svg>
                 )}
               </span>
-              <span className={`text-sm flex-1 ${item.is_checked ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+              <span
+                onClick={() => handleToggle(item)}
+                className={`text-sm flex-1 cursor-pointer ${item.is_checked ? 'line-through text-gray-400' : 'text-gray-800'}`}
+              >
                 {item.name}
               </span>
+              <button
+                onClick={() => handleDeleteItem(item)}
+                className="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none"
+                aria-label="Delete item"
+              >
+                ×
+              </button>
             </li>
           ))}
         </ul>

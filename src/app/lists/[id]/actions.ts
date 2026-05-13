@@ -29,6 +29,13 @@ export async function toggleItem(itemId: string, listId: string, checked: boolea
   revalidatePath(`/lists/${listId}`)
 }
 
+export async function deleteItem(itemId: string, listId: string) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('items').delete().eq('id', itemId)
+  if (error) return { error: error.message }
+  revalidatePath(`/lists/${listId}`)
+}
+
 export async function deleteCheckedItems(listId: string) {
   const supabase = await createClient()
   const { error } = await supabase

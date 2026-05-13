@@ -6,7 +6,10 @@
       "Bash(cd /tmp)",
       "Bash(npx create-next-app@latest shoplist-scaffold --typescript --tailwind --eslint --app --src-dir --no-turbopack --import-alias \"@/*\" --yes)",
       "Bash(npx tsc *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\proj\\\\shoplist\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Format-Table -AutoSize)"
     ]
   }
 }
