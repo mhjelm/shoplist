@@ -8,12 +8,38 @@ export async function addItem(listId: string, name: string, pictureUrl?: string)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
+  const trimmed = name.trim()
+
+  // Prefer active match, then shopped match (revive), then fresh insert.
+  const { data: existing } = await supabase
+    .from('items')
+    .select('*')
+    .eq('list_id', listId)
+    .ilike('name', trimmed)
+    .order('is_checked', { ascending: true }) // false (active) comes first
+    .limit(1)
+    .single()
+
+  if (existing) {
+    const patch: Record<string, unknown> = { quantity: existing.quantity + 1 }
+    if (existing.is_checked) patch.is_checked = false
+    const { data, error } = await supabase
+      .from('items')
+      .update(patch)
+      .eq('id', existing.id)
+      .select()
+      .single()
+    if (error) return { error: error.message }
+    revalidatePath(`/lists/${listId}`)
+    return { item: data, merged: true }
+  }
+
   const { data, error } = await supabase
     .from('items')
     .insert({
       list_id: listId,
       added_by: user.id,
-      name: name.trim(),
+      name: trimmed,
       picture_url: pictureUrl?.trim() || null,
     })
     .select()
@@ -21,18 +47,19 @@ export async function addItem(listId: string, name: string, pictureUrl?: string)
 
   if (error) return { error: error.message }
   revalidatePath(`/lists/${listId}`)
-  return { item: data }
+  return { item: data, merged: false }
 }
 
 export async function updateItem(
   itemId: string,
   listId: string,
-  patch: { name?: string; picture_url?: string | null }
+  patch: { name?: string; picture_url?: string | null; quantity?: number }
 ) {
   const supabase = await createClient()
   const update: Record<string, unknown> = {}
   if (patch.name !== undefined) update.name = patch.name.trim()
   if ('picture_url' in patch) update.picture_url = patch.picture_url?.trim() || null
+  if (patch.quantity !== undefined) update.quantity = Math.max(1, patch.quantity)
 
   const { error } = await supabase.from('items').update(update).eq('id', itemId)
   if (error) return { error: error.message }
@@ -50,31 +77,11 @@ export async function toggleItem(itemId: string, listId: string, checked: boolea
   revalidatePath(`/lists/${listId}`)
 }
 
-export async function deleteItem(itemId: string, listId: string) {
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('items')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', itemId)
-  if (error) return { error: error.message }
-  revalidatePath(`/lists/${listId}`)
-}
-
 export async function reorderItem(itemId: string, listId: string, sortOrder: number) {
   const supabase = await createClient()
   const { error } = await supabase
     .from('items')
     .update({ sort_order: sortOrder })
-    .eq('id', itemId)
-  if (error) return { error: error.message }
-  revalidatePath(`/lists/${listId}`)
-}
-
-export async function restoreItem(itemId: string, listId: string) {
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('items')
-    .update({ is_checked: false, deleted_at: null })
     .eq('id', itemId)
   if (error) return { error: error.message }
   revalidatePath(`/lists/${listId}`)
@@ -87,7 +94,6 @@ export async function clearShoppedItems(listId: string) {
     .delete()
     .eq('list_id', listId)
     .eq('is_checked', true)
-    .is('deleted_at', null)
 
   if (error) return { error: error.message }
   revalidatePath(`/lists/${listId}`)
@@ -98,17 +104,66 @@ export async function addItems(listId: string, names: string[]) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
-  const rows = names
-    .map(n => n.trim())
-    .filter(n => n.length > 0)
-    .map(n => ({ list_id: listId, added_by: user.id, name: n }))
+  // Collapse duplicates within the input by lowercased name.
+  const byLower = new Map<string, { display: string; count: number }>()
+  for (const n of names) {
+    const t = n.trim()
+    if (!t) continue
+    const key = t.toLowerCase()
+    const existing = byLower.get(key)
+    if (existing) existing.count++
+    else byLower.set(key, { display: t, count: 1 })
+  }
+  if (byLower.size === 0) return { error: 'No items to add' }
 
-  if (rows.length === 0) return { error: 'No items to add' }
+  // Fetch all existing items for this list once.
+  const { data: allItems } = await supabase
+    .from('items')
+    .select('id, name, is_checked, quantity')
+    .eq('list_id', listId)
 
-  const { data, error } = await supabase.from('items').insert(rows).select()
-  if (error) return { error: error.message }
+  const activeMap = new Map<string, { id: string; quantity: number }>()
+  const shoppedMap = new Map<string, { id: string; quantity: number }>()
+  for (const it of allItems ?? []) {
+    const key = it.name.toLowerCase()
+    if (!it.is_checked) activeMap.set(key, { id: it.id, quantity: it.quantity })
+    else shoppedMap.set(key, { id: it.id, quantity: it.quantity })
+  }
+
+  const resultItems: unknown[] = []
+
+  for (const [key, { display, count }] of byLower) {
+    const active = activeMap.get(key)
+    const shopped = shoppedMap.get(key)
+
+    if (active) {
+      const { data } = await supabase
+        .from('items')
+        .update({ quantity: active.quantity + count })
+        .eq('id', active.id)
+        .select()
+        .single()
+      if (data) resultItems.push(data)
+    } else if (shopped) {
+      const { data } = await supabase
+        .from('items')
+        .update({ quantity: shopped.quantity + count, is_checked: false })
+        .eq('id', shopped.id)
+        .select()
+        .single()
+      if (data) resultItems.push(data)
+    } else {
+      const { data } = await supabase
+        .from('items')
+        .insert({ list_id: listId, added_by: user.id, name: display, quantity: count })
+        .select()
+        .single()
+      if (data) resultItems.push(data)
+    }
+  }
+
   revalidatePath(`/lists/${listId}`)
-  return { items: data }
+  return { items: resultItems }
 }
 
 async function fetchRecipeText(input: string): Promise<{ text?: string; error?: string }> {
@@ -243,16 +298,4 @@ export async function uploadImage(formData: FormData) {
   const json = (await res.json()) as { success?: boolean; data?: { url?: string }; error?: { message?: string } }
   if (!json.success || !json.data?.url) return { error: json.error?.message ?? 'Upload failed' }
   return { url: json.data.url }
-}
-
-export async function clearDeletedItems(listId: string) {
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('items')
-    .delete()
-    .eq('list_id', listId)
-    .not('deleted_at', 'is', null)
-
-  if (error) return { error: error.message }
-  revalidatePath(`/lists/${listId}`)
 }

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Item, ListTextSize } from '@/lib/types'
-import { addItem, clearDeletedItems, clearShoppedItems, deleteItem, reorderItem, restoreItem, toggleItem, updateItem } from './actions'
+import { addItem, clearShoppedItems, reorderItem, toggleItem, updateItem } from './actions'
 import PictureInput from './PictureInput'
 import RecipeImportModal from './RecipeImportModal'
 import {
@@ -104,9 +104,8 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   }, [lightboxUrl])
 
   const sortByOrder = (a: Item, b: Item) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity)
-  const toShop = useMemo(() => items.filter(i => !i.deleted_at && !i.is_checked).sort(sortByOrder), [items])
-  const shopped = useMemo(() => items.filter(i => !i.deleted_at && i.is_checked).sort(sortByOrder), [items])
-  const deleted = useMemo(() => items.filter(i => !!i.deleted_at).sort(sortByOrder), [items])
+  const toShop = useMemo(() => items.filter(i => !i.is_checked).sort(sortByOrder), [items])
+  const shopped = useMemo(() => items.filter(i => i.is_checked).sort(sortByOrder), [items])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -153,31 +152,54 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     setFiltered([])
     const pictureUrl = urlInput.trim() || undefined
     setUrlInput('')
-    const tempId = crypto.randomUUID()
-    const optimistic: Item = {
-      id: tempId,
-      list_id: listId,
-      added_by: '',
-      name,
-      is_checked: false,
-      created_at: new Date().toISOString(),
-      picture_url: pictureUrl ?? null,
-      deleted_at: null,
-      sort_order: null,
+
+    const lowerName = name.toLowerCase()
+    const activeMatch = items.find(i => !i.is_checked && i.name.toLowerCase() === lowerName)
+    const shoppedMatch = !activeMatch ? items.find(i => i.is_checked && i.name.toLowerCase() === lowerName) : undefined
+    const match = activeMatch ?? shoppedMatch
+
+    if (match) {
+      // Optimistic: increment quantity (and revive from shopped if needed)
+      setItems(prev => prev.map(i => i.id === match.id
+        ? { ...i, quantity: i.quantity + 1, is_checked: false }
+        : i
+      ))
+      const result = await addItem(listId, name, pictureUrl)
+      if (result?.error) {
+        setItems(prev => prev.map(i => i.id === match.id ? match : i))
+      } else if (result?.item) {
+        const real = result.item as Item
+        setItems(prev => prev.map(i => i.id === real.id ? real : i))
+      }
+    } else {
+      // Optimistic: insert new item
+      const tempId = crypto.randomUUID()
+      const optimistic: Item = {
+        id: tempId,
+        list_id: listId,
+        added_by: '',
+        name,
+        is_checked: false,
+        created_at: new Date().toISOString(),
+        picture_url: pictureUrl ?? null,
+        sort_order: null,
+        quantity: 1,
+      }
+      setItems(prev => [...prev, optimistic])
+      const result = await addItem(listId, name, pictureUrl)
+      if (result?.error) {
+        setItems(prev => prev.filter(i => i.id !== tempId))
+      } else if (result?.item) {
+        const real = result.item as Item
+        setItems(prev => {
+          if (prev.some(i => i.id === real.id)) {
+            return prev.filter(i => i.id !== tempId)
+          }
+          return prev.map(i => i.id === tempId ? real : i)
+        })
+      }
     }
-    setItems(prev => [...prev, optimistic])
-    const result = await addItem(listId, name, pictureUrl)
-    if (result?.error) {
-      setItems(prev => prev.filter(i => i.id !== tempId))
-    } else if (result?.item) {
-      const real = result.item as Item
-      setItems(prev => {
-        if (prev.some(i => i.id === real.id)) {
-          return prev.filter(i => i.id !== tempId)
-        }
-        return prev.map(i => i.id === tempId ? real : i)
-      })
-    }
+
     setLoading(false)
   }
 
@@ -186,42 +208,26 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     await toggleItem(item.id, listId, !item.is_checked)
   }
 
-  async function handleDeleteItem(item: Item) {
-    setItems(prev => prev.map(i => i.id === item.id ? { ...i, deleted_at: new Date().toISOString() } : i))
-    await deleteItem(item.id, listId)
-  }
-
-  async function handleRestore(item: Item) {
-    setItems(prev => prev.map(i => i.id === item.id ? { ...i, is_checked: false, deleted_at: null } : i))
-    await restoreItem(item.id, listId)
-  }
-
   async function handleClearShopped() {
-    setItems(prev => prev.filter(i => i.deleted_at || !i.is_checked))
+    setItems(prev => prev.filter(i => !i.is_checked))
     await clearShoppedItems(listId)
   }
 
-  async function handleClearDeleted() {
-    setItems(prev => prev.filter(i => !i.deleted_at))
-    await clearDeletedItems(listId)
-  }
-
-  async function handleUpdate(item: Item, name: string, pictureUrl: string) {
+  async function handleUpdate(item: Item, name: string, pictureUrl: string, quantity: number) {
     const patch = {
       name: name.trim() || item.name,
       picture_url: pictureUrl.trim() || null,
+      quantity: Math.max(1, quantity),
     }
     setEditingItem(null)
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, ...patch } : i))
     const result = await updateItem(item.id, listId, patch)
     if (result?.error) {
       setItems(prev => prev.map(i => i.id === item.id ? item : i))
-    } else {
-      setItems(prev => prev.map(i => i.id === item.id ? { ...i, ...patch } : i))
     }
   }
 
-  const isEmpty = toShop.length === 0 && shopped.length === 0 && deleted.length === 0
+  const isEmpty = toShop.length === 0 && shopped.length === 0
 
   return (
     <div className="space-y-4">
@@ -313,7 +319,6 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
                   thumbSizeClass={thumbSizeClass}
                   onToggle={() => handleToggle(item)}
                   onEdit={() => setEditingItem(item)}
-                  onDelete={() => handleDeleteItem(item)}
                   onPicture={() => item.picture_url && setLightboxUrl(item.picture_url)}
                 />
               ))}
@@ -353,43 +358,9 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
                 <span className={`${itemTextClass} flex-1 text-gray-400 dark:text-gray-500`}>
                   {item.name}
                 </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Deleted */}
-      {deleted.length > 0 && (
-        <div className="space-y-1">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-gray-300 dark:text-gray-600">Deleted</span>
-            <button
-              onClick={handleClearDeleted}
-              className="text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none"
-              aria-label="Clear deleted items"
-            >
-              ×
-            </button>
-          </div>
-          <ul className="space-y-1">
-            {deleted.map(item => (
-              <li
-                key={item.id}
-                onClick={() => handleRestore(item)}
-                className="flex items-center gap-3 bg-gray-50/50 dark:bg-gray-900/30 rounded-xl border border-gray-100/50 dark:border-gray-800/30 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors select-none cursor-pointer opacity-50 hover:opacity-75"
-              >
-                {item.picture_url && (
-                  <img
-                    src={item.picture_url}
-                    alt=""
-                    onError={e => { e.currentTarget.style.display = 'none' }}
-                    className={`${thumbSizeClass} rounded object-cover flex-shrink-0`}
-                  />
+                {item.quantity > 1 && (
+                  <span className="text-xs text-gray-300 dark:text-gray-600 ml-1">× {item.quantity}</span>
                 )}
-                <span className={`${itemTextClass} flex-1 text-gray-400 dark:text-gray-500 line-through`}>
-                  {item.name}
-                </span>
               </li>
             ))}
           </ul>
@@ -399,7 +370,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
       {editingItem && (
         <EditModal
           item={editingItem}
-          onSave={(name, pictureUrl) => handleUpdate(editingItem, name, pictureUrl)}
+          onSave={(name, pictureUrl, quantity) => handleUpdate(editingItem, name, pictureUrl, quantity)}
           onClose={() => setEditingItem(null)}
         />
       )}
@@ -409,8 +380,9 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
           listId={listId}
           onClose={() => setShowRecipe(false)}
           onItemsAdded={incoming => setItems(prev => {
-            const have = new Set(prev.map(i => i.id))
-            return [...prev, ...incoming.filter(i => !have.has(i.id))]
+            const map = new Map(prev.map(i => [i.id, i] as const))
+            for (const it of incoming) map.set(it.id, it)
+            return Array.from(map.values())
           })}
         />
       )}
@@ -433,14 +405,13 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
 }
 
 function SortableRow({
-  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onDelete, onPicture,
+  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onPicture,
 }: {
   item: Item
   itemTextClass: string
   thumbSizeClass: string
   onToggle: () => void
   onEdit: () => void
-  onDelete: () => void
   onPicture: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
@@ -480,6 +451,9 @@ function SortableRow({
       <span className={`${itemTextClass} flex-1 text-gray-800 dark:text-gray-200`}>
         {item.name}
       </span>
+      {item.quantity > 1 && (
+        <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">× {item.quantity}</span>
+      )}
       <button
         onClick={e => { e.stopPropagation(); onEdit() }}
         className="text-gray-300 dark:text-gray-600 hover:text-blue-400 dark:hover:text-blue-400 transition-colors"
@@ -489,24 +463,18 @@ function SortableRow({
           <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
         </svg>
       </button>
-      <button
-        onClick={e => { e.stopPropagation(); onDelete() }}
-        className="text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none"
-        aria-label="Delete item"
-      >
-        ×
-      </button>
     </li>
   )
 }
 
 function EditModal({ item, onSave, onClose }: {
   item: Item
-  onSave: (name: string, pictureUrl: string) => void
+  onSave: (name: string, pictureUrl: string, quantity: number) => void
   onClose: () => void
 }) {
   const [name, setName] = useState(item.name)
   const [pictureUrl, setPictureUrl] = useState(item.picture_url ?? '')
+  const [quantity, setQuantity] = useState(item.quantity)
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
@@ -531,6 +499,25 @@ function EditModal({ item, onSave, onClose }: {
           autoFocus
           className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-600 dark:text-gray-400">Quantity</span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setQuantity(q => Math.max(1, q - 1))}
+              disabled={quantity <= 1}
+              className="w-7 h-7 rounded border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 disabled:opacity-30 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-base leading-none"
+            >
+              −
+            </button>
+            <span className="w-8 text-center text-sm text-gray-800 dark:text-gray-200">{quantity}</span>
+            <button
+              onClick={() => setQuantity(q => q + 1)}
+              className="w-7 h-7 rounded border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-base leading-none"
+            >
+              +
+            </button>
+          </div>
+        </div>
         <PictureInput value={pictureUrl} onChange={setPictureUrl} />
         <div className="flex gap-2 justify-end">
           <button
@@ -540,7 +527,7 @@ function EditModal({ item, onSave, onClose }: {
             Cancel
           </button>
           <button
-            onClick={() => onSave(name, pictureUrl)}
+            onClick={() => onSave(name, pictureUrl, quantity)}
             disabled={!name.trim()}
             className="text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-medium transition-colors"
           >
