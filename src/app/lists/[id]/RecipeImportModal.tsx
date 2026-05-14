@@ -19,6 +19,13 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    navigator.clipboard.readText().then(clip => {
+      const t = clip.trim()
+      if (/^https?:\/\/\S+$/i.test(t)) setText(t)
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
