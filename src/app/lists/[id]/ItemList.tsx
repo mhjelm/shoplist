@@ -51,6 +51,11 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   const [pendingMerge, setPendingMerge] = useState<{ source: Item; target: Item } | null>(null)
   const [editMode] = useEditMode()
   const inputRef = useRef<HTMLInputElement>(null)
+  // Refs so handleDragEnd always reads the latest values even if dnd-kit holds a stale callback.
+  const editModeRef = useRef(editMode)
+  editModeRef.current = editMode
+  const itemsRef = useRef(items)
+  itemsRef.current = items
 
   useEffect(() => {
     if (!isShared) return
@@ -140,9 +145,9 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     const { active, over } = event
     if (!over || active.id === over.id) return
 
-    if (editMode) {
-      const activeItem = items.find(i => i.id === active.id)
-      const overItem = items.find(i => i.id === over.id)
+    if (editModeRef.current) {
+      const activeItem = itemsRef.current.find(i => i.id === active.id)
+      const overItem = itemsRef.current.find(i => i.id === over.id)
       if (activeItem && overItem) {
         setPendingMerge({ source: activeItem, target: overItem })
       }
@@ -588,22 +593,27 @@ function SortableRow({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    // Suppress sort-preview animation in edit mode so items don't visually shuffle while dragging.
+    transform: editMode ? undefined : CSS.Transform.toString(transform),
+    transition: editMode ? undefined : transition,
     opacity: isDragging ? 0.5 : undefined,
   }
 
-  const bgClass = muted
-    ? 'bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/50'
-    : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800'
+  const bgClass = editMode
+    ? muted
+      ? 'bg-rose-50/40 dark:bg-rose-950/10 border-rose-200/70 dark:border-rose-800/30'
+      : 'bg-rose-50/60 dark:bg-gray-900 border-rose-200 dark:border-rose-800/50'
+    : muted
+      ? 'bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/50'
+      : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800'
   const nameClass = muted ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'
 
   return (
     <li
       ref={setNodeRef}
       style={style}
-      onClick={onToggle}
-      className={`flex items-center gap-3 ${bgClass} rounded-xl border px-4 py-3 transition-colors select-none cursor-pointer`}
+      onClick={editMode ? undefined : onToggle}
+      className={`flex items-center gap-3 ${bgClass} rounded-xl border px-4 py-3 transition-colors select-none ${editMode ? 'cursor-default' : 'cursor-pointer'}`}
     >
       <button
         {...attributes}
