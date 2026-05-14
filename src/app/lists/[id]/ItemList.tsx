@@ -487,7 +487,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
                         className={`${thumbSizeClass} rounded object-cover flex-shrink-0 opacity-60`}
                       />
                     )}
-                    <span className={`${itemTextClass} flex-1 text-gray-400 dark:text-gray-500`}>
+                    <span className={`${itemTextClass} flex-1 min-w-0 truncate text-gray-400 dark:text-gray-500`}>
                       {item.name}
                     </span>
                     <MeasurementBadge item={item} muted onCombine={combined => handleMeasurementCombine(item, combined)} />
@@ -641,7 +641,7 @@ function SortableRow({
           className={`${thumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
         />
       )}
-      <span className={`${itemTextClass} flex-1 ${nameClass}`}>
+      <span className={`${itemTextClass} flex-1 min-w-0 truncate ${nameClass}`}>
         {item.name}
       </span>
       <MeasurementBadge item={item} muted={muted} onCombine={onCombine} />
