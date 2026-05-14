@@ -6,6 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Family shopping list web app: each user has personal lists; lists can be shared with other family members for real-time collaboration. The product scope (features and explicit non-goals) lives in `PRD.md` — consult it before proposing new features.
 
+## Workflow rules
+
+- **Plans are plans, not green lights.** When the user asks for a plan, produce the plan and stop. Do not start implementing until the user says so (e.g. "exec plan", "do it", "go ahead").
+- **Never commit or push on your own.** When a task is finished, tell the user it's ready to commit and push — but only run `git commit` / `git push` after an explicit instruction in that turn. Past authorisation does not roll forward to new changes.
+
 ## Commands
 
 ```
@@ -17,7 +22,10 @@ npm run lint     # eslint
 
 No test framework is configured.
 
-Required env vars (Supabase project): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+Required env vars:
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase project.
+- `GEMINI_API_KEY` — Google Gemini 2.5 Flash, used for recipe ingredient extraction, image-based item naming, and grocery category classification. The app degrades gracefully if missing (returns errors that surface in the UI).
+- `IMGBB_API_KEY` — ImgBB image hosting for user-uploaded item pictures.
 
 ## Stack
 
@@ -70,35 +78,75 @@ Server Components re-render with fresh data on the next navigation; the client t
 The item list is a Client Component that:
 
 1. Receives `initialItems` from the server.
-2. Maintains local state for instant feedback on add/toggle/delete (optimistic — reverts on action error).
-3. For **shared** lists only, subscribes to a Supabase Realtime channel filtered by `list_id` and merges INSERT/UPDATE/DELETE events into local state.
+2. Maintains local state for instant feedback on every mutation — add, toggle, edit, delete, reorder, merge, measurement combine, category change, recipe-import bulk add. Each handler applies the change locally first, then awaits the server action, then rolls back from a snapshot on `{ error }`.
+3. For **shared** lists only, subscribes to a Supabase Realtime channel filtered by `list_id` and merges INSERT/UPDATE/DELETE events into local state. Optimistic INSERTs are matched by `(added_by === '' && name === incoming.name)` and reconciled when the real row arrives.
 
 Private lists skip the realtime subscription. When changing mutation logic, update both the optimistic path *and* ensure the eventual server response/realtime echo doesn't double-apply.
 
 ### User preferences are server-side, read in layout
 
-User-level UI preferences (theme, list text size) live in the `user_preferences` table (one row per user, lazily upserted). `src/lib/preferences.ts` exposes `getUserPreferences()` — wrapped in `React.cache` so multiple Server Components in the same request share one query, and returns `DEFAULT_PREFERENCES` for unauthenticated users or users without a row.
+User-level UI preferences live in the `user_preferences` table (one row per user, lazily upserted). `src/lib/preferences.ts` exposes `getUserPreferences()` — wrapped in `React.cache` so multiple Server Components in the same request share one query, and returns `DEFAULT_PREFERENCES` for unauthenticated users or users without a row.
 
-- **Theme** is applied by adding `dark` to `<html>` in `src/app/layout.tsx`. Tailwind v4 uses class-based dark mode via `@custom-variant dark` in `globals.css`. Reading the theme server-side avoids any flash-of-wrong-theme on first paint.
-- **List text size** is read in `src/app/lists/[id]/page.tsx` and passed as a `textSize` prop to `ItemList`, which scales the item rows only (the rest of the chrome stays at its normal size).
-- **Writes** go through `src/app/settings/actions.ts` and call `revalidatePath('/', 'layout')` so the next render reflects the new preference without a reload.
+Three preferences today:
+- `theme` (`light` | `dark`) — applied by adding `dark` to `<html>` in `src/app/layout.tsx`. Tailwind v4 uses class-based dark mode via `@custom-variant dark` in `globals.css`. Reading the theme server-side avoids any flash-of-wrong-theme on first paint.
+- `list_text_size` (`normal` | `large`) — read in `src/app/lists/[id]/page.tsx` and passed as `textSize` to `ItemList`, which scales the item rows only (the rest of the chrome stays at its normal size).
+- `category_order` (`text[]`) — the user's preferred order for the 11 grocery categories. Used to sort the to-shop section. Defaults to `DEFAULT_CATEGORY_ORDER` from `src/lib/categories.ts`.
+
+**Writes** go through `src/app/settings/actions.ts` and call `revalidatePath('/', 'layout')` so the next render reflects the new preference without a reload.
+
+### Categories: a closed enum + Gemini auto-tagging
+
+`src/lib/categories.ts` defines the 11 grocery categories (slugs + Swedish labels) as a `const` array — `frukt-gront`, `mejeri`, `kott-fisk`, `brod`, `frys`, `skafferi`, `drycker`, `snacks`, `hushall`, `hygien`, `ovrigt`. The slug type `CategorySlug` and the validator `isValidCategorySlug()` are the single source of truth — never accept a free-form category string from clients without running it through the validator.
+
+How items get categorised:
+1. **Cached fast path**: when adding an item, look it up in `user_item_history.category` (case-insensitive) and use that.
+2. **Gemini fallback**: if no cached category, fire `categorizeItem()` server action in the background after the optimistic insert; it calls Gemini and writes the result to both `items.category` and `user_item_history.category`. UI updates via the realtime echo or the awaited result.
+3. **Recipe import**: Gemini returns categories in the same call that extracts ingredients (no extra round-trip). These bypass the per-item categorize call.
+4. **Manual override**: the edit modal has a category dropdown; `setItemCategory()` writes both `items.category` and `user_item_history.category` so future adds inherit the user's choice.
+
+### Recipe import (`RecipeImportModal.tsx` + `extractRecipeItems` action)
+
+User pastes a URL or raw recipe text. Flow:
+1. **URL detection**: if the input looks like an `http(s)://` URL, fetch it server-side. The modal also auto-fills from `navigator.clipboard.readText()` on open if the clipboard contains a URL.
+2. **JSON-LD first**: parse `<script type="application/ld+json">` and pull `recipeIngredient` from any `Recipe`-typed node (handles `@graph` wrappers and arrays). Most Swedish recipe sites (koket.se, ica.se, arla.se, mathem.se) have this — way more reliable than scraping HTML.
+3. **HTML fallback**: if no JSON-LD, strip `<script>`/`<style>` and pass the first 30 KB to Gemini.
+4. **Gemini extracts** `{ name, category, measurement }` per ingredient with `temperature: 0` and a few-shot example. The system prompt forbids modifying measurement strings — keep `5 dl` as `5 dl`, never round or paraphrase.
+5. **`addItems()` server action** dedupes by lowercased name within the batch, then either appends to existing active items (measurements joined with ` + `, quantities summed), revives shopped items (replacing the measurement), or inserts new rows.
+
+### Measurement system (`src/lib/measurement.ts`)
+
+Items store measurements as **free-form text** (`measurement text` column, max 80 chars) — Swedish recipe units are too irregular for a structured `{value, unit}` model (ranges like `350-400`, fractions `½ dl`, approximations `ca 500 g`, parentheticals `2 förp à 500 g`).
+
+Two pure helpers:
+- `parseMeasurement(s)` — best-effort parse to `{ value, unit }`. Handles unicode fractions (`½` → `0.5`), Swedish decimal commas (`1,5` → `1.5`), and `ca` / `cirka` / `ungefär` prefixes. Returns `null` for ranges, parentheticals, or anything ambiguous.
+- `tryCombine(measurement)` — for measurements like `1 dl + 5 dl + 3 dl`, returns `9 dl`. Returns `null` if nothing can be combined (mixed incompatible units, single segment, parse failure). Used by `MeasurementBadge` to offer an inline "→ 9 dl · Slå ihop" popover when the user clicks a multi-segment badge.
+
+### Edit mode (`EditModeContext.tsx`)
+
+A separate UI mode toggled from the page header that swaps the per-row pencil for a red ×, and reinterprets drag as merge instead of reorder. Implementation notes:
+- State lives in a tiny React Context (`EditModeProvider` / `useEditMode()`) so the toggle button can sit in the Server Component header while `ItemList` reads the same boolean deep in the tree.
+- In edit mode, `ItemList` uses **refs** (`editModeRef`, `itemsRef`) when reading state inside `handleDragEnd`. Reason: dnd-kit holds the callback in an internal ref that may lag a React render — without the refs, the very first drag after toggling reads stale state. Don't remove the refs.
+- Dragging in edit mode opens a "Slå ihop X och Y?" confirmation. On confirm, the merge happens via two writes (`items.update` + `items.delete`); a partial failure leaves both rows around — acceptable, the user can re-merge.
+- Merge rules: target keeps `name`, `picture_url`, `category`. Measurements joined with ` + ` (null-safe). Quantities summed.
+- Shopped items get a `SortableContext` only when in edit mode, so they can be drag-merge sources/targets across sections.
 
 ### Autocomplete is server-driven, populated by a trigger
 
-`user_item_history` is filled by an `AFTER INSERT` trigger on `items` (`bump_item_history`) — never written directly by app code. The list page fetches the user's top ~200 items by `use_count` and passes them as `suggestions` to `ItemList`; filtering happens client-side. Dedupe is case-insensitive via a unique index on `(user_id, lower(name))`.
+`user_item_history` is filled by an `AFTER INSERT` trigger on `items` (`bump_item_history`) — never written directly by app code. The trigger also persists `category` (using `coalesce` to keep an existing user override when the new insert has no category). The list page fetches the user's top ~200 items by `use_count` and passes them as `suggestions` to `ItemList`; filtering happens client-side. Dedupe is case-insensitive via a unique index on `(user_id, lower(name))`.
 
 ## Data Model
 
-Four tables in `supabase/migrations/0001_init.sql`:
+Five tables. Initial schema in `supabase/migrations/0001_init.sql`; subsequent migrations add columns and a preferences table:
 
 - `lists` (id, name, owner_id, is_shared, created_at)
-- `list_members` (list_id, user_id) — join table for sharing
-- `items` (id, list_id, added_by, name, is_checked, created_at)
-- `user_item_history` (user_id, name, last_used_at, use_count) — autocomplete source
+- `list_members` (list_id, user_id, added_at) — join table for sharing
+- `items` (id, list_id, added_by, name, is_checked, created_at, **picture_url**, **sort_order**, **quantity**, **category**, **measurement**)
+- `user_item_history` (user_id, name, last_used_at, use_count, **category**) — autocomplete source
+- `user_preferences` (user_id, theme, list_text_size, **category_order**, updated_at)
 
 TypeScript mirrors of these are in `src/lib/types.ts`. Keep them in sync when the schema changes.
 
-Realtime publication includes `items`, `lists`, and `list_members`.
+Realtime publication includes `items`, `lists`, and `list_members`. `items` uses `replica identity full` (migration 0005) so DELETE events carry the full old row.
 
 ## Conventions
 
