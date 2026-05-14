@@ -591,22 +591,28 @@ function SortableRow({
   onDelete?: () => void
   muted?: boolean
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
   const style = {
     // Suppress sort-preview animation in edit mode so items don't visually shuffle while dragging.
     transform: editMode ? undefined : CSS.Transform.toString(transform),
     transition: editMode ? undefined : transition,
-    opacity: isDragging ? 0.5 : undefined,
+    opacity: isDragging ? 0.4 : undefined,
   }
 
-  const bgClass = editMode
-    ? muted
-      ? 'bg-rose-50/40 dark:bg-rose-950/10 border-rose-200/70 dark:border-rose-800/30'
-      : 'bg-rose-50/60 dark:bg-gray-900 border-rose-200 dark:border-rose-800/50'
-    : muted
-      ? 'bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/50'
-      : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800'
-  const nameClass = muted ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'
+  const mergeTarget = editMode && isOver && !isDragging
+
+  const bgClass = mergeTarget
+    ? 'bg-blue-100 dark:bg-blue-950/60 border-blue-400 dark:border-blue-500'
+    : editMode
+      ? muted
+        ? 'bg-rose-50/40 dark:bg-rose-950/10 border-rose-200/70 dark:border-rose-800/30'
+        : 'bg-rose-50/60 dark:bg-gray-900 border-rose-200 dark:border-rose-800/50'
+      : muted
+        ? 'bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/50'
+        : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800'
+  const nameClass = mergeTarget
+    ? 'text-blue-800 dark:text-blue-200 font-medium'
+    : muted ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'
 
   return (
     <li
