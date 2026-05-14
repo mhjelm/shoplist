@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Item, ListTextSize } from '@/lib/types'
+import type { Item, List, ListTextSize } from '@/lib/types'
 import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
-import { addItem, categorizeItem, clearAllItems, clearShoppedItems, deleteItem, mergeItems, reorderItem, setItemCategory, toggleItem, updateItem } from './actions'
+import { addItem, categorizeItem, clearAllItems, clearShoppedItems, copyItemsToList, deleteItem, mergeItems, moveItemsToList, reorderItem, setItemCategory, toggleItem, updateItem } from './actions'
 import { useEditMode } from './EditModeContext'
 import { MeasurementBadge } from './MeasurementBadge'
 import PictureInput from './PictureInput'
 import RecipeImportModal from './RecipeImportModal'
+import TargetListModal from './TargetListModal'
 import {
   DndContext,
   type DragEndEvent,
@@ -33,9 +34,11 @@ interface Props {
   suggestions: string[]
   textSize: ListTextSize
   categoryOrder: CategorySlug[]
+  availableLists: Pick<List, 'id' | 'name' | 'owner_id' | 'is_shared'>[]
+  currentUserId: string
 }
 
-export default function ItemList({ initialItems, listId, isShared, suggestions, textSize, categoryOrder }: Props) {
+export default function ItemList({ initialItems, listId, isShared, suggestions, textSize, categoryOrder, availableLists, currentUserId }: Props) {
   const itemTextClass = textSize === 'large' ? 'text-base' : 'text-sm'
   const thumbSizeClass = textSize === 'large' ? 'w-16 h-16' : 'w-12 h-12'
   const [items, setItems] = useState<Item[]>(initialItems)
@@ -49,6 +52,9 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const [showRecipe, setShowRecipe] = useState(false)
   const [pendingMerge, setPendingMerge] = useState<{ source: Item; target: Item } | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [pickerMode, setPickerMode] = useState<'copy' | 'move' | null>(null)
+  const [pickerError, setPickerError] = useState<string | null>(null)
   const [editMode] = useEditMode()
   const inputRef = useRef<HTMLInputElement>(null)
   // Refs so handleDragEnd always reads the latest values even if dnd-kit holds a stale callback.
@@ -56,6 +62,27 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   const itemsRef = useRef(items)
   useEffect(() => { editModeRef.current = editMode }, [editMode])
   useEffect(() => { itemsRef.current = items }, [items])
+
+  // Clear selection when leaving edit mode so the next entry starts fresh.
+  // Reset-during-render pattern (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
+  const [prevEditMode, setPrevEditMode] = useState(editMode)
+  if (prevEditMode !== editMode) {
+    setPrevEditMode(editMode)
+    if (!editMode) {
+      setSelectedIds(new Set())
+      setPickerMode(null)
+      setPickerError(null)
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   useEffect(() => {
     if (!isShared) return
@@ -325,6 +352,40 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     }
   }
 
+  async function handlePickTarget(targetListId: string) {
+    const mode = pickerMode
+    if (!mode || selectedIds.size === 0) return
+    const ids = [...selectedIds]
+    const selectedItems = items.filter(i => selectedIds.has(i.id))
+    const payload = selectedItems.map(i => ({
+      name: i.name,
+      picture_url: i.picture_url,
+      quantity: i.quantity,
+      category: i.category,
+      measurement: i.measurement,
+    }))
+
+    setPickerError(null)
+    if (mode === 'move') {
+      const snapshot = items
+      setItems(prev => prev.filter(i => !selectedIds.has(i.id)))
+      const res = await moveItemsToList(listId, targetListId, ids, payload)
+      if (res?.error) {
+        setItems(snapshot)
+        setPickerError(res.error)
+        throw new Error(res.error)
+      }
+    } else {
+      const res = await copyItemsToList(targetListId, payload)
+      if (res?.error) {
+        setPickerError(res.error)
+        throw new Error(res.error)
+      }
+    }
+    setSelectedIds(new Set())
+    setPickerMode(null)
+  }
+
   const isEmpty = toShop.length === 0 && shopped.length === 0
 
   return (
@@ -429,6 +490,8 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
                         onCombine={combined => handleMeasurementCombine(item, combined)}
                         editMode={editMode}
                         onDelete={() => handleDelete(item)}
+                        selected={selectedIds.has(item.id)}
+                        onToggleSelect={() => toggleSelect(item.id)}
                       />
                     ))}
                   </ul>
@@ -467,6 +530,8 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
                       editMode={editMode}
                       onDelete={() => handleDelete(item)}
                       muted
+                      selected={selectedIds.has(item.id)}
+                      onToggleSelect={() => toggleSelect(item.id)}
                     />
                   ))}
                 </ul>
@@ -508,6 +573,50 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
             Clear list
           </button>
         </div>
+      )}
+
+      {editMode && selectedIds.size > 0 && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-4 pt-3 flex items-center gap-2 shadow-lg"
+          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        >
+          <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 min-w-0">{selectedIds.size} valda</span>
+          <button
+            onClick={() => { setPickerError(null); setPickerMode('copy') }}
+            className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            Kopiera till…
+          </button>
+          <button
+            onClick={() => { setPickerError(null); setPickerMode('move') }}
+            className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+          >
+            Flytta till…
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            aria-label="Avmarkera alla"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none px-1"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {pickerError && !pickerMode && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white text-xs px-3 py-2 rounded-lg shadow-lg">
+          {pickerError}
+        </div>
+      )}
+
+      {pickerMode && (
+        <TargetListModal
+          mode={pickerMode}
+          availableLists={availableLists}
+          currentUserId={currentUserId}
+          onPick={handlePickTarget}
+          onClose={() => { setPickerMode(null); setPickerError(null) }}
+        />
       )}
 
       {editingItem && (
@@ -578,7 +687,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
 }
 
 function SortableRow({
-  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onPicture, onCombine, editMode, onDelete, muted,
+  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onPicture, onCombine, editMode, onDelete, muted, selected, onToggleSelect,
 }: {
   item: Item
   itemTextClass: string
@@ -590,6 +699,8 @@ function SortableRow({
   editMode?: boolean
   onDelete?: () => void
   muted?: boolean
+  selected?: boolean
+  onToggleSelect?: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
   const style = {
@@ -600,26 +711,31 @@ function SortableRow({
   }
 
   const mergeTarget = editMode && isOver && !isDragging
+  const isSelected = editMode && selected
 
   const bgClass = mergeTarget
     ? 'bg-blue-100 dark:bg-blue-950/60 border-blue-400 dark:border-blue-500'
-    : editMode
-      ? muted
-        ? 'bg-rose-50/40 dark:bg-blue-950/35 border-rose-200/70 dark:border-blue-800/50'
-        : 'bg-rose-50/60 dark:bg-blue-950/60 border-rose-200 dark:border-blue-700/70'
-      : muted
-        ? 'bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/50'
-        : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800'
+    : isSelected
+      ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-400 dark:border-blue-500'
+      : editMode
+        ? muted
+          ? 'bg-rose-50/40 dark:bg-blue-950/35 border-rose-200/70 dark:border-blue-800/50'
+          : 'bg-rose-50/60 dark:bg-blue-950/60 border-rose-200 dark:border-blue-700/70'
+        : muted
+          ? 'bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/50'
+          : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800'
   const nameClass = mergeTarget
     ? 'text-blue-800 dark:text-blue-200 font-medium'
-    : muted ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'
+    : isSelected
+      ? 'text-blue-800 dark:text-blue-100 font-medium'
+      : muted ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'
 
   return (
     <li
       ref={setNodeRef}
       style={style}
-      onClick={editMode ? undefined : onToggle}
-      className={`flex items-center gap-3 ${bgClass} rounded-xl border px-4 py-3 transition-colors select-none ${editMode ? 'cursor-default' : 'cursor-pointer'}`}
+      onClick={editMode ? onToggleSelect : onToggle}
+      className={`flex items-center gap-3 ${bgClass} rounded-xl border px-4 py-3 transition-colors select-none cursor-pointer`}
     >
       <button
         {...attributes}

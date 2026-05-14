@@ -34,6 +34,13 @@ export default async function ListPage({ params }: Props) {
     .order('use_count', { ascending: false })
     .limit(200)
 
+  // RLS filters to lists the user owns or is a member of.
+  const { data: otherLists } = await supabase
+    .from('lists')
+    .select('id, name, owner_id, is_shared, created_at')
+    .neq('id', id)
+    .order('created_at', { ascending: false })
+
   const suggestions = history?.map(h => h.name) ?? []
   const isOwner = list.owner_id === user.id
   const { list_text_size, category_order } = await getUserPreferences()
@@ -56,6 +63,8 @@ export default async function ListPage({ params }: Props) {
           suggestions={suggestions}
           textSize={list_text_size}
           categoryOrder={category_order}
+          availableLists={otherLists ?? []}
+          currentUserId={user.id}
         />
 
         {isOwner && list.is_shared && (

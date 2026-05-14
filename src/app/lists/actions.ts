@@ -13,14 +13,15 @@ export async function createList(formData: FormData) {
 
   const isShared = formData.get('is_shared') === 'true'
 
-  const { error } = await supabase.from('lists').insert({
+  const { data: list, error } = await supabase.from('lists').insert({
     name,
     owner_id: user.id,
     is_shared: isShared,
-  })
+  }).select().single()
 
   if (error) return { error: error.message }
   revalidatePath('/lists')
+  return { list }
 }
 
 export async function deleteList(listId: string) {
