@@ -605,8 +605,8 @@ function SortableRow({
     ? 'bg-blue-100 dark:bg-blue-950/60 border-blue-400 dark:border-blue-500'
     : editMode
       ? muted
-        ? 'bg-rose-50/40 dark:bg-rose-950/10 border-rose-200/70 dark:border-rose-800/30'
-        : 'bg-rose-50/60 dark:bg-gray-900 border-rose-200 dark:border-rose-800/50'
+        ? 'bg-rose-50/40 dark:bg-blue-950/35 border-rose-200/70 dark:border-blue-800/50'
+        : 'bg-rose-50/60 dark:bg-blue-950/60 border-rose-200 dark:border-blue-700/70'
       : muted
         ? 'bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/50'
         : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800'
