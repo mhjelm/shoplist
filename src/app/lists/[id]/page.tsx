@@ -48,7 +48,7 @@ export default async function ListPage({ params }: Props) {
         {!isOwner && <LeaveListButton listId={id} />}
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
+      <main className="w-full max-w-lg mx-auto px-4 py-6 space-y-6">
         <ItemList
           initialItems={items ?? []}
           listId={id}
