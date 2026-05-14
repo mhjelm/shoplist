@@ -395,8 +395,9 @@ export async function suggestItemName(formData: FormData) {
   )
   if (!res.ok) {
     const body = await res.text().catch(() => '')
-    console.error('[gemini] error', res.status, body)
-    return { error: `Gemini failed (${res.status}): ${body.slice(0, 200)}` }
+    console.error('[gemini] suggestItemName error', res.status, body)
+    if (res.status === 429) return { error: 'Gemini API rate limit reached — wait a moment and try again' }
+    return { error: `Gemini failed (${res.status})` }
   }
   type GemResp = { candidates?: { content?: { parts?: { text?: string }[] } }[] }
   const data = (await res.json()) as GemResp

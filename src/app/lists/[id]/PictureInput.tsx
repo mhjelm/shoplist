@@ -35,10 +35,15 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
       ])
       console.log('[picture] upload:', uploadResult)
       console.log('[picture] suggest:', suggestResult)
-      if (uploadResult.error) setError(uploadResult.error)
-      else if (uploadResult.url) onChange(uploadResult.url)
-      if (onSuggestName && 'name' in suggestResult && suggestResult.name) {
-        onSuggestName(suggestResult.name)
+      if (uploadResult.error) {
+        setError(uploadResult.error)
+      } else {
+        if (uploadResult.url) onChange(uploadResult.url)
+        if (onSuggestName && suggestResult.name) {
+          onSuggestName(suggestResult.name)
+        } else if (onSuggestName && suggestResult.error) {
+          setError(suggestResult.error)
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed')
