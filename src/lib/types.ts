@@ -25,6 +25,7 @@ export interface Item {
   sort_order: number | null
   quantity: number
   category: CategorySlug | null
+  measurement: string | null
 }
 
 export type Theme = 'light' | 'dark'

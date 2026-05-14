@@ -10,7 +10,7 @@ interface Props {
   onItemsAdded: (items: Item[]) => void
 }
 
-type Extracted = { name: string; category: string | null; selected: boolean }
+type Extracted = { name: string; category: string | null; measurement: string | null; selected: boolean }
 
 export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Props) {
   const [text, setText] = useState('')
@@ -39,12 +39,12 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
       setError('Inga varor hittades. Försök med mer text.')
       return
     }
-    setExtracted(items.map(i => ({ name: i.name, category: i.category ?? null, selected: true })))
+    setExtracted(items.map(i => ({ name: i.name, category: i.category ?? null, measurement: i.measurement ?? null, selected: true })))
   }
 
   async function handleAdd() {
     if (!extracted) return
-    const selected = extracted.filter(i => i.selected).map(i => ({ name: i.name, category: i.category }))
+    const selected = extracted.filter(i => i.selected).map(i => ({ name: i.name, category: i.category, measurement: i.measurement }))
     if (selected.length === 0) return
     setError(null)
     setLoading(true)
@@ -133,6 +133,9 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
                   </span>
                   <span className={`text-sm flex-1 ${item.selected ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500 line-through'}`}>
                     {item.name}
+                    {item.measurement && (
+                      <span className="ml-1.5 text-xs text-gray-400 dark:text-gray-500">· {item.measurement}</span>
+                    )}
                   </span>
                 </li>
               ))}

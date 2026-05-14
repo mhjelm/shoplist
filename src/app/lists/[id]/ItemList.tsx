@@ -207,6 +207,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
         sort_order: null,
         quantity: 1,
         category: null,
+        measurement: null,
       }
       setItems(prev => [...prev, optimistic])
       const result = await addItem(listId, name, pictureUrl)
@@ -247,11 +248,12 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     await clearAllItems(listId)
   }
 
-  async function handleUpdate(item: Item, name: string, pictureUrl: string, quantity: number, category: CategorySlug) {
+  async function handleUpdate(item: Item, name: string, pictureUrl: string, quantity: number, category: CategorySlug, measurement: string) {
     const patch = {
       name: name.trim() || item.name,
       picture_url: pictureUrl.trim() || null,
       quantity: Math.max(1, quantity),
+      measurement: measurement.trim() || null,
     }
     setEditingItem(null)
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, ...patch, category } : i))
@@ -405,9 +407,13 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
                 <span className={`${itemTextClass} flex-1 text-gray-400 dark:text-gray-500`}>
                   {item.name}
                 </span>
-                {item.quantity > 1 && (
+                {item.measurement ? (
+                  <span className="text-xs text-gray-300 dark:text-gray-600 ml-1">
+                    {item.measurement}{item.quantity > 1 ? ` (× ${item.quantity})` : ''}
+                  </span>
+                ) : item.quantity > 1 ? (
                   <span className="text-xs text-gray-300 dark:text-gray-600 ml-1">× {item.quantity}</span>
-                )}
+                ) : null}
               </li>
             ))}
           </ul>
@@ -428,7 +434,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
       {editingItem && (
         <EditModal
           item={editingItem}
-          onSave={(name, pictureUrl, quantity, category) => handleUpdate(editingItem, name, pictureUrl, quantity, category)}
+          onSave={(name, pictureUrl, quantity, category, measurement) => handleUpdate(editingItem, name, pictureUrl, quantity, category, measurement)}
           onClose={() => setEditingItem(null)}
         />
       )}
@@ -509,9 +515,13 @@ function SortableRow({
       <span className={`${itemTextClass} flex-1 text-gray-800 dark:text-gray-200`}>
         {item.name}
       </span>
-      {item.quantity > 1 && (
+      {item.measurement ? (
+        <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
+          {item.measurement}{item.quantity > 1 ? ` (× ${item.quantity})` : ''}
+        </span>
+      ) : item.quantity > 1 ? (
         <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">× {item.quantity}</span>
-      )}
+      ) : null}
       <button
         onClick={e => { e.stopPropagation(); onEdit() }}
         className="text-gray-300 dark:text-gray-600 hover:text-blue-400 dark:hover:text-blue-400 transition-colors"
@@ -527,13 +537,14 @@ function SortableRow({
 
 function EditModal({ item, onSave, onClose }: {
   item: Item
-  onSave: (name: string, pictureUrl: string, quantity: number, category: CategorySlug) => void
+  onSave: (name: string, pictureUrl: string, quantity: number, category: CategorySlug, measurement: string) => void
   onClose: () => void
 }) {
   const [name, setName] = useState(item.name)
   const [pictureUrl, setPictureUrl] = useState(item.picture_url ?? '')
   const [quantity, setQuantity] = useState(item.quantity)
   const [category, setCategory] = useState<CategorySlug>(item.category ?? 'ovrigt')
+  const [measurement, setMeasurement] = useState(item.measurement ?? '')
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
@@ -556,6 +567,12 @@ function EditModal({ item, onSave, onClose }: {
           onChange={e => setName(e.target.value)}
           placeholder="Item name"
           autoFocus
+          className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <input
+          value={measurement}
+          onChange={e => setMeasurement(e.target.value)}
+          placeholder="Mängd (t.ex. 500 g, 2 msk)"
           className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <div className="flex items-center gap-3">
@@ -598,7 +615,7 @@ function EditModal({ item, onSave, onClose }: {
             Cancel
           </button>
           <button
-            onClick={() => onSave(name, pictureUrl, quantity, category)}
+            onClick={() => onSave(name, pictureUrl, quantity, category, measurement)}
             disabled={!name.trim()}
             className="text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-medium transition-colors"
           >
