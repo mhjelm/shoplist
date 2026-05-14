@@ -3,9 +3,12 @@ import { type CategorySlug, CATEGORIES, isValidCategorySlug } from './categories
 const GEMINI_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
 
-type GemResp = { candidates?: { content?: { parts?: { text?: string }[] } }[] }
+type GemResp = {
+  candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]
+  promptFeedback?: { blockReason?: string }
+}
 
-export async function callGemini(prompt: string): Promise<unknown> {
+async function callGeminiOnce(prompt: string, options: { temperature?: number }): Promise<unknown> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured')
 
@@ -15,8 +18,8 @@ export async function callGemini(prompt: string): Promise<unknown> {
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 2000,
+        temperature: options.temperature ?? 0.1,
+        maxOutputTokens: 4000,
         thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: 'application/json',
       },
@@ -25,13 +28,39 @@ export async function callGemini(prompt: string): Promise<unknown> {
 
   if (!res.ok) {
     const body = await res.text().catch(() => '')
-    console.error('[gemini] error', res.status, body)
-    throw new Error(`Gemini failed (${res.status})`)
+    console.error('[gemini] http error', res.status, body)
+    if (res.status === 429) throw Object.assign(new Error('Gemini API rate limit reached — wait a moment and try again'), { status: 429 })
+    throw new Error(`Gemini HTTP ${res.status}: ${body.slice(0, 200)}`)
   }
 
   const data = (await res.json()) as GemResp
-  const text = data.candidates?.[0]?.content?.parts?.map(p => p.text ?? '').join('').trim() ?? ''
-  return JSON.parse(text)
+  const candidate = data.candidates?.[0]
+  const text = candidate?.content?.parts?.map(p => p.text ?? '').join('').trim() ?? ''
+
+  if (!text) {
+    console.error('[gemini] empty response', JSON.stringify(data).slice(0, 1000))
+    const reason = candidate?.finishReason ?? data.promptFeedback?.blockReason ?? 'unknown'
+    throw new Error(`Gemini returned no text (finishReason: ${reason})`)
+  }
+
+  try {
+    return JSON.parse(text)
+  } catch (e) {
+    console.error('[gemini] JSON parse failed. text:', text.slice(0, 500))
+    throw new Error(`Gemini returned invalid JSON: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
+export async function callGemini(prompt: string, options: { temperature?: number } = {}): Promise<unknown> {
+  try {
+    return await callGeminiOnce(prompt, options)
+  } catch (e) {
+    if ((e as { status?: number }).status === 429) {
+      await new Promise(r => setTimeout(r, 5000))
+      return callGeminiOnce(prompt, options)
+    }
+    throw e
+  }
 }
 
 const CATEGORY_LINES = CATEGORIES.map(c => `- ${c.slug} (${c.label})`).join('\n')

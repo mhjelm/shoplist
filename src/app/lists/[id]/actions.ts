@@ -262,6 +262,43 @@ export async function addItems(listId: string, incoming: Array<{ name: string; c
   return { items: resultItems }
 }
 
+// Walk a JSON-LD value and collect every node typed as Recipe (handles bare
+// objects, arrays, and `@graph` wrappers).
+function findRecipeNodes(node: unknown): Array<Record<string, unknown>> {
+  if (!node || typeof node !== 'object') return []
+  if (Array.isArray(node)) return node.flatMap(findRecipeNodes)
+  const obj = node as Record<string, unknown>
+  const out: Array<Record<string, unknown>> = []
+  const t = obj['@type']
+  if (t === 'Recipe' || (Array.isArray(t) && t.includes('Recipe'))) out.push(obj)
+  if (obj['@graph']) out.push(...findRecipeNodes(obj['@graph']))
+  return out
+}
+
+// Most Swedish recipe sites (koket.se, ica.se, arla.se, mathem.se) embed
+// schema.org Recipe markup with a clean recipeIngredient array — way more
+// reliable than scraping HTML.
+function extractRecipeIngredients(html: string): string[] | null {
+  const matches = html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)
+  for (const m of matches) {
+    try {
+      const json = JSON.parse(m[1].trim())
+      for (const recipe of findRecipeNodes(json)) {
+        const raw = recipe.recipeIngredient
+        if (!Array.isArray(raw)) continue
+        const ings = raw
+          .filter((s): s is string => typeof s === 'string')
+          .map(s => s.trim())
+          .filter(Boolean)
+        if (ings.length > 0) return ings
+      }
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
 async function fetchRecipeText(input: string): Promise<{ text?: string; error?: string }> {
   const trimmed = input.trim()
   if (/^https?:\/\//i.test(trimmed) && !trimmed.includes('\n')) {
@@ -272,6 +309,8 @@ async function fetchRecipeText(input: string): Promise<{ text?: string; error?: 
       })
       if (!res.ok) return { error: `Failed to fetch URL (${res.status})` }
       const html = await res.text()
+      const ingredients = extractRecipeIngredients(html)
+      if (ingredients) return { text: ingredients.join('\n') }
       const stripped = html
         .replace(/<script[\s\S]*?<\/script>/gi, ' ')
         .replace(/<style[\s\S]*?<\/style>/gi, ' ')
@@ -300,7 +339,8 @@ export async function extractRecipeItems(input: string) {
 
   try {
     const parsed = (await callGemini(
-      `Extract grocery shopping list items from this recipe. Return only items someone needs to buy at a store. Skip common pantry staples like water, salt, pepper, basic cooking oil. Reply in Swedish. Keep names short (1-4 words each). Also classify each item into one of these category slugs: ${categoryList}.\n\nFor each item, include a "measurement" field with the quantity/unit phrase from the recipe, preserved verbatim in Swedish (e.g. "500 g", "2 msk", "½ dl", "350-400 g", "ca 500 g", "2 förp à 500 g", "1 vitlöksklyfta"). Fractions (½, ¼), ranges (350-400), approximations (ca), and parentheticals (à 500 g) must be kept exactly as written. If the recipe lists the ingredient and its amount on separate lines, associate them. Set "measurement" to null when no amount is given.\n\nExample input:\n${exampleInput}\n\nExample output:\n${exampleOutput}\n\nReturn JSON only in this exact shape: {"items": [{"name": "...", "category": "slug", "measurement": "..." or null}, ...]}\n\nRecipe:\n${fetched.text}`
+      `Extract grocery shopping list items from this recipe. Return only items someone needs to buy at a store. Skip common pantry staples like water, salt, pepper, basic cooking oil. Reply in Swedish. Keep names short (1-4 words each). Also classify each item into one of these category slugs: ${categoryList}.\n\nFor each item, include a "measurement" field with the quantity/unit phrase from the recipe. CRITICAL: copy the measurement VERBATIM from the input. Never modify, round, paraphrase, or invent numbers. If the input says "5 dl" the output must be "5 dl" — not "2 dl", not "3 dl". Preserve fractions (½, ¼), ranges (350-400), approximations (ca), parentheticals (à 500 g), and Swedish decimal commas (1,5) exactly as written. If the recipe lists the ingredient and its amount on separate lines, associate them. Set "measurement" to null when no amount is given in the input.\n\nExample input:\n${exampleInput}\n\nExample output:\n${exampleOutput}\n\nReturn JSON only in this exact shape: {"items": [{"name": "...", "category": "slug", "measurement": "..." or null}, ...]}\n\nRecipe:\n${fetched.text}`,
+      { temperature: 0 }
     )) as { items?: unknown }
 
     if (!Array.isArray(parsed.items)) return { items: [] }
@@ -317,8 +357,9 @@ export async function extractRecipeItems(input: string) {
       .filter(i => i.name.length > 0)
 
     return { items }
-  } catch {
-    return { error: 'Could not parse Gemini response' }
+  } catch (e) {
+    console.error('[extractRecipeItems] failed', e)
+    return { error: e instanceof Error ? e.message : 'Could not parse Gemini response' }
   }
 }
 
