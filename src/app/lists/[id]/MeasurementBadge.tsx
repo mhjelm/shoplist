@@ -38,7 +38,7 @@ export function MeasurementBadge({ item, muted, onCombine }: {
     : `× ${item.quantity}`
 
   if (!combined) {
-    return <span className={`text-xs ${textColor} ml-1`}>{badgeText}</span>
+    return <span className={`text-xs ${textColor} ml-1`} onClick={e => e.stopPropagation()}>{badgeText}</span>
   }
 
   return (
