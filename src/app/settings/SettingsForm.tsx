@@ -2,16 +2,35 @@
 
 import { useState, useTransition } from 'react'
 import type { Theme, ListTextSize } from '@/lib/types'
-import { updateSettings } from './actions'
+import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
+import { updateSettings, updateCategoryOrder } from './actions'
+import {
+  DndContext,
+  type DragEndEvent,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 interface Props {
   initialTheme: Theme
   initialListTextSize: ListTextSize
+  initialCategoryOrder: CategorySlug[]
 }
 
-export default function SettingsForm({ initialTheme, initialListTextSize }: Props) {
+export default function SettingsForm({ initialTheme, initialListTextSize, initialCategoryOrder }: Props) {
   const [theme, setTheme] = useState<Theme>(initialTheme)
   const [size, setSize] = useState<ListTextSize>(initialListTextSize)
+  const [categoryOrder, setCategoryOrder] = useState<CategorySlug[]>(initialCategoryOrder)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
@@ -32,6 +51,26 @@ export default function SettingsForm({ initialTheme, initialListTextSize }: Prop
     setSize(next)
     save(theme, next)
   }
+
+  function handleCategoryDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = categoryOrder.indexOf(active.id as CategorySlug)
+    const newIndex = categoryOrder.indexOf(over.id as CategorySlug)
+    if (oldIndex === -1 || newIndex === -1) return
+    const next = arrayMove(categoryOrder, oldIndex, newIndex)
+    setCategoryOrder(next)
+    setError(null)
+    startTransition(async () => {
+      const result = await updateCategoryOrder(next)
+      if (result?.error) setError(result.error)
+    })
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+  )
 
   return (
     <div className="space-y-8">
@@ -71,9 +110,55 @@ export default function SettingsForm({ initialTheme, initialListTextSize }: Prop
         </div>
       </section>
 
+      <section>
+        <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Kategoriordning</h2>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">Dra för att ändra ordningen på kategorier i inköpslistan.</p>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
+            <SortableContext items={categoryOrder} strategy={verticalListSortingStrategy}>
+              {categoryOrder.map((slug, idx) => (
+                <div key={slug}>
+                  {idx > 0 && <div className="border-t border-gray-100 dark:border-gray-800" />}
+                  <SortableCategoryRow slug={slug} />
+                </div>
+              ))}
+            </SortableContext>
+          </DndContext>
+        </div>
+      </section>
+
       <p className="text-xs text-gray-400 dark:text-gray-500 h-4">
         {pending ? 'Saving…' : error ? <span className="text-red-500 dark:text-red-400">{error}</span> : ''}
       </p>
+    </div>
+  )
+}
+
+function SortableCategoryRow({ slug }: { slug: CategorySlug }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: slug })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 select-none"
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        aria-label="Reorder category"
+        className="touch-none cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 -ml-1 px-1"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+        </svg>
+      </button>
+      <span className="text-sm text-gray-800 dark:text-gray-200">{categoryLabel(slug)}</span>
     </div>
   )
 }

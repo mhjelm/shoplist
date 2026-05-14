@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { type CategorySlug, isValidCategorySlug } from '@/lib/categories'
+import { callGemini, categorizeNames } from '@/lib/gemini'
 
 export async function addItem(listId: string, name: string, pictureUrl?: string) {
   const supabase = await createClient()
@@ -9,6 +11,17 @@ export async function addItem(listId: string, name: string, pictureUrl?: string)
   if (!user) return { error: 'Not authenticated' }
 
   const trimmed = name.trim()
+
+  // Look up cached category from user's history (fast path — avoids Gemini).
+  const { data: histEntry } = await supabase
+    .from('user_item_history')
+    .select('category')
+    .eq('user_id', user.id)
+    .ilike('name', trimmed)
+    .maybeSingle()
+  const cachedCategory = (histEntry?.category && isValidCategorySlug(histEntry.category))
+    ? histEntry.category
+    : null
 
   // Prefer active match, then shopped match (revive), then fresh insert.
   const { data: existing } = await supabase
@@ -41,6 +54,7 @@ export async function addItem(listId: string, name: string, pictureUrl?: string)
       added_by: user.id,
       name: trimmed,
       picture_url: pictureUrl?.trim() || null,
+      category: cachedCategory,
     })
     .select()
     .single()
@@ -48,6 +62,59 @@ export async function addItem(listId: string, name: string, pictureUrl?: string)
   if (error) return { error: error.message }
   revalidatePath(`/lists/${listId}`)
   return { item: data, merged: false }
+}
+
+export async function categorizeItem(itemId: string): Promise<{ category?: CategorySlug; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: item } = await supabase
+    .from('items')
+    .select('id, name, list_id')
+    .eq('id', itemId)
+    .single()
+  if (!item) return { error: 'Item not found' }
+
+  try {
+    const map = await categorizeNames([item.name])
+    const cat: CategorySlug = map[item.name.toLowerCase()] ?? 'ovrigt'
+
+    await Promise.all([
+      supabase.from('items').update({ category: cat }).eq('id', itemId),
+      supabase.from('user_item_history')
+        .update({ category: cat })
+        .eq('user_id', user.id)
+        .ilike('name', item.name),
+    ])
+
+    revalidatePath(`/lists/${item.list_id}`)
+    return { category: cat }
+  } catch {
+    return { category: 'ovrigt' }
+  }
+}
+
+export async function setItemCategory(itemId: string, listId: string, category: CategorySlug): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: item } = await supabase
+    .from('items')
+    .update({ category })
+    .eq('id', itemId)
+    .select('name')
+    .single()
+  if (!item) return { error: 'Item not found' }
+
+  await supabase.from('user_item_history')
+    .update({ category })
+    .eq('user_id', user.id)
+    .ilike('name', item.name)
+
+  revalidatePath(`/lists/${listId}`)
+  return {}
 }
 
 export async function updateItem(
@@ -110,20 +177,21 @@ export async function clearAllItems(listId: string) {
   revalidatePath(`/lists/${listId}`)
 }
 
-export async function addItems(listId: string, names: string[]) {
+export async function addItems(listId: string, incoming: Array<{ name: string; category?: string | null }>) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
   // Collapse duplicates within the input by lowercased name.
-  const byLower = new Map<string, { display: string; count: number }>()
-  for (const n of names) {
-    const t = n.trim()
+  const byLower = new Map<string, { display: string; count: number; category: CategorySlug | null }>()
+  for (const { name, category } of incoming) {
+    const t = name.trim()
     if (!t) continue
     const key = t.toLowerCase()
+    const cat = (category && isValidCategorySlug(category)) ? category : null
     const existing = byLower.get(key)
     if (existing) existing.count++
-    else byLower.set(key, { display: t, count: 1 })
+    else byLower.set(key, { display: t, count: 1, category: cat })
   }
   if (byLower.size === 0) return { error: 'No items to add' }
 
@@ -143,7 +211,7 @@ export async function addItems(listId: string, names: string[]) {
 
   const resultItems: unknown[] = []
 
-  for (const [key, { display, count }] of byLower) {
+  for (const [key, { display, count, category }] of byLower) {
     const active = activeMap.get(key)
     const shopped = shoppedMap.get(key)
 
@@ -166,7 +234,7 @@ export async function addItems(listId: string, names: string[]) {
     } else {
       const { data } = await supabase
         .from('items')
-        .insert({ list_id: listId, added_by: user.id, name: display, quantity: count })
+        .insert({ list_id: listId, added_by: user.id, name: display, quantity: count, category })
         .select()
         .single()
       if (data) resultItems.push(data)
@@ -206,44 +274,27 @@ export async function extractRecipeItems(input: string) {
   const fetched = await fetchRecipeText(input)
   if (fetched.error) return { error: fetched.error }
 
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return { error: 'GEMINI_API_KEY not configured' }
+  if (!process.env.GEMINI_API_KEY) return { error: 'GEMINI_API_KEY not configured' }
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `Extract grocery shopping list items from this recipe. Return only items someone needs to buy at a store. Skip common pantry staples like water, salt, pepper, basic cooking oil. Reply in Swedish. Keep names short (1-4 words each). Do not include quantities. Return JSON only in this exact shape: {"items": ["Item 1", "Item 2"]}.\n\nRecipe:\n${fetched.text}`,
-          }],
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 1000,
-          thinkingConfig: { thinkingBudget: 0 },
-          responseMimeType: 'application/json',
-        },
-      }),
-    }
-  )
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    console.error('[gemini] recipe error', res.status, body)
-    return { error: `Gemini failed (${res.status}): ${body.slice(0, 200)}` }
-  }
-  type GemResp = { candidates?: { content?: { parts?: { text?: string }[] } }[] }
-  const data = (await res.json()) as GemResp
-  const text = data.candidates?.[0]?.content?.parts?.map(p => p.text ?? '').join('').trim() ?? ''
+  const categoryList = `frukt-gront, mejeri, kott-fisk, brod, frys, skafferi, drycker, snacks, hushall, hygien, ovrigt`
+
   try {
-    const parsed = JSON.parse(text) as { items?: unknown }
+    const parsed = (await callGemini(
+      `Extract grocery shopping list items from this recipe. Return only items someone needs to buy at a store. Skip common pantry staples like water, salt, pepper, basic cooking oil. Reply in Swedish. Keep names short (1-4 words each). Do not include quantities. Also classify each item into one of these category slugs: ${categoryList}. Return JSON only in this exact shape: {"items": [{"name": "Item 1", "category": "slug"}, ...]}\n\nRecipe:\n${fetched.text}`
+    )) as { items?: unknown }
+
     if (!Array.isArray(parsed.items)) return { items: [] }
-    const items = parsed.items
-      .filter((i): i is string => typeof i === 'string')
-      .map(s => s.trim())
-      .filter(s => s.length > 0)
+
+    const items = (parsed.items as unknown[])
+      .filter((i): i is { name: string; category?: string } =>
+        typeof i === 'object' && i !== null && typeof (i as Record<string, unknown>).name === 'string'
+      )
+      .map(i => ({
+        name: i.name.trim(),
+        category: (i.category && isValidCategorySlug(i.category)) ? i.category : null,
+      }))
+      .filter(i => i.name.length > 0)
+
     return { items }
   } catch {
     return { error: 'Could not parse Gemini response' }

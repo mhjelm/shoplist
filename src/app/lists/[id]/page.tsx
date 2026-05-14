@@ -35,7 +35,7 @@ export default async function ListPage({ params }: Props) {
 
   const suggestions = history?.map(h => h.name) ?? []
   const isOwner = list.owner_id === user.id
-  const { list_text_size } = await getUserPreferences()
+  const { list_text_size, category_order } = await getUserPreferences()
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -52,6 +52,7 @@ export default async function ListPage({ params }: Props) {
           isShared={list.is_shared}
           suggestions={suggestions}
           textSize={list_text_size}
+          categoryOrder={category_order}
         />
 
         {isOwner && list.is_shared && (

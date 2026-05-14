@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Item, ListTextSize } from '@/lib/types'
-import { addItem, clearAllItems, clearShoppedItems, reorderItem, toggleItem, updateItem } from './actions'
+import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
+import { addItem, categorizeItem, clearAllItems, clearShoppedItems, reorderItem, setItemCategory, toggleItem, updateItem } from './actions'
 import PictureInput from './PictureInput'
 import RecipeImportModal from './RecipeImportModal'
 import {
@@ -29,9 +30,10 @@ interface Props {
   isShared: boolean
   suggestions: string[]
   textSize: ListTextSize
+  categoryOrder: CategorySlug[]
 }
 
-export default function ItemList({ initialItems, listId, isShared, suggestions, textSize }: Props) {
+export default function ItemList({ initialItems, listId, isShared, suggestions, textSize, categoryOrder }: Props) {
   const itemTextClass = textSize === 'large' ? 'text-base' : 'text-sm'
   const thumbSizeClass = textSize === 'large' ? 'w-16 h-16' : 'w-12 h-12'
   const [items, setItems] = useState<Item[]>(initialItems)
@@ -107,6 +109,18 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   const toShop = useMemo(() => items.filter(i => !i.is_checked).sort(sortByOrder), [items])
   const shopped = useMemo(() => items.filter(i => i.is_checked).sort(sortByOrder), [items])
 
+  // Group toShop items by category in user's preferred order.
+  const groupedToShop = useMemo(() => {
+    const groups = new Map<CategorySlug, Item[]>(categoryOrder.map(c => [c, []]))
+    if (!groups.has('ovrigt')) groups.set('ovrigt', [])
+    for (const item of toShop) {
+      const cat = (item.category as CategorySlug | null) ?? 'ovrigt'
+      const target = groups.get(cat) ?? groups.get('ovrigt')!
+      target.push(item)
+    }
+    return [...groups.entries()].filter(([, its]) => its.length > 0)
+  }, [toShop, categoryOrder])
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
@@ -115,10 +129,20 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    const oldIndex = toShop.findIndex(i => i.id === active.id)
-    const newIndex = toShop.findIndex(i => i.id === over.id)
+    const activeItem = toShop.find(i => i.id === active.id)
+    const overItem = toShop.find(i => i.id === over.id)
+    if (!activeItem || !overItem) return
+    // Only allow reorder within the same category group.
+    const activeCat = activeItem.category ?? 'ovrigt'
+    const overCat = overItem.category ?? 'ovrigt'
+    if (activeCat !== overCat) return
+
+    const catItems = toShop.filter(i => (i.category ?? 'ovrigt') === activeCat)
+    const oldIndex = catItems.findIndex(i => i.id === active.id)
+    const newIndex = catItems.findIndex(i => i.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
-    const reordered = arrayMove(toShop, oldIndex, newIndex)
+
+    const reordered = arrayMove(catItems, oldIndex, newIndex)
     const moved = reordered[newIndex]
     const before = reordered[newIndex - 1]
     const after = reordered[newIndex + 1]
@@ -159,7 +183,6 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     const match = activeMatch ?? shoppedMatch
 
     if (match) {
-      // Optimistic: increment quantity (and revive from shopped if needed)
       setItems(prev => prev.map(i => i.id === match.id
         ? { ...i, quantity: i.quantity + 1, is_checked: false }
         : i
@@ -172,7 +195,6 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
         setItems(prev => prev.map(i => i.id === real.id ? real : i))
       }
     } else {
-      // Optimistic: insert new item
       const tempId = crypto.randomUUID()
       const optimistic: Item = {
         id: tempId,
@@ -184,6 +206,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
         picture_url: pictureUrl ?? null,
         sort_order: null,
         quantity: 1,
+        category: null,
       }
       setItems(prev => [...prev, optimistic])
       const result = await addItem(listId, name, pictureUrl)
@@ -192,11 +215,17 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
       } else if (result?.item) {
         const real = result.item as Item
         setItems(prev => {
-          if (prev.some(i => i.id === real.id)) {
-            return prev.filter(i => i.id !== tempId)
-          }
+          if (prev.some(i => i.id === real.id)) return prev.filter(i => i.id !== tempId)
           return prev.map(i => i.id === tempId ? real : i)
         })
+        // Background Gemini categorization when no cached category.
+        if (!real.category && !result.merged) {
+          categorizeItem(real.id).then(r => {
+            if (r?.category) {
+              setItems(prev => prev.map(i => i.id === real.id ? { ...i, category: r.category! } : i))
+            }
+          })
+        }
       }
     }
 
@@ -218,16 +247,18 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     await clearAllItems(listId)
   }
 
-  async function handleUpdate(item: Item, name: string, pictureUrl: string, quantity: number) {
+  async function handleUpdate(item: Item, name: string, pictureUrl: string, quantity: number, category: CategorySlug) {
     const patch = {
       name: name.trim() || item.name,
       picture_url: pictureUrl.trim() || null,
       quantity: Math.max(1, quantity),
     }
     setEditingItem(null)
-    setItems(prev => prev.map(i => i.id === item.id ? { ...i, ...patch } : i))
-    const result = await updateItem(item.id, listId, patch)
-    if (result?.error) {
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, ...patch, category } : i))
+    const ops: Promise<unknown>[] = [updateItem(item.id, listId, patch)]
+    if (category !== item.category) ops.push(setItemCategory(item.id, listId, category))
+    const [updateResult] = await Promise.all(ops) as [{ error?: string } | undefined]
+    if (updateResult?.error) {
       setItems(prev => prev.map(i => i.id === item.id ? item : i))
     }
   }
@@ -307,28 +338,39 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
         )}
       </div>
 
-      {/* Items to shop (no header) */}
-      {toShop.length === 0 ? (
+      {/* Items to shop, grouped by category */}
+      {groupedToShop.length === 0 ? (
         <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">
           {isEmpty ? 'No items yet.' : 'Everything shopped'}
         </p>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={toShop.map(i => i.id)} strategy={verticalListSortingStrategy}>
-            <ul className="space-y-1">
-              {toShop.map(item => (
-                <SortableRow
-                  key={item.id}
-                  item={item}
-                  itemTextClass={itemTextClass}
-                  thumbSizeClass={thumbSizeClass}
-                  onToggle={() => handleToggle(item)}
-                  onEdit={() => setEditingItem(item)}
-                  onPicture={() => item.picture_url && setLightboxUrl(item.picture_url)}
-                />
-              ))}
-            </ul>
-          </SortableContext>
+          <div className="space-y-3">
+            {groupedToShop.map(([cat, catItems]) => (
+              <div key={cat}>
+                <div className="px-1 mb-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                    {categoryLabel(cat)}
+                  </span>
+                </div>
+                <SortableContext items={catItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                  <ul className="space-y-1">
+                    {catItems.map(item => (
+                      <SortableRow
+                        key={item.id}
+                        item={item}
+                        itemTextClass={itemTextClass}
+                        thumbSizeClass={thumbSizeClass}
+                        onToggle={() => handleToggle(item)}
+                        onEdit={() => setEditingItem(item)}
+                        onPicture={() => item.picture_url && setLightboxUrl(item.picture_url)}
+                      />
+                    ))}
+                  </ul>
+                </SortableContext>
+              </div>
+            ))}
+          </div>
         </DndContext>
       )}
 
@@ -386,7 +428,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
       {editingItem && (
         <EditModal
           item={editingItem}
-          onSave={(name, pictureUrl, quantity) => handleUpdate(editingItem, name, pictureUrl, quantity)}
+          onSave={(name, pictureUrl, quantity, category) => handleUpdate(editingItem, name, pictureUrl, quantity, category)}
           onClose={() => setEditingItem(null)}
         />
       )}
@@ -485,12 +527,13 @@ function SortableRow({
 
 function EditModal({ item, onSave, onClose }: {
   item: Item
-  onSave: (name: string, pictureUrl: string, quantity: number) => void
+  onSave: (name: string, pictureUrl: string, quantity: number, category: CategorySlug) => void
   onClose: () => void
 }) {
   const [name, setName] = useState(item.name)
   const [pictureUrl, setPictureUrl] = useState(item.picture_url ?? '')
   const [quantity, setQuantity] = useState(item.quantity)
+  const [category, setCategory] = useState<CategorySlug>(item.category ?? 'ovrigt')
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
@@ -534,6 +577,18 @@ function EditModal({ item, onSave, onClose }: {
             </button>
           </div>
         </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-600 dark:text-gray-400">Kategori</span>
+          <select
+            value={category}
+            onChange={e => setCategory(e.target.value as CategorySlug)}
+            className="flex-1 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {CATEGORIES.map(c => (
+              <option key={c.slug} value={c.slug}>{c.label}</option>
+            ))}
+          </select>
+        </div>
         <PictureInput value={pictureUrl} onChange={setPictureUrl} />
         <div className="flex gap-2 justify-end">
           <button
@@ -543,7 +598,7 @@ function EditModal({ item, onSave, onClose }: {
             Cancel
           </button>
           <button
-            onClick={() => onSave(name, pictureUrl, quantity)}
+            onClick={() => onSave(name, pictureUrl, quantity, category)}
             disabled={!name.trim()}
             className="text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-medium transition-colors"
           >

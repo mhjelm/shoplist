@@ -10,7 +10,7 @@ interface Props {
   onItemsAdded: (items: Item[]) => void
 }
 
-type Extracted = { name: string; selected: boolean }
+type Extracted = { name: string; category: string | null; selected: boolean }
 
 export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Props) {
   const [text, setText] = useState('')
@@ -39,12 +39,12 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
       setError('Inga varor hittades. Försök med mer text.')
       return
     }
-    setExtracted(items.map(name => ({ name, selected: true })))
+    setExtracted(items.map(i => ({ name: i.name, category: i.category ?? null, selected: true })))
   }
 
   async function handleAdd() {
     if (!extracted) return
-    const selected = extracted.filter(i => i.selected).map(i => i.name)
+    const selected = extracted.filter(i => i.selected).map(i => ({ name: i.name, category: i.category }))
     if (selected.length === 0) return
     setError(null)
     setLoading(true)

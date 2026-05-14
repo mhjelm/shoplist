@@ -12,6 +12,8 @@ export interface ListMember {
   added_at: string
 }
 
+import type { CategorySlug } from './categories'
+
 export interface Item {
   id: string
   list_id: string
@@ -22,6 +24,7 @@ export interface Item {
   picture_url: string | null
   sort_order: number | null
   quantity: number
+  category: CategorySlug | null
 }
 
 export type Theme = 'light' | 'dark'

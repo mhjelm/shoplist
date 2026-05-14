@@ -9,7 +9,7 @@ export default async function SettingsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { theme, list_text_size } = await getUserPreferences()
+  const { theme, list_text_size, category_order } = await getUserPreferences()
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -19,7 +19,11 @@ export default async function SettingsPage() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-6">
-        <SettingsForm initialTheme={theme} initialListTextSize={list_text_size} />
+        <SettingsForm
+          initialTheme={theme}
+          initialListTextSize={list_text_size}
+          initialCategoryOrder={category_order}
+        />
       </main>
     </div>
   )
