@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Item, ListTextSize } from '@/lib/types'
 import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
-import { addItem, categorizeItem, clearAllItems, clearShoppedItems, reorderItem, setItemCategory, toggleItem, updateItem } from './actions'
+import { addItem, categorizeItem, clearAllItems, clearShoppedItems, deleteItem, mergeItems, reorderItem, setItemCategory, toggleItem, updateItem } from './actions'
 import { tryCombine } from '@/lib/measurement'
+import { useEditMode } from './EditModeContext'
 import PictureInput from './PictureInput'
 import RecipeImportModal from './RecipeImportModal'
 import {
@@ -47,6 +48,8 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   const [editingItem, setEditingItem] = useState<Item | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const [showRecipe, setShowRecipe] = useState(false)
+  const [pendingMerge, setPendingMerge] = useState<{ source: Item; target: Item } | null>(null)
+  const [editMode] = useEditMode()
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -106,11 +109,17 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     return () => window.removeEventListener('keydown', onKey)
   }, [lightboxUrl])
 
+  useEffect(() => {
+    if (!pendingMerge) return
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setPendingMerge(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [pendingMerge])
+
   const sortByOrder = (a: Item, b: Item) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity)
   const toShop = useMemo(() => items.filter(i => !i.is_checked).sort(sortByOrder), [items])
   const shopped = useMemo(() => items.filter(i => i.is_checked).sort(sortByOrder), [items])
 
-  // Group toShop items by category in user's preferred order.
   const groupedToShop = useMemo(() => {
     const groups = new Map<CategorySlug, Item[]>(categoryOrder.map(c => [c, []]))
     if (!groups.has('ovrigt')) groups.set('ovrigt', [])
@@ -130,10 +139,19 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
+
+    if (editMode) {
+      const activeItem = items.find(i => i.id === active.id)
+      const overItem = items.find(i => i.id === over.id)
+      if (activeItem && overItem) {
+        setPendingMerge({ source: activeItem, target: overItem })
+      }
+      return
+    }
+
     const activeItem = toShop.find(i => i.id === active.id)
     const overItem = toShop.find(i => i.id === over.id)
     if (!activeItem || !overItem) return
-    // Only allow reorder within the same category group.
     const activeCat = activeItem.category ?? 'ovrigt'
     const overCat = overItem.category ?? 'ovrigt'
     if (activeCat !== overCat) return
@@ -220,7 +238,6 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
           if (prev.some(i => i.id === real.id)) return prev.filter(i => i.id !== tempId)
           return prev.map(i => i.id === tempId ? real : i)
         })
-        // Background Gemini categorization when no cached category.
         if (!real.category && !result.merged) {
           categorizeItem(real.id).then(r => {
             if (r?.category) {
@@ -237,6 +254,35 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   async function handleToggle(item: Item) {
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, is_checked: !i.is_checked } : i))
     await toggleItem(item.id, listId, !item.is_checked)
+  }
+
+  async function handleDelete(item: Item) {
+    const snapshot = [...items]
+    setItems(prev => prev.filter(i => i.id !== item.id))
+    const result = await deleteItem(item.id, listId)
+    if (result?.error) setItems(snapshot)
+  }
+
+  async function handleMergeConfirm() {
+    if (!pendingMerge) return
+    const { source, target } = pendingMerge
+    setPendingMerge(null)
+
+    const mergedMeasurement =
+      [target.measurement, source.measurement]
+        .filter((m): m is string => !!m && m.trim().length > 0)
+        .join(' + ') || null
+    const mergedQuantity = target.quantity + source.quantity
+
+    const snapshot = [...items]
+    setItems(prev =>
+      prev
+        .filter(i => i.id !== source.id)
+        .map(i => i.id === target.id ? { ...i, measurement: mergedMeasurement, quantity: mergedQuantity } : i)
+    )
+
+    const result = await mergeItems(source.id, target.id, listId)
+    if (result?.error) setItems(snapshot)
   }
 
   async function handleClearShopped() {
@@ -349,13 +395,13 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
         )}
       </div>
 
-      {/* Items to shop, grouped by category */}
-      {groupedToShop.length === 0 ? (
-        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">
-          {isEmpty ? 'No items yet.' : 'Everything shopped'}
-        </p>
-      ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        {/* Items to shop, grouped by category */}
+        {groupedToShop.length === 0 ? (
+          <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">
+            {isEmpty ? 'No items yet.' : 'Everything shopped'}
+          </p>
+        ) : (
           <div className="space-y-3">
             {groupedToShop.map(([cat, catItems]) => (
               <div key={cat}>
@@ -376,6 +422,8 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
                         onEdit={() => setEditingItem(item)}
                         onPicture={() => item.picture_url && setLightboxUrl(item.picture_url)}
                         onCombine={combined => handleMeasurementCombine(item, combined)}
+                        editMode={editMode}
+                        onDelete={() => handleDelete(item)}
                       />
                     ))}
                   </ul>
@@ -383,46 +431,68 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
               </div>
             ))}
           </div>
-        </DndContext>
-      )}
+        )}
 
-      {/* Shopped */}
-      {shopped.length > 0 && (
-        <div className="space-y-1">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Shopped</span>
-            <button
-              onClick={handleClearShopped}
-              className="text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none"
-              aria-label="Clear shopped items"
-            >
-              ×
-            </button>
-          </div>
-          <ul className="space-y-1">
-            {shopped.map(item => (
-              <li
-                key={item.id}
-                onClick={() => handleToggle(item)}
-                className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800/50 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors select-none cursor-pointer"
+        {/* Shopped */}
+        {shopped.length > 0 && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Shopped</span>
+              <button
+                onClick={handleClearShopped}
+                className="text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none"
+                aria-label="Clear shopped items"
               >
-                {item.picture_url && (
-                  <img
-                    src={item.picture_url}
-                    alt=""
-                    onError={e => { e.currentTarget.style.display = 'none' }}
-                    className={`${thumbSizeClass} rounded object-cover flex-shrink-0 opacity-60`}
-                  />
-                )}
-                <span className={`${itemTextClass} flex-1 text-gray-400 dark:text-gray-500`}>
-                  {item.name}
-                </span>
-                <MeasurementBadge item={item} muted onCombine={combined => handleMeasurementCombine(item, combined)} />
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+                ×
+              </button>
+            </div>
+            {editMode ? (
+              <SortableContext items={shopped.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                <ul className="space-y-1">
+                  {shopped.map(item => (
+                    <SortableRow
+                      key={item.id}
+                      item={item}
+                      itemTextClass={itemTextClass}
+                      thumbSizeClass={thumbSizeClass}
+                      onToggle={() => handleToggle(item)}
+                      onEdit={() => {}}
+                      onPicture={() => item.picture_url && setLightboxUrl(item.picture_url)}
+                      onCombine={combined => handleMeasurementCombine(item, combined)}
+                      editMode={editMode}
+                      onDelete={() => handleDelete(item)}
+                      muted
+                    />
+                  ))}
+                </ul>
+              </SortableContext>
+            ) : (
+              <ul className="space-y-1">
+                {shopped.map(item => (
+                  <li
+                    key={item.id}
+                    onClick={() => handleToggle(item)}
+                    className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800/50 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors select-none cursor-pointer"
+                  >
+                    {item.picture_url && (
+                      <img
+                        src={item.picture_url}
+                        alt=""
+                        onError={e => { e.currentTarget.style.display = 'none' }}
+                        className={`${thumbSizeClass} rounded object-cover flex-shrink-0 opacity-60`}
+                      />
+                    )}
+                    <span className={`${itemTextClass} flex-1 text-gray-400 dark:text-gray-500`}>
+                      {item.name}
+                    </span>
+                    <MeasurementBadge item={item} muted onCombine={combined => handleMeasurementCombine(item, combined)} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </DndContext>
 
       {!isEmpty && (
         <div className="flex justify-center pt-2">
@@ -441,6 +511,36 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
           onSave={(name, pictureUrl, quantity, category, measurement) => handleUpdate(editingItem, name, pictureUrl, quantity, category, measurement)}
           onClose={() => setEditingItem(null)}
         />
+      )}
+
+      {pendingMerge && (
+        <div
+          onClick={() => setPendingMerge(null)}
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 w-full max-w-sm space-y-4 shadow-xl"
+          >
+            <p className="text-sm text-gray-800 dark:text-gray-200">
+              Slå ihop <span className="font-semibold">&ldquo;{pendingMerge.source.name}&rdquo;</span> och <span className="font-semibold">&ldquo;{pendingMerge.target.name}&rdquo;</span>?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setPendingMerge(null)}
+                className="text-sm px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={handleMergeConfirm}
+                className="text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+              >
+                Slå ihop
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showRecipe && (
@@ -473,7 +573,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
 }
 
 function SortableRow({
-  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onPicture, onCombine,
+  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onPicture, onCombine, editMode, onDelete, muted,
 }: {
   item: Item
   itemTextClass: string
@@ -482,6 +582,9 @@ function SortableRow({
   onEdit: () => void
   onPicture: () => void
   onCombine: (combined: string) => void
+  editMode?: boolean
+  onDelete?: () => void
+  muted?: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
   const style = {
@@ -490,18 +593,23 @@ function SortableRow({
     opacity: isDragging ? 0.5 : undefined,
   }
 
+  const bgClass = muted
+    ? 'bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/50'
+    : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800'
+  const nameClass = muted ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'
+
   return (
     <li
       ref={setNodeRef}
       style={style}
       onClick={onToggle}
-      className="flex items-center gap-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors select-none cursor-pointer"
+      className={`flex items-center gap-3 ${bgClass} rounded-xl border px-4 py-3 transition-colors select-none cursor-pointer`}
     >
       <button
         {...attributes}
         {...listeners}
         onClick={e => e.stopPropagation()}
-        aria-label="Reorder item"
+        aria-label={editMode ? 'Drag to merge' : 'Reorder item'}
         className="touch-none cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 -ml-1 px-1 py-1"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -514,22 +622,34 @@ function SortableRow({
           alt=""
           onClick={e => { e.stopPropagation(); onPicture() }}
           onError={e => { e.currentTarget.style.display = 'none' }}
-          className={`${thumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0`}
+          className={`${thumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
         />
       )}
-      <span className={`${itemTextClass} flex-1 text-gray-800 dark:text-gray-200`}>
+      <span className={`${itemTextClass} flex-1 ${nameClass}`}>
         {item.name}
       </span>
-      <MeasurementBadge item={item} onCombine={onCombine} />
-      <button
-        onClick={e => { e.stopPropagation(); onEdit() }}
-        className="text-gray-300 dark:text-gray-600 hover:text-blue-400 dark:hover:text-blue-400 transition-colors"
-        aria-label="Edit item"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
-        </svg>
-      </button>
+      <MeasurementBadge item={item} muted={muted} onCombine={onCombine} />
+      {editMode ? (
+        <button
+          onClick={e => { e.stopPropagation(); onDelete?.() }}
+          className="text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+          aria-label="Delete item"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      ) : (
+        <button
+          onClick={e => { e.stopPropagation(); onEdit() }}
+          className="text-gray-300 dark:text-gray-600 hover:text-blue-400 dark:hover:text-blue-400 transition-colors"
+          aria-label="Edit item"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+          </svg>
+        </button>
+      )}
     </li>
   )
 }

@@ -167,6 +167,38 @@ export async function clearShoppedItems(listId: string) {
   revalidatePath(`/lists/${listId}`)
 }
 
+export async function deleteItem(itemId: string, listId: string) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('items').delete().eq('id', itemId)
+  if (error) return { error: error.message }
+  revalidatePath(`/lists/${listId}`)
+}
+
+export async function mergeItems(sourceId: string, targetId: string, listId: string) {
+  const supabase = await createClient()
+  const { data: rows } = await supabase
+    .from('items')
+    .select('id, quantity, measurement')
+    .in('id', [sourceId, targetId])
+  const source = rows?.find(r => r.id === sourceId)
+  const target = rows?.find(r => r.id === targetId)
+  if (!source || !target) return { error: 'Item not found' }
+
+  const measurement =
+    [target.measurement, source.measurement]
+      .filter((m): m is string => !!m && m.trim().length > 0)
+      .join(' + ') || null
+  const quantity = target.quantity + source.quantity
+
+  const { error: upErr } = await supabase.from('items').update({ measurement, quantity }).eq('id', targetId)
+  if (upErr) return { error: upErr.message }
+  const { error: delErr } = await supabase.from('items').delete().eq('id', sourceId)
+  if (delErr) return { error: delErr.message }
+
+  revalidatePath(`/lists/${listId}`)
+  return { target: { id: targetId, measurement, quantity } }
+}
+
 export async function clearAllItems(listId: string) {
   const supabase = await createClient()
   const { error } = await supabase
