@@ -20,7 +20,9 @@
       "Bash(xargs grep -l \"section\\\\|tab\\\\|filter\\\\|status\")",
       "Bash(git commit *)",
       "Bash(git push *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(npm test *)",
+      "Bash(npm ls *)"
     ]
   }
 }

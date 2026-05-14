@@ -18,9 +18,9 @@ npm run dev      # next dev (localhost:3000)
 npm run build    # next build
 npm run start    # serve production build
 npm run lint     # eslint
+npm test         # vitest run (all tests, single pass)
+npm run test:watch  # vitest (watch mode)
 ```
-
-No test framework is configured.
 
 Required env vars:
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase project.
@@ -148,9 +148,27 @@ TypeScript mirrors of these are in `src/lib/types.ts`. Keep them in sync when th
 
 Realtime publication includes `items`, `lists`, and `list_members`. `items` uses `replica identity full` (migration 0005) so DELETE events carry the full old row.
 
+## Testing
+
+**Framework**: Vitest + React Testing Library (`@testing-library/react`). jsdom is the global environment; `tests/setup.ts` extends `expect` with jest-dom matchers and registers RTL cleanup after each test.
+
+**Two tiers:**
+
+- **Unit tests** (`src/lib/*.test.ts`) — pure logic, no DOM. Currently cover `parseMeasurement` / `tryCombine` in `measurement.ts` and the category helpers in `categories.ts`. Run in the same jsdom environment but never touch the DOM.
+- **Component tests** (`tests/components/*.test.tsx`) — render real components into jsdom via RTL and assert on the DOM. Currently cover `EditModeContext`, `MeasurementBadge`, and `RecipeImportModal`.
+
+**What is deliberately not tested:**
+- `ItemList` itself — too entangled with dnd-kit and server actions to test in-process. Cover end-to-end flows with a browser tool instead.
+- Server Actions directly — they require a real Supabase connection; mock them at the module boundary in component tests with `vi.mock('@/app/lists/[id]/actions', ...)`.
+
+**Conventions:**
+- Mock server action modules wholesale with `vi.mock(...)` — the `'use server'` directive is irrelevant in tests because the mock replaces the module before it loads.
+- Use `vi.mocked(fn)` to get a typed mock reference after the dynamic `await import(...)`.
+- `navigator.clipboard` is not available in jsdom by default; define it with `Object.defineProperty(navigator, 'clipboard', { value: { readText: vi.fn() }, configurable: true })` per test.
+- Components that are only used by one parent but need independent testing should be extracted into their own file (e.g. `MeasurementBadge.tsx` extracted from `ItemList.tsx`).
+
 ## Conventions
 
-- **No tests yet** — if adding logic that warrants tests, also bring up the test framework choice.
 - **`@/...` imports** resolve to `src/...` (Next.js default).
 - **Tailwind v4** — uses `@tailwindcss/postcss`; no `tailwind.config.js`.
 - **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`).
