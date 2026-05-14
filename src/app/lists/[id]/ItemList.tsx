@@ -53,9 +53,9 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   const inputRef = useRef<HTMLInputElement>(null)
   // Refs so handleDragEnd always reads the latest values even if dnd-kit holds a stale callback.
   const editModeRef = useRef(editMode)
-  editModeRef.current = editMode
   const itemsRef = useRef(items)
-  itemsRef.current = items
+  useEffect(() => { editModeRef.current = editMode }, [editMode])
+  useEffect(() => { itemsRef.current = items }, [items])
 
   useEffect(() => {
     if (!isShared) return
