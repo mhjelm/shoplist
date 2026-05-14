@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Item, ListTextSize } from '@/lib/types'
-import { addItem, clearShoppedItems, reorderItem, toggleItem, updateItem } from './actions'
+import { addItem, clearAllItems, clearShoppedItems, reorderItem, toggleItem, updateItem } from './actions'
 import PictureInput from './PictureInput'
 import RecipeImportModal from './RecipeImportModal'
 import {
@@ -213,6 +213,11 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     await clearShoppedItems(listId)
   }
 
+  async function handleClearAll() {
+    setItems([])
+    await clearAllItems(listId)
+  }
+
   async function handleUpdate(item: Item, name: string, pictureUrl: string, quantity: number) {
     const patch = {
       name: name.trim() || item.name,
@@ -364,6 +369,17 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {!isEmpty && (
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={handleClearAll}
+            className="text-xs text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors"
+          >
+            Clear list
+          </button>
         </div>
       )}
 

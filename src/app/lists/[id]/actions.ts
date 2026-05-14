@@ -99,6 +99,17 @@ export async function clearShoppedItems(listId: string) {
   revalidatePath(`/lists/${listId}`)
 }
 
+export async function clearAllItems(listId: string) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('items')
+    .delete()
+    .eq('list_id', listId)
+
+  if (error) return { error: error.message }
+  revalidatePath(`/lists/${listId}`)
+}
+
 export async function addItems(listId: string, names: string[]) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
