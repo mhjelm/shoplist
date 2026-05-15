@@ -271,13 +271,15 @@ This is a big change. I'd ship it in **three PRs** to keep each one reviewable a
 - Subscribes regardless of `isShared` (private channels stay silent).
 - Verification: open list on phone, lock screen, change items from desktop, unlock phone → UI updates within a second of unlock without polling.
 
-**PR 3 — Write path through outbox + conflict UX**
-- `outbox` table, `flushOutbox`.
-- `mutations.ts` replaces direct server-action calls.
-- Offline badge + conflict banner.
-- Disabled UI for Gemini/upload/invite when offline.
-- SW background-sync handler.
-- Verification: enable airplane mode, add/toggle/edit items, see them appear in UI; disable airplane mode, see them sync to server; cause a conflict (edit same item from desktop while phone offline) → banner appears with the right text.
+**PR 3 — Write path through outbox + conflict UX** ✅ done (2026-05-15)
+- `src/lib/sync/engine.ts`: pub-sub sync store, `useSyncState()`, `flushOutbox()` with retry backoff.
+- `src/lib/sync/mutations.ts`: atomic Dexie+outbox writes for all item mutations.
+- `src/lib/sync/reconcile.ts`: updated to be outbox-aware (conflict detection, server-wins policy).
+- `src/app/lists/[id]/actions.ts`: `addItem` accepts optional `clientId` for idempotent inserts.
+- `ItemList.tsx`: all mutations route through `mutations.ts`; recipe/picture buttons disabled when offline.
+- `src/components/OfflineBadge.tsx` + `ConflictBanner.tsx`: offline state UI.
+- `public/sw.js`: SW background-sync handler posts `outbox-flush` message to clients; version bumped to `shoplist-v3`.
+- Lint: 0 errors. Tests: 118/118 pass. Build: clean.
 
 ## Verification
 

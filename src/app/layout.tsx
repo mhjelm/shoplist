@@ -4,6 +4,7 @@ import "./globals.css";
 import { getUserPreferences } from "@/lib/preferences";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import SyncProvider from "@/components/SyncProvider";
+import ConflictBanner from "@/components/ConflictBanner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -44,6 +45,7 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased ${theme === 'dark' ? 'dark' : ''}`}
     >
       <body className="min-h-full flex flex-col bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100">
+        <ConflictBanner />
         {children}
         <SyncProvider />
         <ServiceWorkerRegister />

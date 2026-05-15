@@ -1,4 +1,4 @@
-const CACHE = 'shoplist-v2'
+const CACHE = 'shoplist-v3'
 const SHELL = ['/']
 
 self.addEventListener('install', (event) => {
@@ -41,4 +41,14 @@ self.addEventListener('fetch', (event) => {
 
   // Everything else (GET assets, POST actions): straight pass-through.
   event.respondWith(fetch(req))
+})
+
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'outbox-flush') {
+    event.waitUntil(
+      self.clients.matchAll().then((clients) => {
+        clients.forEach((client) => client.postMessage({ type: 'outbox-flush' }))
+      })
+    )
+  }
 })

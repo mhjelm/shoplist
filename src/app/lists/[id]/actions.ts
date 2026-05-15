@@ -5,12 +5,18 @@ import { createClient } from '@/lib/supabase/server'
 import { type CategorySlug, isValidCategorySlug } from '@/lib/categories'
 import { callGemini, categorizeNames } from '@/lib/gemini'
 
-export async function addItem(listId: string, name: string, pictureUrl?: string) {
+export async function addItem(listId: string, name: string, pictureUrl?: string, clientId?: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
   const trimmed = name.trim()
+
+  // Idempotency guard: if the outbox retries and the item was already inserted, return it.
+  if (clientId) {
+    const { data: already } = await supabase.from('items').select('*').eq('id', clientId).maybeSingle()
+    if (already) return { item: already, merged: false }
+  }
 
   // Look up cached category from user's history (fast path — avoids Gemini).
   const { data: histEntry } = await supabase
@@ -50,6 +56,7 @@ export async function addItem(listId: string, name: string, pictureUrl?: string)
   const { data, error } = await supabase
     .from('items')
     .insert({
+      ...(clientId ? { id: clientId } : {}),
       list_id: listId,
       added_by: user.id,
       name: trimmed,

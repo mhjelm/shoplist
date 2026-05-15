@@ -8,7 +8,9 @@ import { reconcileList } from '@/lib/sync/reconcile'
 import { subscribeToList } from '@/lib/sync/realtime'
 import type { Item, List, ListTextSize } from '@/lib/types'
 import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
-import { addItem, categorizeItem, clearAllItems, clearShoppedItems, copyItemsToList, deleteItem, mergeItems, moveItemsToList, reorderItem, setItemCategory, toggleItem, updateItem } from './actions'
+import { copyItemsToList, moveItemsToList } from './actions'
+import { muAddItem, muUpdateItem, muSetCategory, muDeleteItem, muBulkDelete, muReorderItem, muMergeItems } from '@/lib/sync/mutations'
+import { useSyncState } from '@/lib/sync/engine'
 import { useEditMode } from './EditModeContext'
 import { MeasurementBadge } from './MeasurementBadge'
 import PictureInput from './PictureInput'
@@ -92,6 +94,7 @@ export default function ItemList({ initialItems, listId, suggestions, textSize, 
   const [pickerMode, setPickerMode] = useState<'copy' | 'move' | null>(null)
   const [pickerError, setPickerError] = useState<string | null>(null)
   const [editMode] = useEditMode()
+  const { isOffline } = useSyncState()
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Seed Dexie from SSR data on first visit to this list.
@@ -230,8 +233,7 @@ export default function ItemList({ initialItems, listId, suggestions, textSize, 
     else if (!after) newSortOrder = (before.sort_order ?? 0) + 1
     else newSortOrder = ((before.sort_order ?? 0) + (after.sort_order ?? 0)) / 2
 
-    localDB.items.update(moved.id, { sort_order: newSortOrder })
-    reorderItem(moved.id, listId, newSortOrder)
+    muReorderItem(listId, moved.id, newSortOrder)
   }
 
   function handleInputChange(value: string) {
@@ -263,17 +265,10 @@ export default function ItemList({ initialItems, listId, suggestions, textSize, 
     const match = activeMatch ?? shoppedMatch
 
     if (match) {
-      await localDB.items.update(match.id, { quantity: match.quantity + 1, is_checked: false })
-      const result = await addItem(listId, name, pictureUrl)
-      if (result?.error) {
-        await localDB.items.update(match.id, { quantity: match.quantity, is_checked: match.is_checked })
-      } else if (result?.item) {
-        await localDB.items.put(itemToLocalItem(result.item as Item))
-      }
+      await muUpdateItem(listId, match.id, { quantity: match.quantity + 1, is_checked: false })
     } else {
-      const tempId = crypto.randomUUID()
-      const optimistic: LocalItem = {
-        id: tempId,
+      const newItem: LocalItem = {
+        id: crypto.randomUUID(),
         list_id: listId,
         added_by: '',
         name,
@@ -286,112 +281,58 @@ export default function ItemList({ initialItems, listId, suggestions, textSize, 
         category: null,
         measurement: null,
       }
-      await localDB.items.put(optimistic)
-      const result = await addItem(listId, name, pictureUrl)
-      if (result?.error) {
-        await localDB.items.delete(tempId)
-      } else if (result?.item) {
-        const real = result.item as Item
-        await localDB.transaction('rw', [localDB.items], async () => {
-          await localDB.items.delete(tempId)
-          await localDB.items.put(itemToLocalItem(real))
-        })
-        if (!real.category && !result.merged) {
-          categorizeItem(real.id).then(async r => {
-            if (r?.category) {
-              await localDB.items.update(real.id, { category: r.category })
-            }
-          })
-        }
-      }
+      await muAddItem(newItem)
     }
 
     setLoading(false)
   }
 
   async function handleToggle(item: Item) {
-    await localDB.items.update(item.id, { is_checked: !item.is_checked })
-    const result = await toggleItem(item.id, listId, !item.is_checked)
-    if (result?.error) {
-      await localDB.items.update(item.id, { is_checked: item.is_checked })
-    }
+    await muUpdateItem(listId, item.id, { is_checked: !item.is_checked })
   }
 
   async function handleDelete(item: Item) {
-    await localDB.items.delete(item.id)
-    const result = await deleteItem(item.id, listId)
-    if (result?.error) {
-      await localDB.items.put(itemToLocalItem(item))
-    }
+    await muDeleteItem(listId, item.id)
   }
 
   async function handleMergeConfirm() {
     if (!pendingMerge) return
     const { source, target } = pendingMerge
     setPendingMerge(null)
-
     const mergedMeasurement =
       [target.measurement, source.measurement]
         .filter((m): m is string => !!m && m.trim().length > 0)
         .join(' + ') || null
     const mergedQuantity = target.quantity + source.quantity
-
-    await localDB.transaction('rw', [localDB.items], async () => {
-      await localDB.items.delete(source.id)
-      await localDB.items.update(target.id, { measurement: mergedMeasurement, quantity: mergedQuantity })
-    })
-
-    const result = await mergeItems(source.id, target.id, listId)
-    if (result?.error) {
-      await localDB.transaction('rw', [localDB.items], async () => {
-        await localDB.items.put(itemToLocalItem(source))
-        await localDB.items.update(target.id, { measurement: target.measurement, quantity: target.quantity })
-      })
-    }
+    await muMergeItems(listId, source.id, target.id, mergedMeasurement, mergedQuantity)
   }
 
   async function handleClearShopped() {
     const ids = items.filter(i => i.is_checked).map(i => i.id)
-    await localDB.items.bulkDelete(ids)
-    await clearShoppedItems(listId)
+    await muBulkDelete(listId, ids)
   }
 
   async function handleClearAll() {
-    await localDB.items.where('list_id').equals(listId).delete()
-    await clearAllItems(listId)
+    const ids = items.map(i => i.id)
+    await muBulkDelete(listId, ids)
   }
 
   async function handleMeasurementCombine(item: Item, combined: string) {
-    await localDB.items.update(item.id, { measurement: combined })
-    const result = await updateItem(item.id, listId, { measurement: combined })
-    if (result?.error) {
-      await localDB.items.update(item.id, { measurement: item.measurement })
-    }
+    await muUpdateItem(listId, item.id, { measurement: combined })
   }
 
   async function handleUpdate(item: Item, name: string, pictureUrl: string, quantity: number, category: CategorySlug, measurement: string) {
-    const patch = {
+    setEditingItem(null)
+    const patch: Partial<LocalItem> = {
       name: name.trim() || item.name,
       picture_url: pictureUrl.trim() || null,
       quantity: Math.max(1, quantity),
       measurement: measurement.trim() || null,
-      category,
     }
-    setEditingItem(null)
-    await localDB.items.update(item.id, patch)
-    const ops: Promise<unknown>[] = [
-      updateItem(item.id, listId, { name: patch.name, picture_url: patch.picture_url, quantity: patch.quantity, measurement: patch.measurement }),
-    ]
-    if (category !== item.category) ops.push(setItemCategory(item.id, listId, category))
-    const [updateResult] = await Promise.all(ops) as [{ error?: string } | undefined]
-    if (updateResult?.error) {
-      await localDB.items.update(item.id, {
-        name: item.name,
-        picture_url: item.picture_url,
-        quantity: item.quantity,
-        measurement: item.measurement,
-        category: item.category,
-      })
+    if (category !== item.category) patch.category = category
+    await muUpdateItem(listId, item.id, patch)
+    if (category !== item.category) {
+      await muSetCategory(listId, item.id, category)
     }
   }
 
@@ -410,9 +351,10 @@ export default function ItemList({ initialItems, listId, suggestions, textSize, 
 
     setPickerError(null)
     if (mode === 'move') {
-      await localDB.items.bulkDelete(ids)
+      await muBulkDelete(listId, ids)
       const res = await moveItemsToList(listId, targetListId, ids, payload)
       if (res?.error) {
+        // Restore items to Dexie if server move failed.
         await localDB.items.bulkPut(selectedItems.map(itemToLocalItem))
         setPickerError(res.error)
         throw new Error(res.error)
@@ -454,8 +396,9 @@ export default function ItemList({ initialItems, listId, suggestions, textSize, 
             />
             <button
               onClick={() => setShowUrlInput(v => !v)}
-              title="Lägg till bild"
-              className={`border rounded-lg px-3 transition-colors ${showUrlInput ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'}`}
+              disabled={isOffline}
+              title={isOffline ? 'Kräver anslutning' : 'Lägg till bild'}
+              className={`border rounded-lg px-3 transition-colors disabled:opacity-30 ${showUrlInput ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'}`}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
@@ -463,8 +406,9 @@ export default function ItemList({ initialItems, listId, suggestions, textSize, 
             </button>
             <button
               onClick={() => setShowRecipe(true)}
-              title="Importera från recept eller lista"
-              className="border border-gray-300 dark:border-gray-700 rounded-lg px-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              disabled={isOffline}
+              title={isOffline ? 'Kräver anslutning' : 'Importera från recept eller lista'}
+              className="border border-gray-300 dark:border-gray-700 rounded-lg px-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors disabled:opacity-30"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4" />
