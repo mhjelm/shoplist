@@ -12,8 +12,12 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: '#ffffff',
     theme_color: '#2563eb',
     icons: [
+      // PNG icons are required for Android WebAPK install (and therefore for
+      // share-target registration). SVG remains as a scalable any-size option.
+      { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
       { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-      { src: '/icon-maskable.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
     ],
     // share_target lets Android list this PWA in the system share sheet.
     // Single POST/multipart entry handles both text/URL and image shares.
