@@ -421,7 +421,7 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
             </button>
             <button
               onClick={() => setShowRecipe(true)}
-              title="Importera från recept"
+              title="Importera från recept eller lista"
               className="border border-gray-300 dark:border-gray-700 rounded-lg px-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

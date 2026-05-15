@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { addItems, extractRecipeItems } from './actions'
+import { useEffect, useId, useState } from 'react'
+import { addItems, extractRecipeItems, extractListItemsFromImage } from './actions'
+import { resizeImage } from '@/lib/resize-image'
 import type { Item } from '@/lib/types'
 
 interface Props {
@@ -13,16 +14,62 @@ interface Props {
 type Extracted = { name: string; category: string | null; measurement: string | null; selected: boolean }
 
 export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Props) {
+  const fileInputId = useId()
   const [text, setText] = useState('')
   const [extracted, setExtracted] = useState<Extracted[] | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingLabel, setLoadingLabel] = useState('Bearbetar…')
   const [error, setError] = useState<string | null>(null)
 
+  async function handleImageFile(file: File) {
+    setError(null)
+    setLoadingLabel('Bearbetar bild…')
+    setLoading(true)
+    try {
+      const blob = await resizeImage(file)
+      const fd = new FormData()
+      fd.append('image', new File([blob], 'image.jpg', { type: 'image/jpeg' }))
+      const result = await extractListItemsFromImage(fd)
+      if (result.error) {
+        setError(result.error)
+        return
+      }
+      const items = result.items ?? []
+      if (items.length === 0) {
+        setError('Inga varor hittades i bilden. Försök med en tydligare bild.')
+        return
+      }
+      setExtracted(items.map(i => ({ name: i.name, category: i.category ?? null, measurement: i.measurement ?? null, selected: true })))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Kunde inte bearbeta bilden')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    navigator.clipboard.readText().then(clip => {
-      const t = clip.trim()
-      if (/^https?:\/\/\S+$/i.test(t)) setText(t)
-    }).catch(() => {})
+    (async () => {
+      if (navigator.clipboard?.read) {
+        try {
+          const items = await navigator.clipboard.read()
+          for (const item of items) {
+            const imgType = item.types.find(t => t.startsWith('image/'))
+            if (imgType) {
+              const blob = await item.getType(imgType)
+              const file = new File([blob], 'clipboard.png', { type: imgType })
+              setLoadingLabel('Bearbetar bild från klippbord…')
+              await handleImageFile(file)
+              return
+            }
+          }
+        } catch { /* permission denied or no image — fall through */ }
+      }
+      try {
+        const clip = await navigator.clipboard.readText()
+        const t = clip.trim()
+        if (/^https?:\/\/\S+$/i.test(t)) setText(t)
+      } catch {}
+    })()
   }, [])
 
   useEffect(() => {
@@ -34,6 +81,7 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
   async function handleExtract() {
     if (!text.trim()) return
     setError(null)
+    setLoadingLabel('Bearbetar…')
     setLoading(true)
     const result = await extractRecipeItems(text)
     setLoading(false)
@@ -54,6 +102,7 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
     const selected = extracted.filter(i => i.selected).map(i => ({ name: i.name, category: i.category, measurement: i.measurement }))
     if (selected.length === 0) return
     setError(null)
+    setLoadingLabel('Lägger till…')
     setLoading(true)
     const result = await addItems(listId, selected)
     setLoading(false)
@@ -82,7 +131,7 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
       >
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-            {extracted ? `Lägg till ${selectedCount} varor` : 'Importera från recept'}
+            {extracted ? `Lägg till ${selectedCount} varor` : 'Importera från recept eller lista'}
           </h2>
           <button
             onClick={onClose}
@@ -95,6 +144,36 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
 
         {!extracted && (
           <>
+            <label
+              htmlFor={fileInputId}
+              aria-disabled={loading}
+              className={`flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors ${loading ? 'opacity-50 pointer-events-none' : ''}`}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
+              </svg>
+              <span>Hämta lista från bild</span>
+            </label>
+            <input
+              id={fileInputId}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={e => {
+                const f = e.target.files?.[0]
+                if (f) handleImageFile(f)
+                e.target.value = ''
+              }}
+            />
+            <div className="relative my-1">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200 dark:border-gray-800" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-white dark:bg-gray-900 px-2 text-xs text-gray-400 dark:text-gray-500">eller</span>
+              </div>
+            </div>
             <textarea
               value={text}
               onChange={e => setText(e.target.value)}
@@ -116,7 +195,7 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
                 disabled={loading || !text.trim()}
                 className="text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-medium transition-colors"
               >
-                {loading ? 'Bearbetar…' : 'Hämta varor'}
+                {loading ? loadingLabel : 'Hämta varor'}
               </button>
             </div>
           </>

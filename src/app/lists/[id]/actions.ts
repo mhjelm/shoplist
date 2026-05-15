@@ -517,7 +517,7 @@ export async function extractRecipeItems(input: string) {
 
   try {
     const parsed = (await callGemini(
-      `Extract grocery shopping list items from this recipe. Return only items someone needs to buy at a store. Skip common pantry staples like water, salt, pepper, basic cooking oil. Reply in Swedish. Keep names short (1-4 words each). Also classify each item into one of these category slugs: ${categoryList}.\n\nFor each item, include a "measurement" field with the quantity/unit phrase from the recipe. CRITICAL: copy the measurement VERBATIM from the input. Never modify, round, paraphrase, or invent numbers. If the input says "5 dl" the output must be "5 dl" — not "2 dl", not "3 dl". Preserve fractions (½, ¼), ranges (350-400), approximations (ca), parentheticals (à 500 g), and Swedish decimal commas (1,5) exactly as written. If the recipe lists the ingredient and its amount on separate lines, associate them. Set "measurement" to null when no amount is given in the input.\n\nExample input:\n${exampleInput}\n\nExample output:\n${exampleOutput}\n\nReturn JSON only in this exact shape: {"items": [{"name": "...", "category": "slug", "measurement": "..." or null}, ...]}\n\nRecipe:\n${fetched.text}`,
+      `Extract grocery shopping list items from this recipe or shopping list. Return only items someone needs to buy at a store. Skip common pantry staples like water, salt, pepper, basic cooking oil. Reply in Swedish. Keep names short (1-4 words each). Also classify each item into one of these category slugs: ${categoryList}.\n\nFor each item, include a "measurement" field with the quantity/unit phrase from the input. CRITICAL: copy the measurement VERBATIM from the input. Never modify, round, paraphrase, or invent numbers. If the input says "5 dl" the output must be "5 dl" — not "2 dl", not "3 dl". Preserve fractions (½, ¼), ranges (350-400), approximations (ca), parentheticals (à 500 g), and Swedish decimal commas (1,5) exactly as written. If the input lists the ingredient and its amount on separate lines, associate them. Set "measurement" to null when no amount is given in the input.\n\nExample input:\n${exampleInput}\n\nExample output:\n${exampleOutput}\n\nReturn JSON only in this exact shape: {"items": [{"name": "...", "category": "slug", "measurement": "..." or null}, ...]}\n\nInput:\n${fetched.text}`,
       { temperature: 0 }
     )) as { items?: unknown }
 
@@ -538,6 +538,84 @@ export async function extractRecipeItems(input: string) {
   } catch (e) {
     console.error('[extractRecipeItems] failed', e)
     return { error: e instanceof Error ? e.message : 'Could not parse Gemini response' }
+  }
+}
+
+export async function extractListItemsFromImage(formData: FormData) {
+  const file = formData.get('image')
+  if (!(file instanceof File) || file.size === 0) return { error: 'No image' }
+  if (file.size > 5 * 1024 * 1024) return { error: 'Image too large (max 5 MB)' }
+
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) return { error: 'GEMINI_API_KEY not configured' }
+
+  const mimeType = file.type || 'image/jpeg'
+  const buf = await file.arrayBuffer()
+  const base64 = Buffer.from(buf).toString('base64')
+
+  const categoryList = `frukt-gront, mejeri, kott-fisk, brod, frys, skafferi, drycker, snacks, hushall, hygien, ovrigt`
+  const prompt = `Extract grocery shopping list items from this image of a shopping list or recipe. Reply in Swedish. Keep names short (1-4 words each). Classify each item into one of these category slugs: ${categoryList}.\n\nFor each item, include a "measurement" field with the quantity/unit phrase if visible in the image. CRITICAL: copy the measurement VERBATIM from the image. Never modify, round, paraphrase, or invent numbers. Preserve fractions (½, ¼), ranges (350-400), approximations (ca), parentheticals (à 500 g), and Swedish decimal commas (1,5) exactly as shown. Set "measurement" to null when no amount is shown.\n\nSkip handwritten strikethroughs or crossed-out items. Skip header text, dates, or store names.\n\nReturn JSON only in this exact shape: {"items": [{"name": "...", "category": "slug", "measurement": "..." or null}, ...]}`
+
+  async function callOnce(): Promise<Response> {
+    return fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { inline_data: { mime_type: mimeType, data: base64 } },
+              { text: prompt },
+            ],
+          }],
+          generationConfig: {
+            temperature: 0,
+            maxOutputTokens: 4000,
+            thinkingConfig: { thinkingBudget: 0 },
+            responseMimeType: 'application/json',
+          },
+        }),
+      }
+    )
+  }
+
+  let res = await callOnce()
+  if (res.status === 429) {
+    await new Promise(r => setTimeout(r, 5000))
+    res = await callOnce()
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    console.error('[extractListItemsFromImage] gemini error', res.status, body)
+    if (res.status === 429) return { error: 'Gemini API rate limit reached — wait a moment and try again' }
+    return { error: `Gemini failed (${res.status})` }
+  }
+
+  type GemResp = { candidates?: { content?: { parts?: { text?: string }[] } }[] }
+  const data = (await res.json()) as GemResp
+  const text = data.candidates?.[0]?.content?.parts?.map(p => p.text ?? '').join('').trim() ?? ''
+  if (!text) return { error: 'Gemini returned no text' }
+
+  try {
+    const parsed = JSON.parse(text) as { items?: unknown }
+    if (!Array.isArray(parsed.items)) return { items: [] }
+
+    const items = (parsed.items as unknown[])
+      .filter((i): i is { name: string; category?: string; measurement?: unknown } =>
+        typeof i === 'object' && i !== null && typeof (i as Record<string, unknown>).name === 'string'
+      )
+      .map(i => ({
+        name: i.name.trim(),
+        category: (i.category && isValidCategorySlug(i.category)) ? i.category : null,
+        measurement: (typeof i.measurement === 'string' && i.measurement.trim()) ? i.measurement.trim() : null,
+      }))
+      .filter(i => i.name.length > 0)
+
+    return { items }
+  } catch (e) {
+    console.error('[extractListItemsFromImage] parse failed', e, 'text:', text.slice(0, 500))
+    return { error: 'Could not parse Gemini response' }
   }
 }
 
