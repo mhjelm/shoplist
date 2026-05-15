@@ -1,0 +1,27 @@
+import Dexie, { type Table } from 'dexie'
+import type { LocalList, LocalItem, LocalListMember, LocalHistory, LocalPrefs, OutboxEntry, SyncMeta } from './types'
+
+class LocalDB extends Dexie {
+  lists!: Table<LocalList>
+  items!: Table<LocalItem>
+  list_members!: Table<LocalListMember>
+  user_item_history!: Table<LocalHistory>
+  user_preferences!: Table<LocalPrefs>
+  outbox!: Table<OutboxEntry>
+  sync_meta!: Table<SyncMeta>
+
+  constructor() {
+    super('shoplist')
+    this.version(1).stores({
+      lists: 'id, owner_id',
+      items: 'id, list_id, [list_id+is_checked], updated_at',
+      list_members: '[list_id+user_id], list_id',
+      user_item_history: '[user_id+name_lower], user_id',
+      user_preferences: 'user_id',
+      outbox: '++seq, status, list_id, created_at',
+      sync_meta: 'list_id',
+    })
+  }
+}
+
+export const localDB = new LocalDB()

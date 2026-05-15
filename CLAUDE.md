@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Active plan
 
-- **Android share-to-Shoplist via Web Share Target** — `PLAN.md` (2026-05-15). Registers the PWA as an Android share target so URLs/text/images can land directly in a list-picker UI.
+- **Offline-first list/items with IndexedDB cache + outbox sync** — `PLAN.md` (2026-05-15). Local Dexie store backs the UI; Realtime + event-driven reconciliation keeps it fresh; mutations queue through an outbox while offline.
 
 ## Project
 
