@@ -1,4 +1,4 @@
-const CACHE = 'shoplist-v1'
+const CACHE = 'shoplist-v2'
 const SHELL = ['/']
 
 self.addEventListener('install', (event) => {
@@ -13,14 +13,19 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+// Chrome's installability check wants a fetch listener that actually responds.
+// Top-level respondWith on every request makes this unambiguous.
 self.addEventListener('fetch', (event) => {
   const req = event.request
-  if (req.method !== 'GET') return
   const url = new URL(req.url)
-  // Don't touch Supabase, ImgBB, or any cross-origin requests.
-  if (url.origin !== self.location.origin) return
 
-  // For page navigations: network-first, fall back to the cached shell when offline.
+  // Cross-origin (Supabase, ImgBB, Gemini, etc.) — pass through, don't touch.
+  if (url.origin !== self.location.origin) {
+    event.respondWith(fetch(req))
+    return
+  }
+
+  // Page navigations: network-first, fall back to the cached shell when offline.
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req)
@@ -33,4 +38,7 @@ self.addEventListener('fetch', (event) => {
     )
     return
   }
+
+  // Everything else (GET assets, POST actions): straight pass-through.
+  event.respondWith(fetch(req))
 })
