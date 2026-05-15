@@ -151,6 +151,36 @@ describe('flushOutbox', () => {
     expect(entries).toHaveLength(0)
   })
 
+  it('forwards is_checked through dispatch to updateItem', async () => {
+    // Regression: offline toggle used to be silently dropped because
+    // updateItem ignored is_checked. The action layer now accepts it and the
+    // dispatcher must forward it through verbatim.
+    entries.push(makeEntry(1, {
+      type: 'item.update',
+      payload: { id: 'item-1', list_id: 'list-1', patch: { is_checked: true } },
+    }))
+
+    await flushOutbox()
+
+    expect(mockUpdateItem).toHaveBeenCalledWith('item-1', 'list-1', { is_checked: true })
+    expect(entries).toHaveLength(0)
+  })
+
+  it('marks the entry as failed when the server action returns { error }', async () => {
+    // Regression: dispatch used to discard the action return value, so an
+    // action like updateItem returning { error: "RLS denied" } looked like
+    // success and the outbox entry was deleted — losing the user's edit.
+    entries.push(makeEntry(1))
+    mockUpdateItem.mockResolvedValueOnce({ error: 'RLS denied' })
+
+    await flushOutbox()
+
+    expect(entries).toHaveLength(1)
+    expect(entries[0].status).toBe('failed')
+    expect(entries[0].attempts).toBe(1)
+    expect(entries[0].last_error).toMatch('RLS denied')
+  })
+
   it('dispatches item.insert with the client-generated id', async () => {
     const mockAddItem = vi.fn().mockResolvedValue({ error: null })
     vi.resetModules()

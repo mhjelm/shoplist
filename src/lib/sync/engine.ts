@@ -15,7 +15,12 @@ type SyncState = {
   recentConflicts: ConflictItem[]
 }
 
-let syncState: SyncState = { isOffline: false, pendingCount: 0, recentConflicts: [] }
+function initialOffline(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return navigator.onLine === false
+}
+
+let syncState: SyncState = { isOffline: initialOffline(), pendingCount: 0, recentConflicts: [] }
 const listeners = new Set<(s: SyncState) => void>()
 
 function setSync(partial: Partial<SyncState>) {
@@ -27,6 +32,11 @@ export function useSyncState(): SyncState {
   const [state, setState] = useState(() => syncState)
   useEffect(() => {
     listeners.add(setState)
+    // Snap to current state on mount — initialOffline may have been wrong at
+    // module-load (SSR) and the real navigator.onLine is only safe to read here.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false && !syncState.isOffline) {
+      setSync({ isOffline: true })
+    }
     return () => { listeners.delete(setState) }
   }, [])
   return state
@@ -45,11 +55,49 @@ export function dismissConflicts() {
 }
 
 // ---------------------------------------------------------------------------
+// Connectivity signals
+// ---------------------------------------------------------------------------
+
+export function markOffline() {
+  setSync({ isOffline: true })
+}
+
+// Don't optimistically declare "online" if the browser still says we're offline
+// — wait for the actual `online` event (or a successful dispatch) before
+// clearing the flag.
+export function markOnlineIfBrowserAgrees() {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+  setSync({ isOffline: false })
+}
+
+// ---------------------------------------------------------------------------
+// Active-list registration — so connectivity triggers (in SyncProvider) know
+// which list to reconcile. The list-page Client Component registers itself on
+// mount and unregisters on unmount.
+// ---------------------------------------------------------------------------
+
+let activeListId: string | null = null
+
+export function setActiveList(id: string | null) {
+  activeListId = id
+}
+
+export function getActiveList(): string | null {
+  return activeListId
+}
+
+// ---------------------------------------------------------------------------
 // Outbox flush
 // ---------------------------------------------------------------------------
 
 const RETRY_DELAYS = [1_000, 5_000, 30_000, 300_000]
 let isFlushing = false
+
+function check(result: { error?: string } | undefined | void) {
+  if (result && 'error' in result && result.error) {
+    throw new Error(result.error)
+  }
+}
 
 async function dispatch(entry: OutboxEntry) {
   const { addItem, updateItem, setItemCategory, deleteItem, reorderItem, mergeItems } =
@@ -59,30 +107,30 @@ async function dispatch(entry: OutboxEntry) {
 
   switch (entry.type) {
     case 'item.insert':
-      await addItem(listId, p.name as string, p.picture_url as string | undefined, p.id as string)
+      check(await addItem(listId, p.name as string, p.picture_url as string | undefined, p.id as string))
       break
     case 'item.update': {
       const patch = p.patch as Record<string, unknown>
       const { category, ...rest } = patch
       if (Object.keys(rest).length > 0) {
-        await updateItem(p.id as string, listId, rest as Parameters<typeof updateItem>[2])
+        check(await updateItem(p.id as string, listId, rest as Parameters<typeof updateItem>[2]))
       }
       if (category !== undefined) {
-        await setItemCategory(p.id as string, listId, category as CategorySlug)
+        check(await setItemCategory(p.id as string, listId, category as CategorySlug))
       }
       break
     }
     case 'item.delete':
-      await deleteItem(p.id as string, listId)
+      check(await deleteItem(p.id as string, listId))
       break
     case 'item.reorder':
-      await reorderItem(p.id as string, listId, p.sort_order as number)
+      check(await reorderItem(p.id as string, listId, p.sort_order as number))
       break
     case 'item.merge':
-      await mergeItems(p.source_id as string, p.target_id as string, listId)
+      check(await mergeItems(p.source_id as string, p.target_id as string, listId))
       break
     default:
-      console.warn('[outbox] unknown type:', entry.type)
+      throw new Error(`[outbox] unknown type: ${entry.type}`)
   }
 }
 
@@ -99,7 +147,8 @@ export async function flushOutbox(): Promise<void> {
       .sortBy('seq')
 
     if (pending.length === 0) {
-      setSync({ isOffline: false, pendingCount: 0 })
+      setSync({ pendingCount: 0 })
+      markOnlineIfBrowserAgrees()
       return
     }
 
@@ -111,14 +160,15 @@ export async function flushOutbox(): Promise<void> {
         await dispatch(entry)
         await localDB.outbox.delete(entry.seq!)
         const remaining = await localDB.outbox.where('status').anyOf(['pending', 'failed']).count()
-        setSync({ isOffline: false, pendingCount: remaining })
+        setSync({ pendingCount: remaining })
+        markOnlineIfBrowserAgrees()
       } catch (err) {
         await localDB.outbox.update(entry.seq!, {
           status: 'failed',
           attempts: entry.attempts + 1,
           last_error: String(err),
         })
-        setSync({ isOffline: true })
+        markOffline()
         const delay = RETRY_DELAYS[Math.min(entry.attempts, RETRY_DELAYS.length - 1)]
         setTimeout(() => { isFlushing = false; flushOutbox() }, delay)
         return
@@ -127,4 +177,19 @@ export async function flushOutbox(): Promise<void> {
   } finally {
     isFlushing = false
   }
+}
+
+// ---------------------------------------------------------------------------
+// triggerSync — the single ordered entrypoint for connectivity events. Always
+// drains the outbox first, *then* reconciles the active list. Running them in
+// parallel races: reconcile reads stale server state while flush is mid-push,
+// and the local edit gets clobbered.
+// ---------------------------------------------------------------------------
+
+export async function triggerSync(): Promise<void> {
+  await flushOutbox()
+  const listId = activeListId
+  if (!listId) return
+  const { reconcileList } = await import('./reconcile')
+  await reconcileList(listId)
 }

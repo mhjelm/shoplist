@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { type CategorySlug, isValidCategorySlug } from '@/lib/categories'
 import { callGemini, categorizeNames } from '@/lib/gemini'
+import { buildItemUpdatePayload, type ItemUpdatePatch } from '@/lib/itemUpdate'
 
 export async function addItem(listId: string, name: string, pictureUrl?: string, clientId?: string) {
   const supabase = await createClient()
@@ -127,15 +128,12 @@ export async function setItemCategory(itemId: string, listId: string, category: 
 export async function updateItem(
   itemId: string,
   listId: string,
-  patch: { name?: string; picture_url?: string | null; quantity?: number; measurement?: string | null }
+  patch: ItemUpdatePatch
 ) {
-  const supabase = await createClient()
-  const update: Record<string, unknown> = {}
-  if (patch.name !== undefined) update.name = patch.name.trim()
-  if ('picture_url' in patch) update.picture_url = patch.picture_url?.trim() || null
-  if (patch.quantity !== undefined) update.quantity = Math.max(1, patch.quantity)
-  if ('measurement' in patch) update.measurement = patch.measurement?.trim() || null
+  const update = buildItemUpdatePayload(patch)
+  if (Object.keys(update).length === 0) return
 
+  const supabase = await createClient()
   const { error } = await supabase.from('items').update(update).eq('id', itemId)
   if (error) return { error: error.message }
   revalidatePath(`/lists/${listId}`)

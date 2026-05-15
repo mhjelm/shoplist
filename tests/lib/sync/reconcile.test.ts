@@ -235,6 +235,47 @@ describe('reconcileList', () => {
     expect(mockAddConflicts).not.toHaveBeenCalled()
   })
 
+  it('protects a local item when its outbox entry is marked failed (offline retry)', async () => {
+    // Regression: reconcile used to filter to status pending|in_flight, so an
+    // entry left in 'failed' (e.g. by a previous offline dispatch attempt)
+    // looked invisible — the parallel reconnect-time reconcile then clobbered
+    // the local edit with stale server data.
+    const now = Date.now()
+    const pendingCreatedAt = now - 2_000
+    const serverUpdatedAt = new Date(now - 10_000).toISOString()
+
+    db.localItems = [makeLocalItem('item-1', 'Local edit')]
+    db.outboxEntries = [{
+      ...makeOutboxEntry(1, 'item-1', 'item.update', pendingCreatedAt),
+      status: 'failed',
+      attempts: 1,
+      last_error: 'network error',
+    }]
+    serverData.rows = [makeServerRow('item-1', 'Old server name', serverUpdatedAt)]
+
+    await reconcileList('list-1')
+
+    // Local edit must survive — the outbox will retry it.
+    expect(db.localItems[0].name).toBe('Local edit')
+    expect(db.outboxEntries).toHaveLength(1)
+    expect(mockAddConflicts).not.toHaveBeenCalled()
+  })
+
+  it('does not delete a local item the server is missing when its outbox entry is failed', async () => {
+    db.localItems = [makeLocalItem('item-1', 'Local insert')]
+    db.outboxEntries = [{
+      ...makeOutboxEntry(1, 'item-1', 'item.update'),
+      status: 'failed',
+      attempts: 2,
+    }]
+    serverData.rows = []
+
+    await reconcileList('list-1')
+
+    expect(db.localItems).toHaveLength(1)
+    expect(db.outboxEntries).toHaveLength(1)
+  })
+
   it('handles multiple items with mixed conflict and clean scenarios', async () => {
     const now = Date.now()
     const oldTime = new Date(now - 10_000).toISOString()

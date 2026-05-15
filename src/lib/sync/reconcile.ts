@@ -12,9 +12,11 @@ export async function reconcileList(listId: string): Promise<void> {
   if (error || !rows) return
 
   // Pending outbox entries protect local optimistic state from being overwritten.
+  // 'failed' counts too — those are queued retries (e.g. while offline) and
+  // their local Dexie state must survive until the retry actually drains.
   const outboxEntries: OutboxEntry[] = await localDB.outbox
     .where('list_id').equals(listId)
-    .filter(e => e.status === 'pending' || e.status === 'in_flight')
+    .filter(e => e.status === 'pending' || e.status === 'in_flight' || e.status === 'failed')
     .toArray()
 
   const pendingByItemId = new Map<string, OutboxEntry>()

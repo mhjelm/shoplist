@@ -1,13 +1,25 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useSyncState, addConflicts, dismissConflicts } from '@/lib/sync/engine'
+import {
+  useSyncState,
+  addConflicts,
+  dismissConflicts,
+  markOffline,
+  markOnlineIfBrowserAgrees,
+  setActiveList,
+  getActiveList,
+} from '@/lib/sync/engine'
 
 beforeEach(() => {
   dismissConflicts()
+  // Clear isOffline left by the connectivity tests below.
+  Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+  markOnlineIfBrowserAgrees()
 })
 
 afterEach(() => {
   vi.useRealTimers()
+  setActiveList(null)
 })
 
 describe('useSyncState', () => {
@@ -75,6 +87,41 @@ describe('addConflicts', () => {
     // 'Bröd' dismissed, 'Kaffe' still has ~15 s left
     expect(result.current.recentConflicts).toHaveLength(1)
     expect(result.current.recentConflicts[0].name).toBe('Kaffe')
+  })
+})
+
+describe('connectivity flags', () => {
+  it('markOffline flips isOffline to true', () => {
+    const { result } = renderHook(() => useSyncState())
+    expect(result.current.isOffline).toBe(false)
+    act(() => { markOffline() })
+    expect(result.current.isOffline).toBe(true)
+  })
+
+  it('markOnlineIfBrowserAgrees clears isOffline only when navigator says online', () => {
+    const { result } = renderHook(() => useSyncState())
+    act(() => { markOffline() })
+    expect(result.current.isOffline).toBe(true)
+
+    // Browser still claims offline → don't lie to the UI.
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
+    act(() => { markOnlineIfBrowserAgrees() })
+    expect(result.current.isOffline).toBe(true)
+
+    // Browser agrees we're online → clear the flag.
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+    act(() => { markOnlineIfBrowserAgrees() })
+    expect(result.current.isOffline).toBe(false)
+  })
+})
+
+describe('activeList registration', () => {
+  it('setActiveList round-trips through getActiveList', () => {
+    expect(getActiveList()).toBeNull()
+    setActiveList('list-42')
+    expect(getActiveList()).toBe('list-42')
+    setActiveList(null)
+    expect(getActiveList()).toBeNull()
   })
 })
 

@@ -10,7 +10,7 @@ import type { Item, List, ListTextSize } from '@/lib/types'
 import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
 import { copyItemsToList, moveItemsToList } from './actions'
 import { muAddItem, muUpdateItem, muSetCategory, muDeleteItem, muBulkDelete, muReorderItem, muMergeItems } from '@/lib/sync/mutations'
-import { useSyncState } from '@/lib/sync/engine'
+import { useSyncState, setActiveList } from '@/lib/sync/engine'
 import { useEditMode } from './EditModeContext'
 import { MeasurementBadge } from './MeasurementBadge'
 import PictureInput from './PictureInput'
@@ -97,34 +97,36 @@ export default function ItemList({ initialItems, listId, suggestions, textSize, 
   const { isOffline } = useSyncState()
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Seed Dexie from SSR data on first visit to this list.
+  // Register this list as the active one so the SyncProvider's connectivity
+  // triggers (online/visibilitychange) know which list to reconcile.
   useEffect(() => {
-    localDB.items.where('list_id').equals(listId).count().then(count => {
-      if (count === 0 && initialItems.length > 0) {
-        localDB.items.bulkPut(initialItems.map(itemToLocalItem))
-        localDB.sync_meta.put({ list_id: listId, last_sync_at: new Date().toISOString() })
+    setActiveList(listId)
+    return () => { setActiveList(null) }
+  }, [listId])
+
+  // Seed Dexie from SSR data so the first paint is correct, then always
+  // reconcile from the server. The seed is harmless if Dexie already has rows
+  // for this list (bulkPut is idempotent); reconcile is the authoritative pass
+  // that heals stale Dexie state after a refresh.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (initialItems.length > 0) {
+        const existing = await localDB.items.where('list_id').equals(listId).count()
+        if (!cancelled && existing === 0) {
+          await localDB.items.bulkPut(initialItems.map(itemToLocalItem))
+        }
       }
-    })
+      if (cancelled) return
+      reconcileList(listId).catch(err => console.error('reconcile failed:', err))
+    })()
+    return () => { cancelled = true }
   }, [listId, initialItems])
 
   // Subscribe to Realtime for all lists (private channels stay silent but are ready).
   // On reconnect, reconcile to catch any missed events.
   useEffect(() => {
     return subscribeToList(listId, () => { reconcileList(listId) })
-  }, [listId])
-
-  // Pull fresh data from server on tab focus and network restore.
-  useEffect(() => {
-    const handleVisible = () => {
-      if (document.visibilityState === 'visible') reconcileList(listId)
-    }
-    const handleOnline = () => reconcileList(listId)
-    document.addEventListener('visibilitychange', handleVisible)
-    window.addEventListener('online', handleOnline)
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisible)
-      window.removeEventListener('online', handleOnline)
-    }
   }, [listId])
 
   // Live reactive read from Dexie. Falls back to SSR data while IndexedDB hydrates.

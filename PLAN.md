@@ -271,6 +271,16 @@ This is a big change. I'd ship it in **three PRs** to keep each one reviewable a
 - Subscribes regardless of `isShared` (private channels stay silent).
 - Verification: open list on phone, lock screen, change items from desktop, unlock phone → UI updates within a second of unlock without polling.
 
+**PR 4 — Offline sync recovery patch** ✅ done (2026-05-16)
+- `updateItem` action now accepts `is_checked` (root cause of "mark shopped lost"). Field allow-list extracted into `src/lib/itemUpdate.ts` and unit-tested so the next missing column is loud, not silent.
+- Outbox `dispatch()` throws on `{ error }` server-action returns instead of treating them as success.
+- `reconcileList` protects items with `'failed'` outbox entries (previously only `'pending'` and `'in_flight'`), so reconnect can't clobber queued-but-failed local edits.
+- Real offline detection: `markOffline` / `markOnlineIfBrowserAgrees` plus `online`/`offline` listeners in `SyncProvider`. Sync state now respects `navigator.onLine`, so the Offline badge appears the moment the browser drops connectivity.
+- `triggerSync()` is now the single ordered entrypoint — awaits `flushOutbox` before `reconcileList`, eliminating the race that caused mobile "edits flash then revert".
+- `SyncProvider` owns all connectivity triggers; `ItemList` registers itself as the active list via `setActiveList()` and no longer competes with its own online/visibility listeners.
+- `ItemList` now reconciles on every mount (not just seed-on-empty), so a refresh actually heals a stale Dexie cache.
+- Tests: 155/155 pass. New coverage for the toggle round-trip, dispatch error propagation, failed-entry reconcile protection, and offline-flag transitions.
+
 **PR 3 — Write path through outbox + conflict UX** ✅ done (2026-05-15)
 - `src/lib/sync/engine.ts`: pub-sub sync store, `useSyncState()`, `flushOutbox()` with retry backoff.
 - `src/lib/sync/mutations.ts`: atomic Dexie+outbox writes for all item mutations.
