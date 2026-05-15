@@ -1,7 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { localDB } from '@/lib/db/local'
+import type { LocalItem } from '@/lib/db/types'
+import { reconcileList } from '@/lib/sync/reconcile'
+import { subscribeToList } from '@/lib/sync/realtime'
 import type { Item, List, ListTextSize } from '@/lib/types'
 import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
 import { addItem, categorizeItem, clearAllItems, clearShoppedItems, copyItemsToList, deleteItem, mergeItems, moveItemsToList, reorderItem, setItemCategory, toggleItem, updateItem } from './actions'
@@ -38,10 +42,42 @@ interface Props {
   currentUserId: string
 }
 
-export default function ItemList({ initialItems, listId, isShared, suggestions, textSize, categoryOrder, availableLists, currentUserId }: Props) {
+function itemToLocalItem(item: Item): LocalItem {
+  return {
+    id: item.id,
+    list_id: item.list_id,
+    added_by: item.added_by,
+    name: item.name,
+    is_checked: item.is_checked,
+    created_at: item.created_at,
+    updated_at: item.updated_at ?? '',
+    picture_url: item.picture_url,
+    sort_order: item.sort_order,
+    quantity: item.quantity,
+    category: item.category,
+    measurement: item.measurement,
+  }
+}
+
+function localItemToItem(li: LocalItem): Item {
+  return {
+    id: li.id,
+    list_id: li.list_id,
+    added_by: li.added_by,
+    name: li.name,
+    is_checked: li.is_checked,
+    created_at: li.created_at,
+    picture_url: li.picture_url,
+    sort_order: li.sort_order,
+    quantity: li.quantity,
+    category: li.category,
+    measurement: li.measurement,
+  }
+}
+
+export default function ItemList({ initialItems, listId, suggestions, textSize, categoryOrder, availableLists, currentUserId }: Props) {
   const itemTextClass = textSize === 'large' ? 'text-base' : 'text-sm'
   const thumbSizeClass = textSize === 'large' ? 'w-16 h-16' : 'w-12 h-12'
-  const [items, setItems] = useState<Item[]>(initialItems)
   const [input, setInput] = useState('')
   const [filtered, setFiltered] = useState<string[]>([])
   const [highlightIdx, setHighlightIdx] = useState(-1)
@@ -57,14 +93,54 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   const [pickerError, setPickerError] = useState<string | null>(null)
   const [editMode] = useEditMode()
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Seed Dexie from SSR data on first visit to this list.
+  useEffect(() => {
+    localDB.items.where('list_id').equals(listId).count().then(count => {
+      if (count === 0 && initialItems.length > 0) {
+        localDB.items.bulkPut(initialItems.map(itemToLocalItem))
+        localDB.sync_meta.put({ list_id: listId, last_sync_at: new Date().toISOString() })
+      }
+    })
+  }, [listId, initialItems])
+
+  // Subscribe to Realtime for all lists (private channels stay silent but are ready).
+  // On reconnect, reconcile to catch any missed events.
+  useEffect(() => {
+    return subscribeToList(listId, () => { reconcileList(listId) })
+  }, [listId])
+
+  // Pull fresh data from server on tab focus and network restore.
+  useEffect(() => {
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') reconcileList(listId)
+    }
+    const handleOnline = () => reconcileList(listId)
+    document.addEventListener('visibilitychange', handleVisible)
+    window.addEventListener('online', handleOnline)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisible)
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [listId])
+
+  // Live reactive read from Dexie. Falls back to SSR data while IndexedDB hydrates.
+  const liveItems = useLiveQuery(
+    () => localDB.items.where('list_id').equals(listId).toArray(),
+    [listId],
+  )
+  const items: Item[] = useMemo(
+    () => liveItems ? liveItems.map(localItemToItem) : initialItems,
+    [liveItems, initialItems],
+  )
+
   // Refs so handleDragEnd always reads the latest values even if dnd-kit holds a stale callback.
   const editModeRef = useRef(editMode)
   const itemsRef = useRef(items)
   useEffect(() => { editModeRef.current = editMode }, [editMode])
   useEffect(() => { itemsRef.current = items }, [items])
 
-  // Clear selection when leaving edit mode so the next entry starts fresh.
-  // Reset-during-render pattern (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
+  // Clear selection when leaving edit mode.
   const [prevEditMode, setPrevEditMode] = useState(editMode)
   if (prevEditMode !== editMode) {
     setPrevEditMode(editMode)
@@ -83,56 +159,6 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
       return next
     })
   }
-
-  useEffect(() => {
-    if (!isShared) return
-    const supabase = createClient()
-    let channel: ReturnType<typeof supabase.channel> | null = null
-    let cancelled = false
-
-    ;(async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (cancelled) return
-      console.log('[realtime] session user:', session?.user?.id ?? '(none)')
-      if (session?.access_token) {
-        supabase.realtime.setAuth(session.access_token)
-      }
-
-      channel = supabase
-        .channel(`list-${listId}`)
-        .on('postgres_changes',
-          { event: '*', schema: 'public', table: 'items', filter: `list_id=eq.${listId}` },
-          (payload) => {
-            console.log('[realtime] event:', payload.eventType, payload)
-            if (payload.eventType === 'INSERT') {
-              const incoming = payload.new as Item
-              setItems(prev => {
-                if (prev.some(i => i.id === incoming.id)) return prev
-                const optIdx = prev.findIndex(i => i.added_by === '' && i.name === incoming.name)
-                if (optIdx >= 0) {
-                  const next = [...prev]
-                  next[optIdx] = incoming
-                  return next
-                }
-                return [...prev, incoming]
-              })
-            } else if (payload.eventType === 'UPDATE') {
-              setItems(prev => prev.map(i => i.id === (payload.new as Item).id ? payload.new as Item : i))
-            } else if (payload.eventType === 'DELETE') {
-              setItems(prev => prev.filter(i => i.id !== (payload.old as Item).id))
-            }
-          })
-        .subscribe((status, err) => {
-          if (err) console.error('[realtime] subscribe error', err)
-          else console.log('[realtime] status:', status)
-        })
-    })()
-
-    return () => {
-      cancelled = true
-      if (channel) supabase.removeChannel(channel)
-    }
-  }, [listId, isShared])
 
   useEffect(() => {
     if (!lightboxUrl) return
@@ -181,14 +207,16 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
       return
     }
 
-    const activeItem = toShop.find(i => i.id === active.id)
-    const overItem = toShop.find(i => i.id === over.id)
+    const allItems = itemsRef.current
+    const currentToShop = allItems.filter(i => !i.is_checked).sort(sortByOrder)
+    const activeItem = currentToShop.find(i => i.id === active.id)
+    const overItem = currentToShop.find(i => i.id === over.id)
     if (!activeItem || !overItem) return
     const activeCat = activeItem.category ?? 'ovrigt'
     const overCat = overItem.category ?? 'ovrigt'
     if (activeCat !== overCat) return
 
-    const catItems = toShop.filter(i => (i.category ?? 'ovrigt') === activeCat)
+    const catItems = currentToShop.filter(i => (i.category ?? 'ovrigt') === activeCat)
     const oldIndex = catItems.findIndex(i => i.id === active.id)
     const newIndex = catItems.findIndex(i => i.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
@@ -201,7 +229,8 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     if (!before) newSortOrder = (after?.sort_order ?? 1) - 1
     else if (!after) newSortOrder = (before.sort_order ?? 0) + 1
     else newSortOrder = ((before.sort_order ?? 0) + (after.sort_order ?? 0)) / 2
-    setItems(prev => prev.map(i => i.id === moved.id ? { ...i, sort_order: newSortOrder } : i))
+
+    localDB.items.update(moved.id, { sort_order: newSortOrder })
     reorderItem(moved.id, listId, newSortOrder)
   }
 
@@ -234,46 +263,43 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
     const match = activeMatch ?? shoppedMatch
 
     if (match) {
-      setItems(prev => prev.map(i => i.id === match.id
-        ? { ...i, quantity: i.quantity + 1, is_checked: false }
-        : i
-      ))
+      await localDB.items.update(match.id, { quantity: match.quantity + 1, is_checked: false })
       const result = await addItem(listId, name, pictureUrl)
       if (result?.error) {
-        setItems(prev => prev.map(i => i.id === match.id ? match : i))
+        await localDB.items.update(match.id, { quantity: match.quantity, is_checked: match.is_checked })
       } else if (result?.item) {
-        const real = result.item as Item
-        setItems(prev => prev.map(i => i.id === real.id ? real : i))
+        await localDB.items.put(itemToLocalItem(result.item as Item))
       }
     } else {
       const tempId = crypto.randomUUID()
-      const optimistic: Item = {
+      const optimistic: LocalItem = {
         id: tempId,
         list_id: listId,
         added_by: '',
         name,
         is_checked: false,
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
         picture_url: pictureUrl ?? null,
         sort_order: null,
         quantity: 1,
         category: null,
         measurement: null,
       }
-      setItems(prev => [...prev, optimistic])
+      await localDB.items.put(optimistic)
       const result = await addItem(listId, name, pictureUrl)
       if (result?.error) {
-        setItems(prev => prev.filter(i => i.id !== tempId))
+        await localDB.items.delete(tempId)
       } else if (result?.item) {
         const real = result.item as Item
-        setItems(prev => {
-          if (prev.some(i => i.id === real.id)) return prev.filter(i => i.id !== tempId)
-          return prev.map(i => i.id === tempId ? real : i)
+        await localDB.transaction('rw', [localDB.items], async () => {
+          await localDB.items.delete(tempId)
+          await localDB.items.put(itemToLocalItem(real))
         })
         if (!real.category && !result.merged) {
-          categorizeItem(real.id).then(r => {
+          categorizeItem(real.id).then(async r => {
             if (r?.category) {
-              setItems(prev => prev.map(i => i.id === real.id ? { ...i, category: r.category! } : i))
+              await localDB.items.update(real.id, { category: r.category })
             }
           })
         }
@@ -284,15 +310,19 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
   }
 
   async function handleToggle(item: Item) {
-    setItems(prev => prev.map(i => i.id === item.id ? { ...i, is_checked: !i.is_checked } : i))
-    await toggleItem(item.id, listId, !item.is_checked)
+    await localDB.items.update(item.id, { is_checked: !item.is_checked })
+    const result = await toggleItem(item.id, listId, !item.is_checked)
+    if (result?.error) {
+      await localDB.items.update(item.id, { is_checked: item.is_checked })
+    }
   }
 
   async function handleDelete(item: Item) {
-    const snapshot = [...items]
-    setItems(prev => prev.filter(i => i.id !== item.id))
+    await localDB.items.delete(item.id)
     const result = await deleteItem(item.id, listId)
-    if (result?.error) setItems(snapshot)
+    if (result?.error) {
+      await localDB.items.put(itemToLocalItem(item))
+    }
   }
 
   async function handleMergeConfirm() {
@@ -306,32 +336,36 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
         .join(' + ') || null
     const mergedQuantity = target.quantity + source.quantity
 
-    const snapshot = [...items]
-    setItems(prev =>
-      prev
-        .filter(i => i.id !== source.id)
-        .map(i => i.id === target.id ? { ...i, measurement: mergedMeasurement, quantity: mergedQuantity } : i)
-    )
+    await localDB.transaction('rw', [localDB.items], async () => {
+      await localDB.items.delete(source.id)
+      await localDB.items.update(target.id, { measurement: mergedMeasurement, quantity: mergedQuantity })
+    })
 
     const result = await mergeItems(source.id, target.id, listId)
-    if (result?.error) setItems(snapshot)
+    if (result?.error) {
+      await localDB.transaction('rw', [localDB.items], async () => {
+        await localDB.items.put(itemToLocalItem(source))
+        await localDB.items.update(target.id, { measurement: target.measurement, quantity: target.quantity })
+      })
+    }
   }
 
   async function handleClearShopped() {
-    setItems(prev => prev.filter(i => !i.is_checked))
+    const ids = items.filter(i => i.is_checked).map(i => i.id)
+    await localDB.items.bulkDelete(ids)
     await clearShoppedItems(listId)
   }
 
   async function handleClearAll() {
-    setItems([])
+    await localDB.items.where('list_id').equals(listId).delete()
     await clearAllItems(listId)
   }
 
   async function handleMeasurementCombine(item: Item, combined: string) {
-    setItems(prev => prev.map(i => i.id === item.id ? { ...i, measurement: combined } : i))
+    await localDB.items.update(item.id, { measurement: combined })
     const result = await updateItem(item.id, listId, { measurement: combined })
     if (result?.error) {
-      setItems(prev => prev.map(i => i.id === item.id ? item : i))
+      await localDB.items.update(item.id, { measurement: item.measurement })
     }
   }
 
@@ -341,14 +375,23 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
       picture_url: pictureUrl.trim() || null,
       quantity: Math.max(1, quantity),
       measurement: measurement.trim() || null,
+      category,
     }
     setEditingItem(null)
-    setItems(prev => prev.map(i => i.id === item.id ? { ...i, ...patch, category } : i))
-    const ops: Promise<unknown>[] = [updateItem(item.id, listId, patch)]
+    await localDB.items.update(item.id, patch)
+    const ops: Promise<unknown>[] = [
+      updateItem(item.id, listId, { name: patch.name, picture_url: patch.picture_url, quantity: patch.quantity, measurement: patch.measurement }),
+    ]
     if (category !== item.category) ops.push(setItemCategory(item.id, listId, category))
     const [updateResult] = await Promise.all(ops) as [{ error?: string } | undefined]
     if (updateResult?.error) {
-      setItems(prev => prev.map(i => i.id === item.id ? item : i))
+      await localDB.items.update(item.id, {
+        name: item.name,
+        picture_url: item.picture_url,
+        quantity: item.quantity,
+        measurement: item.measurement,
+        category: item.category,
+      })
     }
   }
 
@@ -367,11 +410,10 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
 
     setPickerError(null)
     if (mode === 'move') {
-      const snapshot = items
-      setItems(prev => prev.filter(i => !selectedIds.has(i.id)))
+      await localDB.items.bulkDelete(ids)
       const res = await moveItemsToList(listId, targetListId, ids, payload)
       if (res?.error) {
-        setItems(snapshot)
+        await localDB.items.bulkPut(selectedItems.map(itemToLocalItem))
         setPickerError(res.error)
         throw new Error(res.error)
       }
@@ -661,11 +703,10 @@ export default function ItemList({ initialItems, listId, isShared, suggestions, 
         <RecipeImportModal
           listId={listId}
           onClose={() => setShowRecipe(false)}
-          onItemsAdded={incoming => setItems(prev => {
-            const map = new Map(prev.map(i => [i.id, i] as const))
-            for (const it of incoming) map.set(it.id, it)
-            return Array.from(map.values())
-          })}
+          onItemsAdded={incoming => {
+            localDB.items.bulkPut(incoming.map(itemToLocalItem))
+              .catch(err => console.error('Failed to put recipe items in local db:', err))
+          }}
         />
       )}
 
@@ -704,7 +745,6 @@ function SortableRow({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
   const style = {
-    // Suppress sort-preview animation in edit mode so items don't visually shuffle while dragging.
     transform: editMode ? undefined : CSS.Transform.toString(transform),
     transition: editMode ? undefined : transition,
     opacity: isDragging ? 0.4 : undefined,
@@ -877,4 +917,3 @@ function EditModal({ item, onSave, onClose }: {
     </div>
   )
 }
-

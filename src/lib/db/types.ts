@@ -17,8 +17,8 @@ export interface LocalItem {
   created_at: string
   updated_at: string
   picture_url: string | null
-  sort_order: number
-  quantity: number | null
+  sort_order: number | null
+  quantity: number
   category: CategorySlug | null
   measurement: string | null
   _pending_local_updated_at?: number

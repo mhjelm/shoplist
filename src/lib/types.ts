@@ -21,6 +21,7 @@ export interface Item {
   name: string
   is_checked: boolean
   created_at: string
+  updated_at?: string
   picture_url: string | null
   sort_order: number | null
   quantity: number

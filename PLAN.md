@@ -255,18 +255,20 @@ Modified:
 
 This is a big change. I'd ship it in **three PRs** to keep each one reviewable and reverting-friendly:
 
-**PR 1 — Schema + dependency + local store foundation**
+**PR 1 — Schema + dependency + local store foundation** ✅ done (2026-05-15)
 - Migration 0011 (`updated_at` + trigger).
 - Add `dexie` and `dexie-react-hooks`.
 - `src/lib/db/local.ts`, `src/lib/db/types.ts`.
 - `SyncProvider` shell (initialises Dexie, no sync logic yet).
 - Verification: `npm run build`, migration applied, IndexedDB visible in DevTools.
 
-**PR 2 — Read path through local store + realtime**
-- `realtime.ts` extracted from ItemList.
-- `ItemList` reads from Dexie via `useLiveQuery`. Initial hydration seeded from Server-Component props.
-- Reconciliation on `visibilitychange` + `online` + Realtime reconnect.
-- No outbox yet — mutations still go through current server actions, but **also** write through to Dexie so reads stay current.
+**PR 2 — Read path through local store + realtime** ✅ done (2026-05-15)
+- `src/lib/sync/realtime.ts`: Supabase channel writes events to Dexie. Fires `onReconnect` on reconnect (not initial subscribe).
+- `src/lib/sync/reconcile.ts`: full-fetch from server → replaces Dexie items atomically (handles deletes too).
+- `ItemList` reads from Dexie via `useLiveQuery`. Falls back to SSR `initialItems` while Dexie hydrates.
+- All mutations write to Dexie first → server action → roll back Dexie on error.
+- `visibilitychange` + `online` → `reconcileList`. Realtime reconnect → `reconcileList`.
+- Subscribes regardless of `isShared` (private channels stay silent).
 - Verification: open list on phone, lock screen, change items from desktop, unlock phone → UI updates within a second of unlock without polling.
 
 **PR 3 — Write path through outbox + conflict UX**
