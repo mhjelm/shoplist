@@ -1,160 +1,182 @@
-# Plan — Extend recipe import to also import lists from images and arbitrary web pages
+# Plan — Android share-to-Shoplist via Web Share Target API
 
 ## Context
 
-Today the import modal (`src/app/lists/[id]/RecipeImportModal.tsx`) only takes a recipe URL or pasted recipe text. The user wants the same modal to additionally accept:
+The recipe / list import that just shipped (`PR db52fe0`) handles clipboard text, URLs, manually-picked images, and clipboard images. On Android, users typically encounter content (a recipe URL in Chrome, a photo of a list in Gallery) and use the system **Share** sheet. Today Shoplist isn't a target there — so the user has to copy to clipboard first, switch to the PWA, paste. We want a one-tap "Share → Shoplist" flow.
 
-1. **An image** containing a shopping list (uploaded from the device, or auto-grabbed from the clipboard on open).
-2. **Web pages that are not recipes** but contain a shopping list (so the URL/text path should not only target recipes).
-
-The existing URL/recipe text path must keep working unchanged. After extraction, all sources funnel into the same accept/reject UI that already exists.
+The mechanism is the **Web Share Target API**: an installed PWA can declare in its manifest that it accepts shared payloads, and Android adds it to the share sheet. The shared payload is delivered as either a GET (query string) or POST (multipart form data) to a URL inside the app. iOS Safari does not support Web Share Target — that's a known platform gap; iOS users keep the clipboard auto-extract path.
 
 Decisions confirmed with user:
-- Image button is rendered **prominent, above the textarea**, with an `eller` divider between the two input modes.
-- When the modal opens and the clipboard already holds an image, **auto-extract immediately** (skip the form, go straight to a "Bearbetar bild från klippbord…" state, then to the accept/reject screen).
+- **List picker always shown** after extraction. No auto-pick even with a single list, no last-used memory.
+- **Unauthed share → redirect to login**. Payload is dropped; the user re-shares after logging in. No server-side stash.
 
 ## Approach
 
-### 1. Generalise the existing URL/text extractor
+### 1. Manifest declares share target
 
-`src/app/lists/[id]/actions.ts` — `extractRecipeItems` (lines 504–542):
-- Rename for clarity to `extractListItems`. Re-export the old name as an alias to keep existing tests/imports painless, or update call sites — see "Files modified" below.
-- Broaden the Gemini system prompt: replace `"Extract grocery shopping list items from this recipe…"` with `"Extract grocery shopping list items from this recipe or shopping list…"`. Keep the rest of the prompt identical (categories, VERBATIM measurement rule, few-shot example, JSON shape).
-- Reuse `fetchRecipeText` (lines 480–502) unchanged: the JSON-LD fast path still wins for recipe sites; the HTML fallback now correctly serves arbitrary shopping-list pages too.
-
-### 2. New server action: extract list items from an image
-
-Add `extractListItemsFromImage(formData: FormData)` to `src/app/lists/[id]/actions.ts`. Pattern is a hybrid of the existing `suggestItemName` (lines 544–586, for the image plumbing) and `extractRecipeItems` (for the JSON shape and category validation):
-
-- Read `image` from FormData, validate `File && size > 0 && size <= 5 MB` (mirrors `uploadImage` at lines 588–604).
-- Base64-encode (`Buffer.from(buf).toString('base64')`) and POST to `gemini-2.5-flash` `:generateContent` with `inline_data` part + text prompt part. Direct fetch — `callGemini` in `src/lib/gemini.ts` only supports text-only prompts, so the image action calls the REST endpoint directly like `suggestItemName` already does.
-- Use `generationConfig: { temperature: 0, maxOutputTokens: 4000, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } }`.
-- Prompt mirrors the recipe prompt but adapted for an image of a list:
-
-  > Extract grocery shopping list items from this image of a shopping list or recipe. Reply in Swedish. Keep names short (1-4 words each). Classify each item into one of these category slugs: `frukt-gront, mejeri, kott-fisk, brod, frys, skafferi, drycker, snacks, hushall, hygien, ovrigt`.
-  >
-  > For each item, include a `measurement` field with the quantity/unit phrase if visible. COPY the measurement VERBATIM. Never modify, round, paraphrase, or invent numbers. Preserve fractions (½, ¼), ranges (350-400), approximations (ca), parentheticals (à 500 g), and Swedish decimal commas (1,5) exactly. Set `measurement` to null when no amount is shown.
-  >
-  > Skip handwritten strikethroughs / crossed-out items. Skip header text, dates, or store names.
-  >
-  > Return JSON only: `{"items": [{"name": "...", "category": "slug", "measurement": "..." or null}, ...]}`
-
-- Validate the response identically to `extractRecipeItems` (lines 524–537): require array, filter to objects with string `name`, validate category via `isValidCategorySlug`, trim measurement to string-or-null. Return `{ items }` or `{ error }`. Handle 429 with the same retry pattern as `callGemini` (lines 56–63).
-
-### 3. Modal UI changes — `RecipeImportModal.tsx`
-
-- **Title**: replace `'Importera från recept'` (line 85) with `'Importera från recept eller lista'`. The post-extract title (`Lägg till N varor`) stays as-is.
-- **Tooltip on the trigger button** in `ItemList.tsx` (line 425, `title="Importera från recept"`) becomes `title="Importera från recept eller lista"`.
-- **New top section** above the textarea (inside the `!extracted` branch, lines 96–122):
-
-  ```
-  ┌──────────────────────────────────────┐
-  │  📷  Hämta lista från bild           │
-  └──────────────────────────────────────┘
-                ─── eller ───
-  [existing textarea + Hämta varor row]
-  ```
-
-  - The button is a `<label htmlFor={fileInputId}>` so a hidden `<input type="file" accept="image/*">` opens the device picker (on mobile this includes Camera). Mirrors `PictureInput.tsx` lines 87–108.
-  - The `eller` divider is a centered text-on-line element (`<div class="relative"><hr /><span class="absolute…">eller</span></div>`).
-  - Hide both the image button and the divider while `loading` so the accept/reject screen stays uncluttered (the button block lives inside the existing `!extracted` conditional).
-
-- **New state**:
-  - `imageLoading: boolean` — true while a chosen / pasted / clipboard image is being processed. Reuse the existing `loading` flag if simpler; the only practical difference is a separate placeholder text ("Bearbetar bild…" vs "Bearbetar…"). Tentative: keep one `loading` flag + a `loadingLabel` string.
-- **New handler**: `handleImageFile(file: File)`:
-  1. Set loading.
-  2. `await resizeImage(file)` from `src/lib/resize-image.ts` to compress to 1024px max edge before sending — keeps base64 payload small.
-  3. Build a FormData with key `image`, call `extractListItemsFromImage(fd)`.
-  4. On success, populate `extracted` exactly like `handleExtract` does at line 49. On error, set `error` and stay on the form.
-- **File input `onChange`** calls `handleImageFile(file)`.
-
-### 4. Clipboard image auto-extract on open
-
-Replace the current `useEffect` at lines 21–26 with a single effect that checks the clipboard for an image first, then falls back to text:
+`src/app/manifest.ts` — add a `share_target` entry. Single entry covers both text/URL shares and image shares because POST + multipart allows both `params` and `files`:
 
 ```ts
-useEffect(() => {
-  (async () => {
-    // 1. Try clipboard image (modern browsers, https / localhost only).
-    if (navigator.clipboard?.read) {
-      try {
-        const items = await navigator.clipboard.read()
-        for (const item of items) {
-          const imgType = item.types.find(t => t.startsWith('image/'))
-          if (imgType) {
-            const blob = await item.getType(imgType)
-            const file = new File([blob], 'clipboard.png', { type: imgType })
-            await handleImageFile(file)  // auto-extract, jump to accept/reject
-            return
-          }
-        }
-      } catch { /* permission denied or no image — fall through */ }
-    }
-    // 2. Fall back to existing URL auto-fill behaviour.
-    try {
-      const clip = await navigator.clipboard.readText()
-      if (/^https?:\/\/\S+$/i.test(clip.trim())) setText(clip.trim())
-    } catch {}
-  })()
-}, [])  // intentionally once-on-mount; handleImageFile is stable enough for this scope
+share_target: {
+  action: '/share',
+  method: 'POST',
+  enctype: 'multipart/form-data',
+  params: {
+    title: 'title',
+    text: 'text',
+    url: 'url',
+    files: [{ name: 'image', accept: ['image/*'] }],
+  },
+}
 ```
 
-Notes:
-- `navigator.clipboard.read()` requires user permission on desktop browsers; the `catch` is essential because it throws when permission is denied or the user hasn't interacted yet. The graceful failure mirrors how the existing `readText()` is wrapped.
-- Auto-extract on open behaves correctly with Escape — the user can still close the modal mid-extract; the in-flight request will resolve into discarded state.
-- The textarea URL auto-fill only runs when no clipboard image was found, so we don't double-trigger.
+Note: `MetadataRoute.Manifest` in Next.js may not type `share_target` natively. Cast with `as MetadataRoute.Manifest` or add `// @ts-expect-error` on the property — verify when implementing. Browser still reads the JSON.
 
-### 5. Tests
+### 2. DB migration — `pending_imports` table
 
-`tests/components/RecipeImportModal.test.tsx`:
-- Update the existing `vi.mock('@/app/lists/[id]/actions', ...)` to also export `extractListItemsFromImage: vi.fn()`.
-- Add cases:
-  - Title now reads "Importera från recept eller lista".
-  - "Hämta lista från bild" button is rendered above the textarea.
-  - Clipboard with an image triggers `extractListItemsFromImage` and jumps to the accept/reject screen. (Mock `navigator.clipboard.read` returning a fake `ClipboardItem`-like object with `types` and `getType`.)
-  - Clipboard with a URL but no image still fills the textarea (existing behaviour preserved).
-  - File picker `onChange` calls `extractListItemsFromImage` with FormData containing the file.
-- Keep the existing "URL/text extraction" tests untouched — proves backward compatibility.
+`supabase/migrations/0010_pending_imports.sql` (new file):
 
-The existing `vi.mock` pattern at lines 5–13 makes mocking a third server action a one-line addition. `resizeImage` lives in `src/lib/resize-image.ts` and uses `canvas.toBlob`, which is not available in jsdom — for the new image tests, mock `@/lib/resize-image` to return the input blob unchanged.
+```sql
+create table pending_imports (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  items jsonb not null,
+  source text not null check (source in ('image', 'url', 'text')),
+  created_at timestamptz not null default now()
+);
 
-## Critical files modified
+create index pending_imports_user_idx on pending_imports(user_id, created_at desc);
 
-- `src/app/lists/[id]/RecipeImportModal.tsx` — title, image button, divider, file input, clipboard-image effect, `handleImageFile`.
-- `src/app/lists/[id]/actions.ts` — broaden `extractRecipeItems` prompt; add `extractListItemsFromImage`.
-- `src/app/lists/[id]/ItemList.tsx` — update trigger button tooltip (line 425).
-- `tests/components/RecipeImportModal.test.tsx` — extend mocks and add image-flow tests.
-- `CLAUDE.md` — update the "Recipe import" architecture section to reflect the new image / general-list scope and the new server action.
+alter table pending_imports enable row level security;
+
+create policy "users select own pending imports" on pending_imports
+  for select to authenticated using (user_id = auth.uid());
+
+create policy "users insert own pending imports" on pending_imports
+  for insert to authenticated with check (user_id = auth.uid());
+
+create policy "users delete own pending imports" on pending_imports
+  for delete to authenticated using (user_id = auth.uid());
+```
+
+A periodic cleanup job is out of scope — rows are small JSON and get deleted on confirm; orphan rows are a tolerable rounding error for now.
+
+### 3. POST handler — `src/app/share/route.ts`
+
+A Next.js route handler (not a page) that receives the POST from the share sheet:
+
+1. Create the server Supabase client (`@/lib/supabase/server`). Call `getUser()`.
+2. If unauthed → `NextResponse.redirect(new URL('/auth/login', req.url))`. (Middleware in `src/proxy.ts` would do this too, but doing it inline lets us return 303 explicitly.)
+3. Read FormData: `text`, `url`, `title`, `image`.
+4. Branch:
+   - `image instanceof File && image.size > 0` → build a FormData and call `extractListItemsFromImage` from `src/app/lists/[id]/actions.ts`. `source = 'image'`.
+   - Otherwise prefer `url`, then `text`, then `title`. Call `extractRecipeItems(payload)`. `source = url ? 'url' : 'text'`.
+5. If extraction errors or yields zero items → redirect to `/lists?shareError=empty` (or similar). The lists page can read the query param and render a toast/banner.
+6. Insert the items into `pending_imports` (RLS-authenticated client; user_id will be set explicitly to `user.id` to satisfy the policy).
+7. `return NextResponse.redirect(new URL(/share/${id}, req.url), 303)`. 303 forces the browser to GET the new URL.
+
+The extraction call happens server-to-server: `extractRecipeItems` and `extractListItemsFromImage` are server actions, but they're plain async functions when invoked from another server context. They already return `{ items, error }`.
+
+### 4. List-picker + accept/reject page — `src/app/share/[importId]/page.tsx`
+
+Server Component:
+
+1. Auth check (defensive; middleware enforces it). Redirect to `/auth/login` if no user.
+2. Load the pending import row by id. RLS guarantees it belongs to the user; `notFound()` if missing.
+3. Load the user's lists (same query as `src/app/lists/page.tsx`).
+4. Render `<ShareImportClient importId items lists />`.
+
+### 5. Client component — `src/app/share/[importId]/ShareImportClient.tsx`
+
+Reuses the same accept/reject UI patterns from `RecipeImportModal.tsx` — checkbox list, strikethrough on deselect, count in header — but inline on a full page (not a modal), with an additional list-selector on top:
+
+- Two stacked sections inside a centered card:
+  - **List picker**: vertical list of the user's lists; one click selects (radio behaviour, stored in local state).
+  - **Items to import**: same checkbox-row UI as `RecipeImportModal` lines 127–149, all selected by default.
+- Bottom action row:
+  - "Avbryt" → `confirmShareImport(importId, null, [])` server action (deletes the pending row, redirects to `/lists`). Or simpler: a separate `cancelShareImport(importId)` action.
+  - "Lägg till" disabled until a list is picked and ≥1 item selected. Calls `confirmShareImport(importId, selectedListId, selectedItems)`.
+
+### 6. Server actions — `src/app/share/actions.ts`
+
+```ts
+'use server'
+export async function confirmShareImport(
+  importId: string,
+  listId: string,
+  items: Array<{ name: string; category: string | null; measurement: string | null }>,
+)
+```
+
+Implementation:
+1. `createClient()`, `getUser()`.
+2. Call `addItems(listId, items)` (imported from `@/app/lists/[id]/actions`). RLS on `items.list_id` enforces that user has access; no extra check needed.
+3. On success, delete the `pending_imports` row by id (RLS scopes it to user).
+4. `redirect('/lists/${listId}')`.
+
+Separate `cancelShareImport(importId)` that just deletes the row and redirects to `/lists`.
+
+### 7. Middleware proxy
+
+`src/proxy.ts` matcher already covers `/share`. `updateSession` redirects unauthed users to `/auth/login` automatically — the share handler's own auth check is belt-and-braces. Nothing to change.
+
+### 8. Tests
+
+Per project convention (`CLAUDE.md` — Testing section), server actions and route handlers aren't unit-tested (they need a real Supabase connection). Component-level coverage:
+
+- `tests/components/ShareImportClient.test.tsx` (new) — mock `@/app/share/actions` wholesale (same pattern as the existing `RecipeImportModal.test.tsx` at lines 5–13). Cover:
+  - List picker renders all lists.
+  - Confirm disabled until a list is picked.
+  - Toggling items updates the selected count.
+  - Clicking confirm calls `confirmShareImport` with the chosen list id and selected items.
+  - "Avbryt" calls `cancelShareImport` with just the import id.
+
+Manual / end-to-end verification is the primary signal here (see Verification).
+
+## Critical files
+
+- `src/app/manifest.ts` — add `share_target`.
+- `supabase/migrations/0010_pending_imports.sql` — new migration.
+- `src/app/share/route.ts` — new POST handler.
+- `src/app/share/[importId]/page.tsx` — new Server Component (list picker + items).
+- `src/app/share/[importId]/ShareImportClient.tsx` — new Client Component.
+- `src/app/share/actions.ts` — `confirmShareImport`, `cancelShareImport`.
+- `tests/components/ShareImportClient.test.tsx` — new component tests.
+- `CLAUDE.md` — document the share flow under "Architecture", mention `share_target` declaration in the manifest.
 
 ## Existing utilities reused
 
-- `resizeImage` (`src/lib/resize-image.ts`) — client-side downscale before upload.
-- `fetchRecipeText` (`actions.ts:480`) — JSON-LD + HTML fallback pipeline, unchanged.
-- `isValidCategorySlug` (`src/lib/categories.ts`) — response validation.
-- `addItems` (`actions.ts:213`) — unchanged; same accept/reject screen feeds it for every source.
-- File-input + label pattern from `PictureInput.tsx:87-108`.
-- 429 retry pattern from `callGemini` (`src/lib/gemini.ts:54-64`).
+- `extractListItemsFromImage` (`src/app/lists/[id]/actions.ts`) — handles the image branch unchanged.
+- `extractRecipeItems` (same file) — handles the URL/text branch unchanged.
+- `addItems` (same file) — the universal sink. Same dedupe / append / revive / insert behaviour.
+- `createClient` (`@/lib/supabase/server`) — Supabase server client.
+- `updateSession` (`@/lib/supabase/middleware`) — auth redirect for unauthed POSTs is already enforced; no change.
+- `RecipeImportModal.tsx` lines 127–149 — visual reference for the checkbox-row item list to mirror in `ShareImportClient`.
 
 ## Verification
 
-1. `npm run lint` and `npm test` — existing recipe tests must still pass; new image-path tests added.
-2. `npm run dev`, open a list, click the import icon:
-   - Existing path: paste a koket.se URL → still extracts via JSON-LD.
-   - Existing path: paste raw recipe text → still extracts.
-   - New path: click `Hämta lista från bild` and pick a photo of a handwritten or printed shopping list → items appear in the accept/reject screen with categories and measurements.
-   - New path: on mobile, choose Camera from the picker, take a photo of a list → same flow.
-   - New path: copy an image to the clipboard (Win+Shift+S on Windows, screenshot tools, image from a webpage), open the modal → modal jumps straight to the accept/reject screen after a brief "Bearbetar bild…" state.
-   - New path: paste a URL to a non-recipe page that contains a list (e.g. a blog post or notes page) → broadened prompt should extract its items.
-3. Reject some items in the selection screen, confirm `addItems` deduping/append/revive behaviour still works (e.g. add a list containing an item that already exists active or shopped).
+1. `npm run lint`, `npm test`, `npm run build` — all clean (new tests added).
+2. **Apply the migration**: run `0010_pending_imports.sql` against the Supabase project. Verify the table exists and RLS policies are listed in the dashboard.
+3. **Local PWA install** (Android with Chrome):
+   - Open the deployed app in Chrome.
+   - Install (Add to Home screen).
+   - Open Chrome on a recipe page (e.g. koket.se) → Share → confirm Shoplist appears in the sheet.
+   - Tap Shoplist → app opens at `/share/[id]` → pick a list → confirm → items land in the list.
+   - Repeat with Gallery → Share image of a list → Shoplist appears → flow completes.
+   - Repeat unauthed: log out in the PWA, share again → should land on `/auth/login` (payload dropped).
+4. **Edge cases**:
+   - Share something with no extractable items (e.g. an empty page) → land on `/lists?shareError=empty` (or whatever error UX we land on).
+   - Cancel from the share UI → returns to `/lists`, no items added, pending row deleted.
 
-## Out of scope / explicit non-goals
+## Out of scope
 
-- No persistence of the source image (not uploaded to ImgBB).
-- No OCR fallback if Gemini vision misreads — single Gemini call, single retry on 429.
-- No new "list" entity or separate "recipe vs list" mode in the data model — items still land in `items` exactly as today.
+- iOS support (platform limitation — no Web Share Target API in Safari).
+- Resuming a share after login (payload is dropped on unauthed POST).
+- Cleanup job for orphan `pending_imports` rows.
+- Creating a new list from the share UI (only existing lists are listed).
+- Memorising last-used destination list.
 
 ## Follow-up after approval
 
-When the user gives the go-ahead, I'll also:
-- Copy this plan to `PLAN.md` at the project root (per the user's global CLAUDE.md convention).
-- Add an "Active plan" entry to project `CLAUDE.md` with today's date.
+- Mirror plan to `PLAN.md` at project root.
+- Update the project `CLAUDE.md` "Active plan" entry with today's date and the new plan name.

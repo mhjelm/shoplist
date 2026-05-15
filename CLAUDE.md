@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Active plan
 
-- **Extend recipe import to images + general lists** — `PLAN.md` (2026-05-15). Adds image-based list import and broadens URL/text extraction beyond recipes.
+- **Android share-to-Shoplist via Web Share Target** — `PLAN.md` (2026-05-15). Registers the PWA as an Android share target so URLs/text/images can land directly in a list-picker UI.
 
 ## Project
 
@@ -124,6 +124,22 @@ Image path (`extractListItemsFromImage`):
 3. **Gemini vision call**: direct REST POST to `gemini-2.5-flash:generateContent` with an `inline_data` part — `callGemini` in `src/lib/gemini.ts` is text-only. Same JSON schema and validation as the text path (category via `isValidCategorySlug`, verbatim measurement rule).
 
 Both paths end with **`addItems()` server action**, which dedupes by lowercased name within the batch, then either appends to existing active items (measurements joined with ` + `, quantities summed), revives shopped items (replacing the measurement), or inserts new rows.
+
+### Android share-to-Shoplist (Web Share Target)
+
+`src/app/manifest.ts` declares a `share_target` entry so the installed PWA appears in Android's system share sheet. The share sheet POSTs `multipart/form-data` to `/share` with any of `text`, `url`, `title`, `image`.
+
+Flow:
+1. **`src/app/share/route.ts`** — POST handler. Auth-checks, parses FormData, then branches to `extractListItemsFromImage` (when an image file is present) or `extractRecipeItems` (URL/text). The same extractors used by the in-app import modal.
+2. The extracted items are stored as a JSON blob in `pending_imports` (`supabase/migrations/0010_pending_imports.sql`). RLS scopes rows to the inserting user.
+3. The handler 303-redirects to `/share/[importId]`.
+4. **`src/app/share/[importId]/page.tsx`** — Server Component loads the pending row + user's lists.
+5. **`ShareImportClient.tsx`** — list-picker on top, item accept/reject below. Confirming calls `confirmShareImport(importId, listId, items)` which fans out to `addItems()` and deletes the pending row; cancelling calls `cancelShareImport(importId)` which just deletes the row.
+
+Caveats:
+- iOS Safari does not implement Web Share Target — iOS users still use the in-app clipboard auto-extract.
+- Unauthed shares redirect to `/auth/login` and the payload is dropped (no server-side resume).
+- Orphan `pending_imports` rows are tolerated; there's no cleanup job yet.
 
 ### Measurement system (`src/lib/measurement.ts`)
 
