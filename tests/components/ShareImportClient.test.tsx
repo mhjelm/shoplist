@@ -45,6 +45,11 @@ describe('ShareImportClient', () => {
     expect(screen.getByText('Fest')).toBeInTheDocument()
   })
 
+  it('renders the "+ Skapa ny lista" option', () => {
+    renderClient()
+    expect(screen.getByText(/skapa ny lista/i)).toBeInTheDocument()
+  })
+
   it('marks shared lists from other users', () => {
     renderClient()
     expect(screen.getByText('delad')).toBeInTheDocument()
@@ -60,7 +65,7 @@ describe('ShareImportClient', () => {
     expect(screen.getByRole('button', { name: /lägg till 2/i })).toBeDisabled()
   })
 
-  it('confirm enabled once a list is picked', () => {
+  it('confirm enabled once an existing list is picked', () => {
     renderClient()
     fireEvent.click(screen.getByText('Veckohandling'))
     expect(screen.getByRole('button', { name: /lägg till 2/i })).not.toBeDisabled()
@@ -69,6 +74,11 @@ describe('ShareImportClient', () => {
   it('auto-selects when only one list exists', () => {
     renderClient({ lists: [baseLists[0]] })
     expect(screen.getByRole('button', { name: /lägg till 2/i })).not.toBeDisabled()
+  })
+
+  it('auto-selects "new list" when user has no lists', () => {
+    renderClient({ lists: [] })
+    expect(screen.getByPlaceholderText(/listnamn/i)).toBeInTheDocument()
   })
 
   it('toggling an item reduces the count', () => {
@@ -85,17 +95,62 @@ describe('ShareImportClient', () => {
     expect(screen.getByRole('button', { name: /lägg till 0/i })).toBeDisabled()
   })
 
-  it('confirm calls confirmShareImport with the picked list and selected items', async () => {
+  it('confirm calls confirmShareImport with the existing list destination', async () => {
     mockConfirm.mockResolvedValue(undefined as unknown as { error?: string })
     renderClient()
     fireEvent.click(screen.getByText('Fest'))
     fireEvent.click(screen.getByText('Smör').closest('li')!) // deselect Smör
     fireEvent.click(screen.getByRole('button', { name: /lägg till 1/i }))
     await waitFor(() =>
-      expect(mockConfirm).toHaveBeenCalledWith('imp-1', 'list-b', [
-        { name: 'Mjölk', category: 'mejeri', measurement: '3 dl' },
-      ]),
+      expect(mockConfirm).toHaveBeenCalledWith(
+        'imp-1',
+        { kind: 'existing', listId: 'list-b' },
+        [{ name: 'Mjölk', category: 'mejeri', measurement: '3 dl' }],
+      ),
     )
+  })
+
+  describe('new-list flow', () => {
+    it('shows a name input when "+ Skapa ny lista" is picked', () => {
+      renderClient()
+      fireEvent.click(screen.getByText(/skapa ny lista/i))
+      expect(screen.getByPlaceholderText(/listnamn/i)).toBeInTheDocument()
+    })
+
+    it('confirm stays disabled until a name is typed', () => {
+      renderClient()
+      fireEvent.click(screen.getByText(/skapa ny lista/i))
+      expect(screen.getByRole('button', { name: /skapa & lägg till 2/i })).toBeDisabled()
+    })
+
+    it('confirm enables once a name is typed', () => {
+      renderClient()
+      fireEvent.click(screen.getByText(/skapa ny lista/i))
+      fireEvent.change(screen.getByPlaceholderText(/listnamn/i), { target: { value: 'Picnic' } })
+      expect(screen.getByRole('button', { name: /skapa & lägg till 2/i })).not.toBeDisabled()
+    })
+
+    it('whitespace-only name does not enable confirm', () => {
+      renderClient()
+      fireEvent.click(screen.getByText(/skapa ny lista/i))
+      fireEvent.change(screen.getByPlaceholderText(/listnamn/i), { target: { value: '   ' } })
+      expect(screen.getByRole('button', { name: /skapa & lägg till 2/i })).toBeDisabled()
+    })
+
+    it('confirm calls confirmShareImport with the new-list destination', async () => {
+      mockConfirm.mockResolvedValue(undefined as unknown as { error?: string })
+      renderClient()
+      fireEvent.click(screen.getByText(/skapa ny lista/i))
+      fireEvent.change(screen.getByPlaceholderText(/listnamn/i), { target: { value: '  Picnic  ' } })
+      fireEvent.click(screen.getByRole('button', { name: /skapa & lägg till 2/i }))
+      await waitFor(() =>
+        expect(mockConfirm).toHaveBeenCalledWith(
+          'imp-1',
+          { kind: 'new', name: 'Picnic' },
+          baseItems,
+        ),
+      )
+    })
   })
 
   it('surfaces an error returned by confirmShareImport', async () => {
@@ -111,11 +166,6 @@ describe('ShareImportClient', () => {
     renderClient()
     fireEvent.click(screen.getByRole('button', { name: /avbryt/i }))
     await waitFor(() => expect(mockCancel).toHaveBeenCalledWith('imp-1'))
-  })
-
-  it('shows a message when the user has no lists', () => {
-    renderClient({ lists: [] })
-    expect(screen.getByText(/du har inga listor än/i)).toBeInTheDocument()
   })
 
   it('renders the source label', () => {
