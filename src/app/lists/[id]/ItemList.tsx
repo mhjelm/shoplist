@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { localDB } from '@/lib/db/local'
 import type { LocalItem } from '@/lib/db/types'
 import { reconcileList } from '@/lib/sync/reconcile'
 import { subscribeToList } from '@/lib/sync/realtime'
-import type { Item, List, ListTextSize } from '@/lib/types'
+import type { Item, List, ListTextSize, Theme } from '@/lib/types'
 import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
 import { addItems, copyItemsToList, deleteHistoryItem, extractAddItems, moveItemsToList } from './actions'
 import { splitPlainItems } from '@/lib/parseAddInput'
@@ -45,12 +45,31 @@ interface GhostItem {
   thumbSizeClass: string
 }
 
+interface FWParticle {
+  x: number; y: number; vx: number; vy: number
+  size: number; life: number; maxLife: number
+  color: string; drag: number; gravity: number; sparkle: boolean
+}
+
+const SL_COLORS = ['#EC4899', '#14B8A6', '#F97316', '#FACC15', '#3B82F6']
+const FW_PALETTE = [...SL_COLORS, '#ffffff']
+
+function fwRand(min: number, max: number) { return min + Math.random() * (max - min) }
+function fwPick() { return FW_PALETTE[Math.floor(Math.random() * FW_PALETTE.length)] }
+
+function slColorFor(id: string): 0 | 1 | 2 | 3 {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0
+  return (Math.abs(h) % 4) as 0 | 1 | 2 | 3
+}
+
 interface Props {
   list: List
   initialItems: Item[]
   listId: string
   suggestions: string[]
   textSize: ListTextSize
+  theme: Theme
   categoryOrder: CategorySlug[]
   availableLists: Pick<List, 'id' | 'name' | 'owner_id'>[]
   currentUserId: string
@@ -91,7 +110,7 @@ function localItemToItem(li: LocalItem): Item {
   }
 }
 
-export default function ItemList({ list, initialItems, listId, suggestions, textSize, categoryOrder, availableLists, currentUserId }: Props) {
+export default function ItemList({ list, initialItems, listId, suggestions, textSize, theme, categoryOrder, availableLists, currentUserId }: Props) {
   const itemTextClass = textSize === 'large' ? 'text-base' : 'text-sm'
   const thumbSizeClass = textSize === 'large' ? 'w-16 h-16' : 'w-12 h-12'
   const [input, setInput] = useState('')
@@ -108,6 +127,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
   const [pickerMode, setPickerMode] = useState<'copy' | 'move' | null>(null)
   const [pickerError, setPickerError] = useState<string | null>(null)
   const [ghosts, setGhosts] = useState<GhostItem[]>([])
+  const fwCanvasRef = useRef<{ explode: (x: number, y: number) => void } | null>(null)
   const [confirmingClear, setConfirmingClear] = useState(false)
   const [editMode] = useEditMode()
   const { isOffline } = useSyncState()
@@ -395,6 +415,11 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
   async function handleToggle(item: Item, sourceRect?: DOMRect) {
     if (!item.is_checked && sourceRect) {
       spawnGhost(item, sourceRect)
+      if (theme === 'shoplist') {
+        const cx = sourceRect.left + sourceRect.width / 2
+        const cy = sourceRect.top + sourceRect.height / 2
+        fwCanvasRef.current?.explode(cx, cy)
+      }
     }
     await muUpdateItem(listId, item.id, { is_checked: !item.is_checked })
   }
@@ -627,6 +652,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
                         onDelete={() => handleDelete(item)}
                         selected={selectedIds.has(item.id)}
                         onToggleSelect={() => toggleSelect(item.id)}
+                        slColor={theme === 'shoplist' ? slColorFor(item.id) : undefined}
                       />
                     ))}
                   </ul>
@@ -667,6 +693,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
                       muted
                       selected={selectedIds.has(item.id)}
                       onToggleSelect={() => toggleSelect(item.id)}
+                      slColor={theme === 'shoplist' ? slColorFor(item.id) : undefined}
                     />
                   ))}
                 </ul>
@@ -678,6 +705,8 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
                     key={item.id}
                     onClick={e => handleToggle(item, (e.currentTarget as HTMLElement).getBoundingClientRect())}
                     className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800/50 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors select-none cursor-pointer"
+                    data-sl-color={theme === 'shoplist' ? slColorFor(item.id) : undefined}
+                    data-muted="true"
                   >
                     {item.picture_url && (
                       <img
@@ -850,6 +879,8 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
         </>,
         document.body
       )}
+
+      {theme === 'shoplist' && <FireworkCanvas ref={fwCanvasRef} />}
     </div>
   )
 }
@@ -906,8 +937,108 @@ function GhostOverlay({ ghost, onDone }: { ghost: GhostItem; onDone: () => void 
   )
 }
 
+const FireworkCanvas = forwardRef<{ explode: (x: number, y: number) => void }, object>(
+  function FireworkCanvas(_, ref) {
+    const canvasRef = useRef<HTMLCanvasElement>(null)
+    const stateRef = useRef({ particles: [] as FWParticle[], rafId: 0, dpr: 1, w: 0, h: 0 })
+
+    useEffect(() => {
+      const canvas = canvasRef.current!
+      const s = stateRef.current
+
+      function resize() {
+        s.dpr = Math.min(window.devicePixelRatio || 1, 2)
+        s.w = window.innerWidth
+        s.h = window.innerHeight
+        canvas.width  = Math.floor(s.w * s.dpr)
+        canvas.height = Math.floor(s.h * s.dpr)
+        canvas.style.width  = `${s.w}px`
+        canvas.style.height = `${s.h}px`
+        canvas.getContext('2d')!.setTransform(s.dpr, 0, 0, s.dpr, 0, 0)
+      }
+      resize()
+      window.addEventListener('resize', resize)
+      return () => { window.removeEventListener('resize', resize); cancelAnimationFrame(s.rafId) }
+    }, [])
+
+    useImperativeHandle(ref, () => ({
+      explode(x: number, y: number) {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+        const s = stateRef.current
+        const color = fwPick()
+        const secondary = fwPick()
+        for (let i = 0; i < 52; i++) {
+          const angle = (Math.PI * 2 * i) / 52 + fwRand(-0.08, 0.08)
+          const speed = fwRand(1.8, 6.0)
+          s.particles.push({
+            x, y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: fwRand(1.4, 3.2),
+            life: fwRand(38, 62),
+            maxLife: 62,
+            color: Math.random() > 0.65 ? secondary : color,
+            drag: fwRand(0.966, 0.980),
+            gravity: fwRand(0.032, 0.068),
+            sparkle: Math.random() > 0.86,
+          })
+        }
+        if (s.rafId) return
+        function loop() {
+          const canvas = canvasRef.current
+          if (!canvas) return
+          const ctx = canvas.getContext('2d')!
+          ctx.globalCompositeOperation = 'source-over'
+          ctx.clearRect(0, 0, s.w, s.h)
+          for (let i = s.particles.length - 1; i >= 0; i--) {
+            const p = s.particles[i]
+            p.x  += p.vx
+            p.y  += p.vy
+            p.vx *= p.drag
+            p.vy  = p.vy * p.drag + p.gravity
+            p.life -= 1
+            const alpha = Math.max(p.life / p.maxLife, 0)
+            ctx.save()
+            ctx.globalAlpha = alpha
+            ctx.fillStyle   = p.color
+            ctx.shadowColor = p.color
+            ctx.shadowBlur  = p.sparkle ? 14 : 6
+            ctx.beginPath()
+            ctx.arc(p.x, p.y, p.size * alpha + 0.4, 0, Math.PI * 2)
+            ctx.fill()
+            if (p.sparkle && Math.random() > 0.6) {
+              ctx.strokeStyle = '#ffffff'
+              ctx.lineWidth   = 0.9
+              ctx.beginPath()
+              ctx.moveTo(p.x - 4, p.y); ctx.lineTo(p.x + 4, p.y)
+              ctx.moveTo(p.x, p.y - 4); ctx.lineTo(p.x, p.y + 4)
+              ctx.stroke()
+            }
+            ctx.restore()
+            if (p.life <= 0 || p.y > s.h + 24) s.particles.splice(i, 1)
+          }
+          if (s.particles.length > 0) {
+            s.rafId = requestAnimationFrame(loop)
+          } else {
+            s.rafId = 0
+          }
+        }
+        s.rafId = requestAnimationFrame(loop)
+      },
+    }))
+
+    return (
+      <canvas
+        ref={canvasRef}
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, zIndex: 70, pointerEvents: 'none', display: 'block' }}
+      />
+    )
+  }
+)
+
 function SortableRow({
-  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onPicture, onCombine, editMode, onDelete, muted, selected, onToggleSelect,
+  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onPicture, onCombine, editMode, onDelete, muted, selected, onToggleSelect, slColor,
 }: {
   item: Item
   itemTextClass: string
@@ -921,6 +1052,7 @@ function SortableRow({
   muted?: boolean
   selected?: boolean
   onToggleSelect?: () => void
+  slColor?: 0 | 1 | 2 | 3
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
   const style = {
@@ -955,6 +1087,8 @@ function SortableRow({
       style={style}
       onClick={editMode ? onToggleSelect : e => onToggle((e.currentTarget as HTMLElement).getBoundingClientRect())}
       className={`flex items-center gap-3 ${bgClass} rounded-xl border px-4 py-3 transition-colors select-none cursor-pointer`}
+      data-sl-color={slColor}
+      data-muted={muted ? 'true' : undefined}
     >
       <button
         {...attributes}

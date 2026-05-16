@@ -43,7 +43,7 @@ export default async function ListPage({ params }: Props) {
 
   const suggestions = history?.map(h => h.name) ?? []
   const isOwner = list.owner_id === user.id
-  const { list_text_size, category_order } = await getUserPreferences()
+  const { list_text_size, category_order, theme } = await getUserPreferences()
 
   return (
     <EditModeProvider>
@@ -63,6 +63,7 @@ export default async function ListPage({ params }: Props) {
           listId={id}
           suggestions={suggestions}
           textSize={list_text_size}
+          theme={theme}
           categoryOrder={category_order}
           availableLists={otherLists ?? []}
           currentUserId={user.id}

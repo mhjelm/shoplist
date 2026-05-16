@@ -59,3 +59,47 @@ body {
   --color-white: oklch(0% 0 0);
 }
 
+/* ── Shoplist theme ─────────────────────────────────────────────────────── */
+
+@custom-variant shoplist (&:where(.shoplist, .shoplist *));
+
+.shoplist {
+  --sl-pink:    #EC4899;
+  --sl-teal:    #14B8A6;
+  --sl-orange:  #F97316;
+  --sl-yellow:  #FACC15;
+  --sl-blue:    #3B82F6;
+  --background: #FFF7FB;
+  --foreground: #1F1033;
+}
+
+.shoplist body {
+  background:
+    radial-gradient(80% 60% at 0% 0%,    color-mix(in oklab, var(--sl-pink)   28%, transparent), transparent 70%),
+    radial-gradient(80% 60% at 100% 0%,  color-mix(in oklab, var(--sl-teal)   22%, transparent), transparent 70%),
+    radial-gradient(90% 70% at 50% 100%, color-mix(in oklab, var(--sl-yellow) 25%, transparent), transparent 70%),
+    var(--background);
+  background-attachment: fixed;
+}
+
+/* Page-level structural wrappers: let the gradient breathe through */
+.shoplist .min-h-screen { background: transparent !important; }
+
+/* Page headers: frosted glass instead of solid white */
+.shoplist header {
+  background-color: rgb(255 255 255 / 0.75) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Per-item pastel tints — selected via data-sl-color="0..3" on the <li>.
+   These rules come AFTER the .bg-white override above, so they win the
+   !important battle for item rows that also carry the bg-white class. */
+.shoplist [data-sl-color="0"] { background-color: color-mix(in oklab, var(--sl-pink)   20%, white) !important; border-color: color-mix(in oklab, var(--sl-pink)   55%, transparent) !important; }
+.shoplist [data-sl-color="1"] { background-color: color-mix(in oklab, var(--sl-teal)   20%, white) !important; border-color: color-mix(in oklab, var(--sl-teal)   55%, transparent) !important; }
+.shoplist [data-sl-color="2"] { background-color: color-mix(in oklab, var(--sl-orange) 20%, white) !important; border-color: color-mix(in oklab, var(--sl-orange) 55%, transparent) !important; }
+.shoplist [data-sl-color="3"] { background-color: color-mix(in oklab, var(--sl-yellow) 24%, white) !important; border-color: color-mix(in oklab, var(--sl-yellow) 60%, transparent) !important; }
+
+/* Shopped rows keep their tint but fade out */
+.shoplist [data-sl-color][data-muted="true"] { opacity: 0.5; }
+
