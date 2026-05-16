@@ -25,7 +25,7 @@ export async function confirmShareImport(
     if (!name) return { error: 'List name is required' }
     const { data: list, error } = await supabase
       .from('lists')
-      .insert({ name, owner_id: user.id, is_shared: false })
+      .insert({ name, owner_id: user.id })
       .select('id')
       .single()
     if (error || !list) return { error: error?.message ?? 'Could not create list' }

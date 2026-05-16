@@ -61,7 +61,7 @@ vi.mock('@/lib/db/local', () => ({
 import { reconcileLists } from '@/lib/sync/reconcile'
 
 function makeList(id: string, name: string, ownerId = 'user-1'): LocalList {
-  return { id, name, owner_id: ownerId, is_shared: false, created_at: '2024-01-01T00:00:00.000Z' }
+  return { id, name, owner_id: ownerId, created_at: '2024-01-01T00:00:00.000Z' }
 }
 
 function makeItem(id: string, listId: string): LocalItem {

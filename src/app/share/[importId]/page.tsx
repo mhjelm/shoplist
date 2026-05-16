@@ -23,7 +23,7 @@ export default async function SharePage({ params }: Props) {
 
   const { data: lists } = await supabase
     .from('lists')
-    .select('id, name, owner_id, is_shared')
+    .select('id, name, owner_id')
     .order('created_at', { ascending: false })
 
   return (

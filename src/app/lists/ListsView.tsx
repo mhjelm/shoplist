@@ -11,10 +11,11 @@ import DeleteListButton from './DeleteListButton'
 
 interface Props {
   initialLists: List[]
+  memberCounts: Record<string, boolean>
   currentUserId: string
 }
 
-export default function ListsView({ initialLists, currentUserId }: Props) {
+export default function ListsView({ initialLists, memberCounts, currentUserId }: Props) {
   const { isOffline } = useSyncState()
 
   // Reconcile on mount so existing Dexie `lists` rows get refreshed against
@@ -55,6 +56,7 @@ export default function ListsView({ initialLists, currentUserId }: Props) {
               <ListRow
                 key={list.id}
                 list={list}
+                hasMembers={memberCounts[list.id] ?? false}
                 cached={cachedIds.has(list.id)}
                 isOffline={isOffline}
                 showDelete
@@ -72,6 +74,7 @@ export default function ListsView({ initialLists, currentUserId }: Props) {
               <ListRow
                 key={list.id}
                 list={list}
+                hasMembers={false}
                 cached={cachedIds.has(list.id)}
                 isOffline={isOffline}
               />
@@ -83,8 +86,9 @@ export default function ListsView({ initialLists, currentUserId }: Props) {
   )
 }
 
-function ListRow({ list, cached, isOffline, showDelete }: {
+function ListRow({ list, hasMembers, cached, isOffline, showDelete }: {
   list: List
+  hasMembers: boolean
   cached: boolean
   isOffline: boolean
   showDelete?: boolean
@@ -105,7 +109,7 @@ function ListRow({ list, cached, isOffline, showDelete }: {
         />
       )}
       <span className="truncate">{list.name}</span>
-      {list.is_shared && <span className="text-xs text-gray-400 dark:text-gray-500">shared</span>}
+      {hasMembers && <span className="text-xs text-gray-400 dark:text-gray-500">shared</span>}
     </>
   )
 

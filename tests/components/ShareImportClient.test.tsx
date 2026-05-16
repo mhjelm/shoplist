@@ -17,8 +17,8 @@ const baseItems = [
 ]
 
 const baseLists = [
-  { id: 'list-a', name: 'Veckohandling', owner_id: 'me', is_shared: false },
-  { id: 'list-b', name: 'Fest', owner_id: 'someone-else', is_shared: true },
+  { id: 'list-a', name: 'Veckohandling', owner_id: 'me' },
+  { id: 'list-b', name: 'Fest', owner_id: 'someone-else' },
 ]
 
 function renderClient(overrides: Partial<React.ComponentProps<typeof ShareImportClient>> = {}) {

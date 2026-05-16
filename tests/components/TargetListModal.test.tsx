@@ -13,8 +13,8 @@ const onPick = vi.fn()
 const onClose = vi.fn()
 
 const lists = [
-  { id: 'list-a', name: 'Veckohandling', owner_id: 'me', is_shared: false },
-  { id: 'list-b', name: 'Recept', owner_id: 'someone-else', is_shared: true },
+  { id: 'list-a', name: 'Veckohandling', owner_id: 'me' },
+  { id: 'list-b', name: 'Recept', owner_id: 'someone-else' },
 ]
 
 function renderModal(overrides: Partial<Parameters<typeof TargetListModal>[0]> = {}) {
@@ -110,7 +110,7 @@ describe('TargetListModal', () => {
     })
 
     it('on submit, calls createList then onPick with the new list id', async () => {
-      mockCreateList.mockResolvedValue({ list: { id: 'new-list-id', name: 'Ny', owner_id: 'me', is_shared: false, created_at: '' } })
+      mockCreateList.mockResolvedValue({ list: { id: 'new-list-id', name: 'Ny', owner_id: 'me', created_at: '' } })
       renderModal()
       fireEvent.click(screen.getByRole('button', { name: /^\+ skapa ny lista$/i }))
       fireEvent.change(screen.getByPlaceholderText(/listans namn/i), { target: { value: 'Ny' } })
@@ -118,7 +118,7 @@ describe('TargetListModal', () => {
       await waitFor(() => expect(mockCreateList).toHaveBeenCalled())
       const fd = mockCreateList.mock.calls[0][0]
       expect(fd.get('name')).toBe('Ny')
-      expect(fd.get('is_shared')).toBe('false')
+
       await waitFor(() => expect(onPick).toHaveBeenCalledWith('new-list-id'))
     })
 

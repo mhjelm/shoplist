@@ -37,11 +37,10 @@ interface Props {
   list: List
   initialItems: Item[]
   listId: string
-  isShared: boolean
   suggestions: string[]
   textSize: ListTextSize
   categoryOrder: CategorySlug[]
-  availableLists: Pick<List, 'id' | 'name' | 'owner_id' | 'is_shared'>[]
+  availableLists: Pick<List, 'id' | 'name' | 'owner_id'>[]
   currentUserId: string
 }
 

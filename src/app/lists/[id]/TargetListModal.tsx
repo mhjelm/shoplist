@@ -6,7 +6,7 @@ import { createList } from '@/app/lists/actions'
 
 type Props = {
   mode: 'copy' | 'move'
-  availableLists: Pick<List, 'id' | 'name' | 'owner_id' | 'is_shared'>[]
+  availableLists: Pick<List, 'id' | 'name' | 'owner_id'>[]
   currentUserId: string
   onPick: (targetListId: string) => Promise<void>
   onClose: () => void
@@ -48,7 +48,7 @@ export default function TargetListModal({ mode, availableLists, currentUserId, o
     setError(null)
     const fd = new FormData()
     fd.set('name', trimmed)
-    fd.set('is_shared', 'false')
+
     const result = await createList(fd)
     if (result?.error || !result?.list) {
       setError(result?.error ?? 'Kunde inte skapa listan')

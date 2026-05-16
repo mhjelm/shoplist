@@ -5,16 +5,28 @@ import { logout } from '../auth/actions'
 import CreateListForm from './CreateListForm'
 import ListsView from './ListsView'
 import OfflineBadge from '@/components/OfflineBadge'
+import type { List } from '@/lib/types'
 
 export default async function ListsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: lists } = await supabase
+  // Join list_members count so we can show the "shared" badge without the
+  // dropped is_shared column. head:true returns just the count, not rows.
+  const { data: rawLists } = await supabase
     .from('lists')
-    .select('*')
+    .select('id, name, owner_id, created_at, list_members(count)')
     .order('created_at', { ascending: false })
+
+  // Flatten into List shape + a hasMembers boolean for the badge.
+  const lists: List[] = []
+  const memberCounts: Record<string, boolean> = {}
+  for (const row of rawLists ?? []) {
+    const { list_members, ...rest } = row as typeof row & { list_members: Array<{ count: number }> }
+    lists.push(rest as List)
+    memberCounts[rest.id] = (list_members?.[0]?.count ?? 0) > 0
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -31,7 +43,7 @@ export default async function ListsPage() {
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-8">
         <CreateListForm />
-        <ListsView initialLists={lists ?? []} currentUserId={user.id} />
+        <ListsView initialLists={lists} memberCounts={memberCounts} currentUserId={user.id} />
       </main>
     </div>
   )

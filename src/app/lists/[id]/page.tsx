@@ -2,11 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import ItemList from './ItemList'
-import InviteForm from './InviteForm'
 import LeaveListButton from './LeaveListButton'
+import ShareSection from './ShareSection'
 import { getUserPreferences } from '@/lib/preferences'
 import { EditModeProvider, EditModeToggle } from './EditModeContext'
 import OfflineBadge from '@/components/OfflineBadge'
+import { fetchListMembers, fetchMyInvitees } from '../actions'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -38,13 +39,18 @@ export default async function ListPage({ params }: Props) {
   // RLS filters to lists the user owns or is a member of.
   const { data: otherLists } = await supabase
     .from('lists')
-    .select('id, name, owner_id, is_shared, created_at')
+    .select('id, name, owner_id, created_at')
     .neq('id', id)
     .order('created_at', { ascending: false })
 
   const suggestions = history?.map(h => h.name) ?? []
   const isOwner = list.owner_id === user.id
   const { list_text_size, category_order } = await getUserPreferences()
+
+  // Fetch sharing data in parallel (owner-only; harmless no-ops for members).
+  const [members, invitees] = isOwner
+    ? await Promise.all([fetchListMembers(id), fetchMyInvitees()])
+    : [[], []]
 
   return (
     <EditModeProvider>
@@ -62,7 +68,6 @@ export default async function ListPage({ params }: Props) {
           list={list}
           initialItems={items ?? []}
           listId={id}
-          isShared={list.is_shared}
           suggestions={suggestions}
           textSize={list_text_size}
           categoryOrder={category_order}
@@ -70,11 +75,12 @@ export default async function ListPage({ params }: Props) {
           currentUserId={user.id}
         />
 
-        {isOwner && list.is_shared && (
-          <section>
-            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Invite member</h2>
-            <InviteForm listId={id} />
-          </section>
+        {isOwner && (
+          <ShareSection
+            listId={id}
+            initialMembers={members}
+            initialInvitees={invitees}
+          />
         )}
       </main>
     </div>

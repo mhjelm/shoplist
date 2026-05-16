@@ -4,7 +4,6 @@ export interface LocalList {
   id: string
   name: string
   owner_id: string
-  is_shared: boolean
   created_at: string
 }
 

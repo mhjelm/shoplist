@@ -11,12 +11,9 @@ export async function createList(formData: FormData) {
   const name = (formData.get('name') as string)?.trim()
   if (!name) return { error: 'Name is required' }
 
-  const isShared = formData.get('is_shared') === 'true'
-
   const { data: list, error } = await supabase.from('lists').insert({
     name,
     owner_id: user.id,
-    is_shared: isShared,
   }).select().single()
 
   if (error) return { error: error.message }
@@ -45,6 +42,18 @@ export async function inviteMember(listId: string, email: string) {
   revalidatePath(`/lists/${listId}`)
 }
 
+export async function removeMember(listId: string, userId: string) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('list_members')
+    .delete()
+    .eq('list_id', listId)
+    .eq('user_id', userId)
+  if (error) return { error: error.message }
+  revalidatePath(`/lists/${listId}`)
+  return { error: null }
+}
+
 export async function leaveList(listId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -58,4 +67,16 @@ export async function leaveList(listId: string) {
 
   if (error) return { error: error.message }
   revalidatePath('/lists')
+}
+
+export async function fetchListMembers(listId: string): Promise<Array<{ user_id: string; email: string; added_at: string }>> {
+  const supabase = await createClient()
+  const { data } = await supabase.rpc('get_list_members', { p_list_id: listId })
+  return (data ?? []) as Array<{ user_id: string; email: string; added_at: string }>
+}
+
+export async function fetchMyInvitees(): Promise<string[]> {
+  const supabase = await createClient()
+  const { data } = await supabase.rpc('get_my_invitee_emails')
+  return (data ?? []).map((r: { email: string }) => r.email)
 }

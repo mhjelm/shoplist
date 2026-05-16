@@ -52,8 +52,8 @@ import ListsView from '@/app/lists/ListsView'
 // Helpers
 // ---------------------------------------------------------------------------
 
-function mkList(id: string, ownerId = 'me', name = `List ${id}`, isShared = false): List {
-  return { id, name, owner_id: ownerId, is_shared: isShared, created_at: '2024-01-01T00:00:00.000Z' }
+function mkList(id: string, ownerId = 'me', name = `List ${id}`): List {
+  return { id, name, owner_id: ownerId, created_at: '2024-01-01T00:00:00.000Z' }
 }
 
 function mkItem(id: string, listId: string): LocalItem {
@@ -63,6 +63,12 @@ function mkItem(id: string, listId: string): LocalItem {
     quantity: 1, category: null, measurement: null, added_by: 'me',
   }
 }
+
+function mkLocalList(id: string): LocalList {
+  return { id, name: `List ${id}`, owner_id: 'me', created_at: '' }
+}
+
+const NO_COUNTS: Record<string, boolean> = {}
 
 beforeEach(() => {
   live.lists = undefined
@@ -77,7 +83,7 @@ beforeEach(() => {
 describe('ListsView', () => {
   it('renders all lists from initialLists', () => {
     const initial = [mkList('a'), mkList('b')]
-    render(<ListsView initialLists={initial} currentUserId="me" />)
+    render(<ListsView initialLists={initial} memberCounts={NO_COUNTS} currentUserId="me" />)
     expect(screen.getByRole('link', { name: /List a/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /List b/ })).toBeInTheDocument()
   })
@@ -85,37 +91,45 @@ describe('ListsView', () => {
   it('online: every list is a clickable Link regardless of cache status', () => {
     live.lists = []
     live.items = []
-    render(<ListsView initialLists={[mkList('a'), mkList('b')]} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a'), mkList('b')]} memberCounts={NO_COUNTS} currentUserId="me" />)
     expect(screen.getByRole('link', { name: /List a/ })).toHaveAttribute('href', '/lists/a')
     expect(screen.getByRole('link', { name: /List b/ })).toHaveAttribute('href', '/lists/b')
   })
 
-  it('offline + cached list: renders a hard-nav <a> (not next/link) with the right href', () => {
+  it('shows "shared" badge when memberCounts says a list has members', () => {
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={{ a: true }} currentUserId="me" />)
+    expect(screen.getByText('shared')).toBeInTheDocument()
+  })
+
+  it('does NOT show "shared" badge when list has no members', () => {
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={{ a: false }} currentUserId="me" />)
+    expect(screen.queryByText('shared')).not.toBeInTheDocument()
+  })
+
+  it('offline + cached list: renders a hard-nav <a> with the right href', () => {
     sync.isOffline = true
-    live.lists = [mkList('a')]
+    live.lists = [mkLocalList('a')]
     live.items = [mkItem('i1', 'a')]
-    render(<ListsView initialLists={[mkList('a')]} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} currentUserId="me" />)
     const link = screen.getByRole('link', { name: /List a/ })
     expect(link).toHaveAttribute('href', '/lists/a')
     expect(link).not.toHaveAttribute('aria-disabled')
-    // Hard navigation is required so the SW navigate handler runs and serves
-    // the cached HTML shell — Link-driven RSC fetches bypass the SW cache.
     expect(link.tagName).toBe('A')
   })
 
   it('offline + cached: shows the offline-cached dot indicator', () => {
     sync.isOffline = true
-    live.lists = [mkList('a')]
+    live.lists = [mkLocalList('a')]
     live.items = []
-    render(<ListsView initialLists={[mkList('a')]} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} currentUserId="me" />)
     expect(screen.getByLabelText('Sparad offline')).toBeInTheDocument()
   })
 
   it('online: cached list does NOT show the dot (only relevant offline)', () => {
     sync.isOffline = false
-    live.lists = [mkList('a')]
+    live.lists = [mkLocalList('a')]
     live.items = []
-    render(<ListsView initialLists={[mkList('a')]} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} currentUserId="me" />)
     expect(screen.queryByLabelText('Sparad offline')).not.toBeInTheDocument()
   })
 
@@ -123,16 +137,15 @@ describe('ListsView', () => {
     sync.isOffline = true
     live.lists = []
     live.items = []
-    render(<ListsView initialLists={[mkList('a')]} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} currentUserId="me" />)
     expect(screen.queryByLabelText('Sparad offline')).not.toBeInTheDocument()
   })
 
   it('offline + non-cached list: link is replaced with an aria-disabled span', () => {
     sync.isOffline = true
-    // Both live queries resolved-empty → cachedIds is empty.
     live.lists = []
     live.items = []
-    render(<ListsView initialLists={[mkList('a')]} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} currentUserId="me" />)
     expect(screen.queryByRole('link', { name: /List a/ })).not.toBeInTheDocument()
     const disabled = screen.getByText('List a').closest('[aria-disabled]')
     expect(disabled).not.toBeNull()
@@ -143,7 +156,7 @@ describe('ListsView', () => {
     sync.isOffline = true
     live.lists = []
     live.items = []
-    render(<ListsView initialLists={[mkList('a')]} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} currentUserId="me" />)
     const disabled = screen.getByText('List a').closest('[aria-disabled]')
     expect(disabled).toHaveAttribute('title', 'Inte tillgänglig offline')
   })
@@ -152,7 +165,7 @@ describe('ListsView', () => {
     sync.isOffline = true
     live.lists = []
     live.items = []
-    render(<ListsView initialLists={[mkList('a')]} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} currentUserId="me" />)
     const el = screen.getByText('List a').closest('[aria-disabled]')
     expect(el?.tagName).not.toBe('A')
     if (el) fireEvent.click(el)
@@ -162,15 +175,15 @@ describe('ListsView', () => {
     sync.isOffline = true
     live.lists = []
     live.items = [mkItem('i1', 'orphan')]
-    render(<ListsView initialLists={[mkList('orphan')]} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('orphan')]} memberCounts={NO_COUNTS} currentUserId="me" />)
     expect(screen.getByRole('link', { name: /List orphan/ })).toHaveAttribute('href', '/lists/orphan')
   })
 
   it('cached set: a list known only via the lists table counts as cached (zero items)', () => {
     sync.isOffline = true
-    live.lists = [mkList('empty')]
+    live.lists = [mkLocalList('empty')]
     live.items = []
-    render(<ListsView initialLists={[mkList('empty')]} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('empty')]} memberCounts={NO_COUNTS} currentUserId="me" />)
     expect(screen.getByRole('link', { name: /List empty/ })).toHaveAttribute('href', '/lists/empty')
   })
 
@@ -179,7 +192,8 @@ describe('ListsView', () => {
     live.items = []
     render(
       <ListsView
-        initialLists={[mkList('mine', 'me'), mkList('theirs', 'someone-else', 'Other List', true)]}
+        initialLists={[mkList('mine', 'me'), mkList('theirs', 'someone-else', 'Other List')]}
+        memberCounts={NO_COUNTS}
         currentUserId="me"
       />,
     )

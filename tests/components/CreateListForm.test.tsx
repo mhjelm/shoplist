@@ -4,7 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 const sync = vi.hoisted(() => ({ isOffline: false }))
 
 vi.mock('@/app/lists/actions', () => ({
-  createList: vi.fn().mockResolvedValue({ list: { id: 'new', name: 'Ny', owner_id: 'me', is_shared: false, created_at: '' } }),
+  createList: vi.fn().mockResolvedValue({ list: { id: 'new', name: 'Ny', owner_id: 'me', created_at: '' } }),
 }))
 
 vi.mock('@/lib/sync/engine', () => ({

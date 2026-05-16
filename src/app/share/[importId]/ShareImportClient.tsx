@@ -13,7 +13,6 @@ interface ShareList {
   id: string
   name: string
   owner_id: string
-  is_shared: boolean
 }
 
 interface Props {

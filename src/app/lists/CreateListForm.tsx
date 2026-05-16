@@ -6,7 +6,6 @@ import { useSyncState } from '@/lib/sync/engine'
 
 export default function CreateListForm() {
   const [open, setOpen] = useState(false)
-  const [isShared, setIsShared] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const { isOffline } = useSyncState()
@@ -15,14 +14,12 @@ export default function CreateListForm() {
     if (isOffline) return
     setError(null)
     setLoading(true)
-    formData.set('is_shared', isShared ? 'true' : 'false')
     const result = await createList(formData)
     setLoading(false)
     if (result?.error) {
       setError(result.error)
     } else {
       setOpen(false)
-      setIsShared(false)
     }
   }
 
@@ -49,16 +46,6 @@ export default function CreateListForm() {
         autoFocus
         className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
-
-      <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={isShared}
-          onChange={e => setIsShared(e.target.checked)}
-          className="rounded"
-        />
-        Shared list (invite members)
-      </label>
 
       {isOffline && (
         <p className="text-amber-700 dark:text-amber-400 text-xs">Kräver anslutning</p>

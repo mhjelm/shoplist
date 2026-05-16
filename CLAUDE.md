@@ -4,7 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Active plan
 
-- _None._ Last completed plan: **Offline UX hardening (PR5)** — 2026-05-16 — SW per-URL navigation cache, `/lists` Dexie-backed via `ListsView`, `+ New list` and `OfflineBadge` gated on `useSyncState`. Follow-up fix (same day) addresses: (a) RSC fetches now also seed the HTML cache so Link-clicked list pages survive offline; (b) `reconcileLists` no longer inserts unknown server rows — Dexie's `lists` table only tracks lists actually opened on this device, so the cached set is meaningful; (c) cached lists now show a positive green-dot indicator and force hard navigation when offline. Full plan archived in `PLAN.md`.
+- _None._ Last completed plan: **Sharing moves into list edit mode, with member history** — 2026-05-16. Drops `lists.is_shared`; sharing is derived from `list_members` membership. New inline `ShareSection` inside edit mode shows current members (with remove ×), invite form, and quick-pick chips for previously-invited emails. Full plan archived in `PLAN.md`.
+- Previously completed: **Offline UX hardening (PR5)** — 2026-05-16 — SW per-URL navigation cache, `/lists` Dexie-backed via `ListsView`, `+ New list` and `OfflineBadge` gated on `useSyncState`. Follow-up fix (same day): RSC fetches seed the HTML cache so Link-clicked list pages survive offline; `reconcileLists` no longer inserts unknown server rows; cached lists show a positive green-dot indicator (offline only) and force hard navigation when offline.
 - **Offline-first list/items with IndexedDB cache + outbox sync** — completed PR1–PR4 (2026-05-15 → 2026-05-16). Local Dexie store backs the UI; Realtime + event-driven reconciliation keeps it fresh; mutations queue through an outbox while offline. See git history for PR-level detail.
 
 ## Project
@@ -84,9 +85,9 @@ The item list is a Client Component that:
 
 1. Receives `initialItems` from the server.
 2. Maintains local state for instant feedback on every mutation — add, toggle, edit, delete, reorder, merge, measurement combine, category change, recipe-import bulk add. Each handler applies the change locally first, then awaits the server action, then rolls back from a snapshot on `{ error }`.
-3. For **shared** lists only, subscribes to a Supabase Realtime channel filtered by `list_id` and merges INSERT/UPDATE/DELETE events into local state. Optimistic INSERTs are matched by `(added_by === '' && name === incoming.name)` and reconciled when the real row arrives.
+3. Subscribes to a Supabase Realtime channel filtered by `list_id` and merges INSERT/UPDATE/DELETE events into local state. Optimistic INSERTs are matched by `(added_by === '' && name === incoming.name)` and reconciled when the real row arrives.
 
-Private lists skip the realtime subscription. When changing mutation logic, update both the optimistic path *and* ensure the eventual server response/realtime echo doesn't double-apply.
+Realtime subscribes unconditionally for every list — there is no `is_shared` gate. When changing mutation logic, update both the optimistic path *and* ensure the eventual server response/realtime echo doesn't double-apply.
 
 ### User preferences are server-side, read in layout
 
@@ -184,7 +185,7 @@ A separate UI mode toggled from the page header that swaps the per-row pencil fo
 
 Five tables. Initial schema in `supabase/migrations/0001_init.sql`; subsequent migrations add columns and a preferences table:
 
-- `lists` (id, name, owner_id, is_shared, created_at)
+- `lists` (id, name, owner_id, created_at) — `is_shared` was dropped in migration 0012; shared status is now derived from `list_members` having rows
 - `list_members` (list_id, user_id, added_at) — join table for sharing
 - `items` (id, list_id, added_by, name, is_checked, created_at, **picture_url**, **sort_order**, **quantity**, **category**, **measurement**)
 - `user_item_history` (user_id, name, last_used_at, use_count, **category**) — autocomplete source
