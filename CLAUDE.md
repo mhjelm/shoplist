@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Pending manual tasks
+
+- [ ] **Restrict signup to invited users only** — In Supabase dashboard: Authentication → Settings → disable "Enable email signup". Then add family members via Authentication → Users → "Invite user". Do this before sharing the app URL publicly.
+
 ## Active plan
 
 - _None._ Last completed plan: **High-contrast accessibility mode** — 2026-05-16. Adds a `high_contrast` boolean preference (migration 0013), `hc` class on `<html>`, global CSS overrides in `globals.css`, and a toggle in Settings. Previously: **UI polish: list nav loading + shop ghost animation** — 2026-05-16. Adds `loading.tsx` for `/lists/[id]` (Suspense "Laddar…" spinner) and a ghost-fade animation when an item is marked shopped (faded duplicate row drifts down ~36px and fades, via portal + `@keyframes shop-ghost`). Touches `ItemList.tsx` (state, handleToggle, SortableRow onToggle prop) and `globals.css`.
