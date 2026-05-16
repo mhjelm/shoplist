@@ -469,28 +469,46 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
       <div className="space-y-2">
         <div className="relative">
           <div className="flex gap-2">
-            <textarea
-              ref={inputRef}
-              value={input}
-              rows={1}
-              onChange={e => {
-                handleInputChange(e.target.value)
-                e.target.style.height = 'auto'
-                e.target.style.height = `${e.target.scrollHeight}px`
-              }}
-              onKeyDown={e => {
-                if (e.key === 'ArrowDown' && !e.shiftKey) { e.preventDefault(); setHighlightIdx(i => Math.min(i + 1, filtered.length - 1)) }
-                else if (e.key === 'ArrowUp' && !e.shiftKey) { e.preventDefault(); setHighlightIdx(i => Math.max(i - 1, -1)) }
-                else if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  if (highlightIdx >= 0 && filtered[highlightIdx]) selectSuggestion(filtered[highlightIdx])
-                  else handleAdd()
-                }
-                else if (e.key === 'Escape') setFiltered([])
-              }}
-              placeholder="Add an item…"
-              className="flex-1 min-w-0 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden leading-normal"
-            />
+            <div className="relative flex-1 min-w-0">
+              <textarea
+                ref={inputRef}
+                value={input}
+                rows={1}
+                onChange={e => {
+                  handleInputChange(e.target.value)
+                  e.target.style.height = 'auto'
+                  e.target.style.height = `${e.target.scrollHeight}px`
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'ArrowDown' && !e.shiftKey) { e.preventDefault(); setHighlightIdx(i => Math.min(i + 1, filtered.length - 1)) }
+                  else if (e.key === 'ArrowUp' && !e.shiftKey) { e.preventDefault(); setHighlightIdx(i => Math.max(i - 1, -1)) }
+                  else if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    if (highlightIdx >= 0 && filtered[highlightIdx]) selectSuggestion(filtered[highlightIdx])
+                    else handleAdd()
+                  }
+                  else if (e.key === 'Escape') setFiltered([])
+                }}
+                placeholder="Add an item…"
+                className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden leading-normal pr-7"
+              />
+              {input && (
+                <button
+                  onMouseDown={e => {
+                    e.preventDefault()
+                    setInput('')
+                    setFiltered([])
+                    if (inputRef.current) inputRef.current.style.height = 'auto'
+                    inputRef.current?.focus()
+                  }}
+                  className="absolute right-2 top-2 text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 transition-colors"
+                  tabIndex={-1}
+                  aria-label="Rensa"
+                >
+                  ×
+                </button>
+              )}
+            </div>
             <button
               onClick={() => setShowUrlInput(v => !v)}
               disabled={isOffline}
