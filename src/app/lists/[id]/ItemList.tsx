@@ -107,6 +107,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
   const [pickerMode, setPickerMode] = useState<'copy' | 'move' | null>(null)
   const [pickerError, setPickerError] = useState<string | null>(null)
   const [ghosts, setGhosts] = useState<GhostItem[]>([])
+  const [confirmingClear, setConfirmingClear] = useState(false)
   const [editMode] = useEditMode()
   const { isOffline } = useSyncState()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -588,12 +589,29 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
 
       {!isEmpty && (
         <div className="flex justify-center pt-2">
-          <button
-            onClick={handleClearAll}
-            className="text-xs text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors"
-          >
-            Clear list
-          </button>
+          {confirmingClear ? (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={async () => { await handleClearAll(); setConfirmingClear(false) }}
+                className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => setConfirmingClear(false)}
+                className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmingClear(true)}
+              className="text-xs text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors"
+            >
+              Clear list
+            </button>
+          )}
         </div>
       )}
 
