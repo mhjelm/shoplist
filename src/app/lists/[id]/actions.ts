@@ -103,6 +103,20 @@ export async function categorizeItem(itemId: string): Promise<{ category?: Categ
   }
 }
 
+export async function deleteHistoryItem(name: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  await supabase
+    .from('user_item_history')
+    .delete()
+    .eq('user_id', user.id)
+    .ilike('name', name)
+
+  return {}
+}
+
 export async function setItemCategory(itemId: string, listId: string, category: CategorySlug): Promise<{ error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

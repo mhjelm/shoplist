@@ -9,7 +9,7 @@ import { reconcileList } from '@/lib/sync/reconcile'
 import { subscribeToList } from '@/lib/sync/realtime'
 import type { Item, List, ListTextSize } from '@/lib/types'
 import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
-import { addItems, copyItemsToList, extractAddItems, moveItemsToList } from './actions'
+import { addItems, copyItemsToList, deleteHistoryItem, extractAddItems, moveItemsToList } from './actions'
 import { splitPlainItems } from '@/lib/parseAddInput'
 import { muAddItem, muUpdateItem, muSetCategory, muDeleteItem, muBulkDelete, muReorderItem, muMergeItems } from '@/lib/sync/mutations'
 import { useSyncState, setActiveList } from '@/lib/sync/engine'
@@ -273,6 +273,12 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     inputRef.current?.focus()
   }
 
+  function handleDeleteSuggestion(name: string) {
+    setFiltered(f => f.filter(s => s !== name))
+    deleteHistoryItem(name)
+    inputRef.current?.focus()
+  }
+
   async function handleAdd() {
     const raw = input.trim()
     if (!raw) return
@@ -520,9 +526,17 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
                 <li
                   key={s}
                   onMouseDown={() => selectSuggestion(s)}
-                  className={`px-3 py-2 text-sm cursor-pointer ${idx === highlightIdx ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                  className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer ${idx === highlightIdx ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                 >
-                  {s}
+                  <span className="flex-1">{s}</span>
+                  <button
+                    onMouseDown={e => { e.stopPropagation(); handleDeleteSuggestion(s) }}
+                    className="text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 transition-colors flex-shrink-0"
+                    tabIndex={-1}
+                    aria-label={`Ta bort ${s} från historik`}
+                  >
+                    ×
+                  </button>
                 </li>
               ))}
             </ul>
