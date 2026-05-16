@@ -3,11 +3,9 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import ItemList from './ItemList'
 import LeaveListButton from './LeaveListButton'
-import ShareSection from './ShareSection'
 import { getUserPreferences } from '@/lib/preferences'
 import { EditModeProvider, EditModeToggle } from './EditModeContext'
 import OfflineBadge from '@/components/OfflineBadge'
-import { fetchListMembers, fetchMyInvitees } from '../actions'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -47,11 +45,6 @@ export default async function ListPage({ params }: Props) {
   const isOwner = list.owner_id === user.id
   const { list_text_size, category_order } = await getUserPreferences()
 
-  // Fetch sharing data in parallel (owner-only; harmless no-ops for members).
-  const [members, invitees] = isOwner
-    ? await Promise.all([fetchListMembers(id), fetchMyInvitees()])
-    : [[], []]
-
   return (
     <EditModeProvider>
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -75,13 +68,6 @@ export default async function ListPage({ params }: Props) {
           currentUserId={user.id}
         />
 
-        {isOwner && (
-          <ShareSection
-            listId={id}
-            initialMembers={members}
-            initialInvitees={invitees}
-          />
-        )}
       </main>
     </div>
     </EditModeProvider>

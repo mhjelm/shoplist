@@ -8,6 +8,7 @@ import { reconcileLists } from '@/lib/sync/reconcile'
 import { useSyncState } from '@/lib/sync/engine'
 import type { List } from '@/lib/types'
 import DeleteListButton from './DeleteListButton'
+import ListEditPanel from './ListEditPanel'
 
 interface Props {
   initialLists: List[]
@@ -18,9 +19,11 @@ interface Props {
 export default function ListsView({ initialLists, memberCounts, currentUserId }: Props) {
   const { isOffline } = useSyncState()
   const [navigatingToListId, setNavigatingToListId] = useState<string | null>(null)
+  const [openEditListId, setOpenEditListId] = useState<string | null>(null)
+  const [renamedLists, setRenamedLists] = useState<Record<string, string>>({})
 
   // Reconcile on mount so existing Dexie `lists` rows get refreshed against
-  // the server. We do NOT seed Dexie from initialLists here — Dexie's `lists`
+  // the server. We do NOT seed Dexie from initialLists here - Dexie's `lists`
   // table tracks "what the user has actually opened on this device" and is
   // populated only by ItemList mount. Seeding from SSR would make every
   // visible list look cached and defeat the offline gating.
@@ -40,10 +43,21 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
   }, [liveLists, liveItems])
 
   // Render from SSR seed. Online: SSR is current. Offline: the SW served
-  // cached /lists HTML, whose SSR data is from the last online visit — fine
+  // cached /lists HTML, whose SSR data is from the last online visit - fine
   // as a shell, and offline gating below hides anything the user can't open.
-  const myLists = initialLists.filter(l => l.owner_id === currentUserId)
-  const sharedLists = initialLists.filter(l => l.owner_id !== currentUserId)
+  const displayLists = initialLists.map(list => ({
+    ...list,
+    name: renamedLists[list.id] ?? list.name,
+  }))
+  const myLists = displayLists.filter(l => l.owner_id === currentUserId)
+  const sharedLists = displayLists.filter(l => l.owner_id !== currentUserId)
+
+  const toggleEdit = (listId: string) => {
+    setOpenEditListId(current => current === listId ? null : listId)
+  }
+  const handleRename = (listId: string, name: string) => {
+    setRenamedLists(prev => ({ ...prev, [listId]: name }))
+  }
 
   return (
     <div className="space-y-8">
@@ -62,6 +76,7 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
           </div>
         </div>
       )}
+
       <section>
         <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">My lists</h2>
         {myLists.length === 0 ? (
@@ -76,7 +91,10 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
                 cached={cachedIds.has(list.id)}
                 isOffline={isOffline}
                 onNavigate={setNavigatingToListId}
-                showDelete
+                openEditListId={openEditListId}
+                onToggleEdit={toggleEdit}
+                onRename={handleRename}
+                showEdit
               />
             ))}
           </ul>
@@ -95,6 +113,9 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
                 cached={cachedIds.has(list.id)}
                 isOffline={isOffline}
                 onNavigate={setNavigatingToListId}
+                openEditListId={openEditListId}
+                onToggleEdit={toggleEdit}
+                onRename={handleRename}
               />
             ))}
           </ul>
@@ -104,15 +125,19 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
   )
 }
 
-function ListRow({ list, hasMembers, cached, isOffline, onNavigate, showDelete }: {
+function ListRow({ list, hasMembers, cached, isOffline, onNavigate, openEditListId, onToggleEdit, onRename, showEdit }: {
   list: List
   hasMembers: boolean
   cached: boolean
   isOffline: boolean
   onNavigate: (listId: string) => void
-  showDelete?: boolean
+  openEditListId: string | null
+  onToggleEdit: (listId: string) => void
+  onRename: (listId: string, name: string) => void
+  showEdit?: boolean
 }) {
   const disabled = isOffline && !cached
+  const isEditOpen = openEditListId === list.id
   const labelClasses = 'font-medium text-gray-900 dark:text-gray-100 flex-1 min-w-0 truncate flex items-center gap-2'
   const hoverClasses = disabled
     ? 'cursor-not-allowed'
@@ -133,36 +158,60 @@ function ListRow({ list, hasMembers, cached, isOffline, onNavigate, showDelete }
   )
 
   return (
-    <li className={`bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between ${disabled ? 'opacity-50' : ''}`}>
-      {disabled ? (
-        <span
-          aria-disabled="true"
-          title="Inte tillgänglig offline"
-          className={`${labelClasses} ${hoverClasses}`}
-        >
-          {inner}
-        </span>
-      ) : isOffline ? (
-        // Hard navigation (not next/link) so the SW navigate handler runs and
-        // serves the cached HTML for /lists/[id]. Soft nav uses an RSC fetch
-        // that bypasses the navigate cache and fails offline.
-        <a
-          href={`/lists/${list.id}`}
-          className={`${labelClasses} ${hoverClasses}`}
-          onClick={() => onNavigate(list.id)}
-        >
-          {inner}
-        </a>
-      ) : (
-        <Link
-          href={`/lists/${list.id}`}
-          className={`${labelClasses} ${hoverClasses}`}
-          onClick={() => onNavigate(list.id)}
-        >
-          {inner}
-        </Link>
+    <li className={`bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 ${disabled ? 'opacity-50' : ''}`}>
+      <div className="flex items-center justify-between gap-2">
+        {disabled ? (
+          <span
+            aria-disabled="true"
+            title="Inte tillgänglig offline"
+            className={`${labelClasses} ${hoverClasses}`}
+          >
+            {inner}
+          </span>
+        ) : isOffline ? (
+          // Hard navigation (not next/link) so the SW navigate handler runs and
+          // serves the cached HTML for /lists/[id]. Soft nav uses an RSC fetch
+          // that bypasses the navigate cache and fails offline.
+          <a
+            href={`/lists/${list.id}`}
+            className={`${labelClasses} ${hoverClasses}`}
+            onClick={() => onNavigate(list.id)}
+          >
+            {inner}
+          </a>
+        ) : (
+          <Link
+            href={`/lists/${list.id}`}
+            className={`${labelClasses} ${hoverClasses}`}
+            onClick={() => onNavigate(list.id)}
+          >
+            {inner}
+          </Link>
+        )}
+
+        {showEdit && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onToggleEdit(list.id)}
+              aria-expanded={isEditOpen}
+              aria-label={`Redigera ${list.name}`}
+              className="text-gray-400 hover:text-blue-600 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
+            >
+              ✎
+            </button>
+            <DeleteListButton listId={list.id} />
+          </div>
+        )}
+      </div>
+
+      {showEdit && isEditOpen && (
+        <ListEditPanel
+          listId={list.id}
+          initialName={list.name}
+          onRename={name => onRename(list.id, name)}
+        />
       )}
-      {showDelete && <DeleteListButton listId={list.id} />}
     </li>
   )
 }

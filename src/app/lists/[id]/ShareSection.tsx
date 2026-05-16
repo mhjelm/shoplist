@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { useEditMode } from './EditModeContext'
 import { inviteMember, removeMember } from '../actions'
 import { useSyncState } from '@/lib/sync/engine'
 
@@ -18,15 +17,12 @@ interface Props {
 }
 
 export default function ShareSection({ listId, initialMembers, initialInvitees }: Props) {
-  const [editMode] = useEditMode()
   const { isOffline } = useSyncState()
   const [members, setMembers] = useState<Member[]>(initialMembers)
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<{ type: 'error' | 'success'; message: string } | null>(null)
   const [loading, setLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  if (!editMode) return null
 
   // Chips = previously-invited emails not already in this list's members.
   const currentEmails = new Set(members.map(m => m.email))
@@ -60,7 +56,7 @@ export default function ShareSection({ listId, initialMembers, initialInvitees }
   }
 
   return (
-    <section className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 space-y-4">
+    <section className="space-y-4">
       <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Dela listan</h2>
 
       {/* Current members */}

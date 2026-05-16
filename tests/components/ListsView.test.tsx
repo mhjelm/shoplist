@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import type { List } from '@/lib/types'
 import type { LocalItem, LocalList } from '@/lib/db/types'
 
@@ -16,6 +16,13 @@ const live = vi.hoisted(() => ({
 }))
 
 const sync = vi.hoisted(() => ({ isOffline: false }))
+const actions = vi.hoisted(() => ({
+  fetchListMembers: vi.fn().mockResolvedValue([]),
+  fetchMyInvitees: vi.fn().mockResolvedValue([]),
+  renameList: vi.fn().mockResolvedValue({ error: null }),
+  inviteMember: vi.fn().mockResolvedValue({ error: null }),
+  removeMember: vi.fn().mockResolvedValue({ error: null }),
+}))
 
 vi.mock('dexie-react-hooks', () => ({
   useLiveQuery: (fn: () => Promise<unknown>) => {
@@ -41,12 +48,18 @@ vi.mock('@/lib/sync/engine', () => ({
   useSyncState: () => ({ isOffline: sync.isOffline, pendingCount: 0, recentConflicts: [] }),
 }))
 
+vi.mock('@/app/lists/actions', () => actions)
+
 // DeleteListButton imports server actions; stub it so this test stays focused.
 vi.mock('@/app/lists/DeleteListButton', () => ({
   default: ({ listId }: { listId: string }) => <button aria-label={`delete-${listId}`}>×</button>,
 }))
 
 import ListsView from '@/app/lists/ListsView'
+const { fetchListMembers, fetchMyInvitees, renameList } = await import('@/app/lists/actions')
+const mockFetchMembers = vi.mocked(fetchListMembers)
+const mockFetchInvitees = vi.mocked(fetchMyInvitees)
+const mockRenameList = vi.mocked(renameList)
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -74,6 +87,10 @@ beforeEach(() => {
   live.lists = undefined
   live.items = undefined
   sync.isOffline = false
+  vi.clearAllMocks()
+  mockFetchMembers.mockResolvedValue([])
+  mockFetchInvitees.mockResolvedValue([])
+  mockRenameList.mockResolvedValue({ error: null })
 })
 
 // ---------------------------------------------------------------------------
@@ -107,6 +124,69 @@ describe('ListsView', () => {
   it('shows "shared" badge when memberCounts says a list has members', () => {
     render(<ListsView initialLists={[mkList('a')]} memberCounts={{ a: true }} currentUserId="me" />)
     expect(screen.getByText('shared')).toBeInTheDocument()
+  })
+
+  it('shows an edit pencil for owned lists', () => {
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} currentUserId="me" />)
+    expect(screen.getByRole('button', { name: /redigera list a/i })).toBeInTheDocument()
+  })
+
+  it('does not show an edit pencil for shared-with-me lists', () => {
+    render(<ListsView initialLists={[mkList('theirs', 'someone-else', 'Other List')]} memberCounts={NO_COUNTS} currentUserId="me" />)
+    expect(screen.queryByRole('button', { name: /redigera other list/i })).not.toBeInTheDocument()
+  })
+
+  it('clicking the edit pencil opens the inline panel and fetches share data', async () => {
+    mockFetchMembers.mockResolvedValueOnce([{ user_id: 'u1', email: 'alice@a.com', added_at: '2024-01-01T00:00:00.000Z' }])
+    mockFetchInvitees.mockResolvedValueOnce(['bob@b.com'])
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} currentUserId="me" />)
+    fireEvent.click(screen.getByRole('button', { name: /redigera list a/i }))
+
+    expect(screen.getByLabelText('Listnamn')).toHaveValue('List a')
+    expect(screen.getByRole('status')).toHaveTextContent('Hämtar delning...')
+    await waitFor(() => expect(mockFetchMembers).toHaveBeenCalledWith('a'))
+    expect(mockFetchInvitees).toHaveBeenCalled()
+    await waitFor(() => expect(screen.getByText('alice@a.com')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'bob@b.com' })).toBeInTheDocument()
+  })
+
+  it('only keeps one edit panel open at a time', async () => {
+    render(<ListsView initialLists={[mkList('a'), mkList('b')]} memberCounts={NO_COUNTS} currentUserId="me" />)
+    fireEvent.click(screen.getByRole('button', { name: /redigera list a/i }))
+    expect(screen.getByLabelText('Listnamn')).toHaveValue('List a')
+    fireEvent.click(screen.getByRole('button', { name: /redigera list b/i }))
+    await waitFor(() => expect(screen.getByLabelText('Listnamn')).toHaveValue('List b'))
+    expect(screen.queryByDisplayValue('List a')).not.toBeInTheDocument()
+  })
+
+  it('renames the list and updates the row locally', async () => {
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} currentUserId="me" />)
+    fireEvent.click(screen.getByRole('button', { name: /redigera list a/i }))
+    fireEvent.change(screen.getByLabelText('Listnamn'), { target: { value: 'Ny lista' } })
+    fireEvent.submit(screen.getByRole('button', { name: /spara/i }).closest('form')!)
+
+    await waitFor(() => expect(mockRenameList).toHaveBeenCalledWith('a', 'Ny lista'))
+    expect(screen.getByRole('link', { name: /Ny lista/ })).toBeInTheDocument()
+  })
+
+  it('does not submit an empty rename', () => {
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} currentUserId="me" />)
+    fireEvent.click(screen.getByRole('button', { name: /redigera list a/i }))
+    fireEvent.change(screen.getByLabelText('Listnamn'), { target: { value: '   ' } })
+    expect(screen.getByRole('button', { name: /spara/i })).toBeDisabled()
+    fireEvent.submit(screen.getByRole('button', { name: /spara/i }).closest('form')!)
+    expect(mockRenameList).not.toHaveBeenCalled()
+  })
+
+  it('offline: rename is disabled with the Kräver anslutning tooltip', () => {
+    sync.isOffline = true
+    live.lists = [mkLocalList('a')]
+    live.items = []
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} currentUserId="me" />)
+    fireEvent.click(screen.getByRole('button', { name: /redigera list a/i }))
+    const save = screen.getByRole('button', { name: /spara/i })
+    expect(save).toBeDisabled()
+    expect(save).toHaveAttribute('title', 'Kräver anslutning')
   })
 
   it('does NOT show "shared" badge when list has no members', () => {

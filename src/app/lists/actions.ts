@@ -28,6 +28,25 @@ export async function deleteList(listId: string) {
   revalidatePath('/lists')
 }
 
+export async function renameList(listId: string, name: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const trimmed = name.trim()
+  if (!trimmed) return { error: 'Name is required' }
+
+  const { error } = await supabase
+    .from('lists')
+    .update({ name: trimmed })
+    .eq('id', listId)
+
+  if (error) return { error: error.message }
+  revalidatePath('/lists')
+  revalidatePath(`/lists/${listId}`)
+  return { error: null }
+}
+
 export async function inviteMember(listId: string, email: string) {
   const supabase = await createClient()
 
