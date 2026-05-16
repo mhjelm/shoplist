@@ -25,31 +25,40 @@ interface Props {
   initialTheme: Theme
   initialListTextSize: ListTextSize
   initialCategoryOrder: CategorySlug[]
+  initialHighContrast: boolean
 }
 
-export default function SettingsForm({ initialTheme, initialListTextSize, initialCategoryOrder }: Props) {
+export default function SettingsForm({ initialTheme, initialListTextSize, initialCategoryOrder, initialHighContrast }: Props) {
   const [theme, setTheme] = useState<Theme>(initialTheme)
   const [size, setSize] = useState<ListTextSize>(initialListTextSize)
   const [categoryOrder, setCategoryOrder] = useState<CategorySlug[]>(initialCategoryOrder)
+  const [highContrast, setHighContrast] = useState<boolean>(initialHighContrast)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
-  function save(nextTheme: Theme, nextSize: ListTextSize) {
+  function save(nextTheme: Theme, nextSize: ListTextSize, nextHighContrast: boolean) {
     setError(null)
     startTransition(async () => {
-      const result = await updateSettings(nextTheme, nextSize)
+      const result = await updateSettings(nextTheme, nextSize, nextHighContrast)
       if (result?.error) setError(result.error)
     })
   }
 
   function pickTheme(next: Theme) {
     setTheme(next)
-    save(next, size)
+    document.documentElement.classList.toggle('dark', next === 'dark')
+    save(next, size, highContrast)
   }
 
   function pickSize(next: ListTextSize) {
     setSize(next)
-    save(theme, next)
+    save(theme, next, highContrast)
+  }
+
+  function pickHighContrast(next: boolean) {
+    setHighContrast(next)
+    document.documentElement.classList.toggle('hc', next)
+    save(theme, size, next)
   }
 
   function handleCategoryDragEnd(event: DragEndEvent) {
@@ -88,6 +97,25 @@ export default function SettingsForm({ initialTheme, initialListTextSize, initia
             label="Dark"
             selected={theme === 'dark'}
             onSelect={() => pickTheme('dark')}
+          />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">High contrast</h2>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <OptionRow
+            label="Off"
+            sublabel="Default"
+            selected={!highContrast}
+            onSelect={() => pickHighContrast(false)}
+          />
+          <div className="border-t border-gray-100 dark:border-gray-800" />
+          <OptionRow
+            label="On"
+            sublabel="Stronger borders and text"
+            selected={highContrast}
+            onSelect={() => pickHighContrast(true)}
           />
         </div>
       </section>

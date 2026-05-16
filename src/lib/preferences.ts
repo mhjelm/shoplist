@@ -7,12 +7,14 @@ export interface ResolvedPreferences {
   theme: Theme
   list_text_size: ListTextSize
   category_order: CategorySlug[]
+  high_contrast: boolean
 }
 
 export const DEFAULT_PREFERENCES: ResolvedPreferences = {
   theme: 'light',
   list_text_size: 'normal',
   category_order: DEFAULT_CATEGORY_ORDER,
+  high_contrast: false,
 }
 
 export const getUserPreferences = cache(async (): Promise<ResolvedPreferences> => {
@@ -22,7 +24,7 @@ export const getUserPreferences = cache(async (): Promise<ResolvedPreferences> =
 
   const { data } = await supabase
     .from('user_preferences')
-    .select('theme, list_text_size, category_order')
+    .select('theme, list_text_size, category_order, high_contrast')
     .eq('user_id', user.id)
     .maybeSingle()
 
@@ -33,5 +35,10 @@ export const getUserPreferences = cache(async (): Promise<ResolvedPreferences> =
     ? rawOrder
     : DEFAULT_CATEGORY_ORDER
 
-  return { theme: data.theme as Theme, list_text_size: data.list_text_size as ListTextSize, category_order }
+  return {
+    theme: data.theme as Theme,
+    list_text_size: data.list_text_size as ListTextSize,
+    category_order,
+    high_contrast: data.high_contrast as boolean ?? false,
+  }
 })

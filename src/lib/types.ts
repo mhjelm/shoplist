@@ -35,5 +35,6 @@ export interface UserPreferences {
   user_id: string
   theme: Theme
   list_text_size: ListTextSize
+  high_contrast: boolean
   updated_at: string
 }

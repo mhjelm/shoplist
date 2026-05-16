@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
+@custom-variant hc (&:where(.hc, .hc *));
 
 :root {
   --background: #ffffff;
@@ -23,5 +24,36 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* High-contrast mode: override Tailwind's gray scale tokens directly */
+.hc {
+  --background: #ffffff;
+  --foreground: #000000;
+  /* Muted text → black */
+  --color-gray-400: oklch(0% 0 0);
+  --color-gray-500: oklch(0% 0 0);
+  --color-gray-600: oklch(0% 0 0);
+  /* Near-white backgrounds → pure white */
+  --color-gray-50: oklch(100% 0 0);
+  --color-gray-100: oklch(95% 0 0);
+  /* Light borders → visible */
+  --color-gray-200: oklch(40% 0 0);
+}
+
+.hc.dark {
+  --background: #000000;
+  --foreground: #ffffff;
+  /* Muted text → white */
+  --color-gray-400: oklch(100% 0 0);
+  --color-gray-500: oklch(100% 0 0);
+  --color-gray-600: oklch(100% 0 0);
+  /* Dark card/page backgrounds → pure black */
+  --color-gray-900: oklch(0% 0 0);
+  --color-gray-950: oklch(0% 0 0);
+  /* Dark borders → visible */
+  --color-gray-800: oklch(60% 0 0);
+  /* white → black in dark HC */
+  --color-white: oklch(0% 0 0);
 }
 
