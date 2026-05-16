@@ -83,6 +83,7 @@ describe('flushOutbox', () => {
       deleteItem: vi.fn().mockResolvedValue({ error: null }),
       reorderItem: vi.fn().mockResolvedValue({ error: null }),
       mergeItems: vi.fn().mockResolvedValue({ error: null }),
+      categorizeItem: vi.fn().mockResolvedValue({ category: null }),
     }))
 
     const mod = await import('@/lib/sync/engine')
@@ -195,6 +196,7 @@ describe('flushOutbox', () => {
       deleteItem: vi.fn().mockResolvedValue({ error: null }),
       reorderItem: vi.fn().mockResolvedValue({ error: null }),
       mergeItems: vi.fn().mockResolvedValue({ error: null }),
+      categorizeItem: vi.fn().mockResolvedValue({ category: null }),
     }))
     const mod = await import('@/lib/sync/engine')
 
@@ -207,5 +209,91 @@ describe('flushOutbox', () => {
 
     expect(mockAddItem).toHaveBeenCalledWith('list-1', 'Mjölk', null, 'client-uuid-123')
     expect(entries).toHaveLength(0)
+  })
+})
+
+describe('flushOutbox — Gemini categorize fallback on item.insert', () => {
+  // Regression: the offline-PR3 refactor moved adds into the outbox and
+  // accidentally dropped the background categorizeItem() call that originally
+  // lived in ItemList.handleAdd. Without it, items inserted without a cached
+  // category in user_item_history stay at category=null and the UI groups them
+  // under "övrigt" forever. These tests pin the dispatcher's call to
+  // categorizeItem — they only assert presence/absence of the call, not the
+  // actual classification.
+
+  let entries: OutboxEntry[]
+
+  async function setup(addItemResult: unknown) {
+    vi.resetModules()
+    entries = []
+    const mockCategorize = vi.fn().mockResolvedValue({ category: 'mejeri' })
+
+    vi.doMock('@/lib/db/local', () => ({
+      localDB: {
+        outbox: createOutboxMock(entries),
+        items: { update: vi.fn().mockResolvedValue(1) },
+      },
+    }))
+    vi.doMock('@/app/lists/[id]/actions', () => ({
+      addItem: vi.fn().mockResolvedValue(addItemResult),
+      updateItem: vi.fn().mockResolvedValue({ error: null }),
+      setItemCategory: vi.fn().mockResolvedValue({ error: null }),
+      deleteItem: vi.fn().mockResolvedValue({ error: null }),
+      reorderItem: vi.fn().mockResolvedValue({ error: null }),
+      mergeItems: vi.fn().mockResolvedValue({ error: null }),
+      categorizeItem: mockCategorize,
+    }))
+
+    const mod = await import('@/lib/sync/engine')
+    return { flushOutbox: mod.flushOutbox, mockCategorize }
+  }
+
+  function insertEntry(): OutboxEntry {
+    return {
+      seq: 1,
+      list_id: 'list-1',
+      type: 'item.insert',
+      payload: { id: 'srv-id-1', list_id: 'list-1', name: 'Mjölk', picture_url: null },
+      status: 'pending',
+      attempts: 0,
+      created_at: Date.now(),
+      idempotency_key: 'key-1',
+    }
+  }
+
+  it('fires categorizeItem when the inserted row has no category', async () => {
+    const { flushOutbox, mockCategorize } = await setup({
+      item: { id: 'srv-id-1', category: null },
+      merged: false,
+    })
+    entries.push(insertEntry())
+
+    await flushOutbox()
+
+    expect(mockCategorize).toHaveBeenCalledOnce()
+  })
+
+  it('does not fire categorizeItem when the server already returned a cached category', async () => {
+    const { flushOutbox, mockCategorize } = await setup({
+      item: { id: 'srv-id-1', category: 'mejeri' },
+      merged: false,
+    })
+    entries.push(insertEntry())
+
+    await flushOutbox()
+
+    expect(mockCategorize).not.toHaveBeenCalled()
+  })
+
+  it('does not fire categorizeItem when the insert merged into an existing item', async () => {
+    const { flushOutbox, mockCategorize } = await setup({
+      item: { id: 'srv-id-1', category: null },
+      merged: true,
+    })
+    entries.push(insertEntry())
+
+    await flushOutbox()
+
+    expect(mockCategorize).not.toHaveBeenCalled()
   })
 })

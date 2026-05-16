@@ -100,15 +100,29 @@ function check(result: { error?: string } | undefined | void) {
 }
 
 async function dispatch(entry: OutboxEntry) {
-  const { addItem, updateItem, setItemCategory, deleteItem, reorderItem, mergeItems } =
+  const { addItem, updateItem, setItemCategory, deleteItem, reorderItem, mergeItems, categorizeItem } =
     await import('@/app/lists/[id]/actions')
   const p = entry.payload as Record<string, unknown>
   const listId = p.list_id as string
 
   switch (entry.type) {
-    case 'item.insert':
-      check(await addItem(listId, p.name as string, p.picture_url as string | undefined, p.id as string))
+    case 'item.insert': {
+      const result = await addItem(listId, p.name as string, p.picture_url as string | undefined, p.id as string)
+      check(result)
+      // Gemini fallback: if the server couldn't find a cached category in
+      // user_item_history, classify in the background and patch Dexie when
+      // it returns. Skip for merged adds (existing item, already categorized).
+      const r = result as { item?: { id: string; category: string | null }; merged?: boolean }
+      if (r.item && !r.item.category && !r.merged) {
+        const itemId = r.item.id
+        categorizeItem(itemId).then(res => {
+          if (res?.category) {
+            return localDB.items.update(itemId, { category: res.category })
+          }
+        }).catch(() => { /* swallow — UI stays in 'ovrigt' until next attempt */ })
+      }
       break
+    }
     case 'item.update': {
       const patch = p.patch as Record<string, unknown>
       const { category, ...rest } = patch
