@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { localDB } from '@/lib/db/local'
 import type { LocalItem } from '@/lib/db/types'
@@ -33,6 +34,16 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
+interface GhostItem {
+  key: string
+  name: string
+  picture_url: string | null
+  measurement: string | null
+  rect: DOMRect
+  itemTextClass: string
+  thumbSizeClass: string
+}
+
 interface Props {
   list: List
   initialItems: Item[]
@@ -43,6 +54,8 @@ interface Props {
   availableLists: Pick<List, 'id' | 'name' | 'owner_id'>[]
   currentUserId: string
 }
+
+let ghostSeq = 0
 
 function itemToLocalItem(item: Item): LocalItem {
   return {
@@ -93,6 +106,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [pickerMode, setPickerMode] = useState<'copy' | 'move' | null>(null)
   const [pickerError, setPickerError] = useState<string | null>(null)
+  const [ghosts, setGhosts] = useState<GhostItem[]>([])
   const [editMode] = useEditMode()
   const { isOffline } = useSyncState()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -293,7 +307,23 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     setLoading(false)
   }
 
-  async function handleToggle(item: Item) {
+  function spawnGhost(item: Item, rect: DOMRect) {
+    const ghost: GhostItem = {
+      key: `ghost-${ghostSeq++}`,
+      name: item.name,
+      picture_url: item.picture_url,
+      measurement: item.measurement,
+      rect,
+      itemTextClass,
+      thumbSizeClass,
+    }
+    setGhosts(g => [...g, ghost])
+  }
+
+  async function handleToggle(item: Item, sourceRect?: DOMRect) {
+    if (!item.is_checked && sourceRect) {
+      spawnGhost(item, sourceRect)
+    }
     await muUpdateItem(listId, item.id, { is_checked: !item.is_checked })
   }
 
@@ -476,7 +506,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
                         item={item}
                         itemTextClass={itemTextClass}
                         thumbSizeClass={thumbSizeClass}
-                        onToggle={() => handleToggle(item)}
+                        onToggle={(rect) => handleToggle(item, rect)}
                         onEdit={() => setEditingItem(item)}
                         onPicture={() => item.picture_url && setLightboxUrl(item.picture_url)}
                         onCombine={combined => handleMeasurementCombine(item, combined)}
@@ -515,7 +545,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
                       item={item}
                       itemTextClass={itemTextClass}
                       thumbSizeClass={thumbSizeClass}
-                      onToggle={() => handleToggle(item)}
+                      onToggle={(rect) => handleToggle(item, rect)}
                       onEdit={() => {}}
                       onPicture={() => item.picture_url && setLightboxUrl(item.picture_url)}
                       onCombine={combined => handleMeasurementCombine(item, combined)}
@@ -533,7 +563,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
                 {shopped.map(item => (
                   <li
                     key={item.id}
-                    onClick={() => handleToggle(item)}
+                    onClick={e => handleToggle(item, (e.currentTarget as HTMLElement).getBoundingClientRect())}
                     className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800/50 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors select-none cursor-pointer"
                   >
                     {item.picture_url && (
@@ -673,6 +703,71 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
           />
         </div>
       )}
+
+      {typeof document !== 'undefined' && ghosts.length > 0 && createPortal(
+        <>
+          {ghosts.map(ghost => (
+            <GhostOverlay
+              key={ghost.key}
+              ghost={ghost}
+              onDone={() => setGhosts(g => g.filter(x => x.key !== ghost.key))}
+            />
+          ))}
+        </>,
+        document.body
+      )}
+    </div>
+  )
+}
+
+function GhostOverlay({ ghost, onDone }: { ghost: GhostItem; onDone: () => void }) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const anim = el.animate(
+      [
+        { opacity: 0.75, transform: 'translateY(0px)' },
+        { opacity: 0, transform: 'translateY(36px)' },
+      ],
+      { duration: 450, easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)', fill: 'forwards' },
+    )
+    anim.onfinish = onDone
+    return () => { anim.cancel() }
+  // Animation runs exactly once on mount; onDone captured at mount is correct for this ghost's lifetime.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div
+      ref={ref}
+      className="flex items-center gap-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3"
+      style={{
+        position: 'fixed',
+        top: ghost.rect.top,
+        left: ghost.rect.left,
+        width: ghost.rect.width,
+        height: ghost.rect.height,
+        pointerEvents: 'none',
+        zIndex: 60,
+        overflow: 'hidden',
+        opacity: 0,
+      }}
+    >
+      {ghost.picture_url && (
+        <img
+          src={ghost.picture_url}
+          alt=""
+          className={`${ghost.thumbSizeClass} rounded object-cover flex-shrink-0`}
+        />
+      )}
+      <span className={`${ghost.itemTextClass} flex-1 min-w-0 truncate text-gray-800 dark:text-gray-200`}>
+        {ghost.name}
+      </span>
+      {ghost.measurement && (
+        <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{ghost.measurement}</span>
+      )}
     </div>
   )
 }
@@ -683,7 +778,7 @@ function SortableRow({
   item: Item
   itemTextClass: string
   thumbSizeClass: string
-  onToggle: () => void
+  onToggle: (rect: DOMRect) => void
   onEdit: () => void
   onPicture: () => void
   onCombine: (combined: string) => void
@@ -724,7 +819,7 @@ function SortableRow({
     <li
       ref={setNodeRef}
       style={style}
-      onClick={editMode ? onToggleSelect : onToggle}
+      onClick={editMode ? onToggleSelect : e => onToggle((e.currentTarget as HTMLElement).getBoundingClientRect())}
       className={`flex items-center gap-3 ${bgClass} rounded-xl border px-4 py-3 transition-colors select-none cursor-pointer`}
     >
       <button

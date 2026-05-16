@@ -4,7 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Active plan
 
-- _None._ Last completed plan: **Sharing moves into list edit mode, with member history** — 2026-05-16. Drops `lists.is_shared`; sharing is derived from `list_members` membership. New inline `ShareSection` inside edit mode shows current members (with remove ×), invite form, and quick-pick chips for previously-invited emails. Full plan archived in `PLAN.md`.
+- _None._ Last completed plan: **UI polish: list nav loading + shop ghost animation** — 2026-05-16. Adds `loading.tsx` for `/lists/[id]` (Suspense "Laddar…" spinner) and a ghost-fade animation when an item is marked shopped (faded duplicate row drifts down ~36px and fades, via portal + `@keyframes shop-ghost`). Touches `ItemList.tsx` (state, handleToggle, SortableRow onToggle prop) and `globals.css`.
+- Previously completed: **Sharing moves into list edit mode, with member history** — 2026-05-16. Drops `lists.is_shared`; sharing is derived from `list_members` membership. New inline `ShareSection` inside edit mode shows current members (with remove ×), invite form, and quick-pick chips for previously-invited emails.
 - Previously completed: **Offline UX hardening (PR5)** — 2026-05-16 — SW per-URL navigation cache, `/lists` Dexie-backed via `ListsView`, `+ New list` and `OfflineBadge` gated on `useSyncState`. Follow-up fix (same day): RSC fetches seed the HTML cache so Link-clicked list pages survive offline; `reconcileLists` no longer inserts unknown server rows; cached lists show a positive green-dot indicator (offline only) and force hard navigation when offline.
 - **Offline-first list/items with IndexedDB cache + outbox sync** — completed PR1–PR4 (2026-05-15 → 2026-05-16). Local Dexie store backs the UI; Realtime + event-driven reconciliation keeps it fresh; mutations queue through an outbox while offline. See git history for PR-level detail.
 
