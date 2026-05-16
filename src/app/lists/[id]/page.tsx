@@ -59,6 +59,7 @@ export default async function ListPage({ params }: Props) {
 
       <main className="w-full max-w-lg mx-auto px-4 py-6 space-y-6">
         <ItemList
+          list={list}
           initialItems={items ?? []}
           listId={id}
           isShared={list.is_shared}

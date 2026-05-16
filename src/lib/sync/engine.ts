@@ -188,8 +188,10 @@ export async function flushOutbox(): Promise<void> {
 
 export async function triggerSync(): Promise<void> {
   await flushOutbox()
+  const { reconcileList, reconcileLists } = await import('./reconcile')
+  // Always keep the lists table fresh — the user may be on /lists with no
+  // active list registered, and the cached-vs-not affordance depends on it.
+  await reconcileLists()
   const listId = activeListId
-  if (!listId) return
-  const { reconcileList } = await import('./reconcile')
-  await reconcileList(listId)
+  if (listId) await reconcileList(listId)
 }

@@ -1,320 +1,191 @@
-# Plan — Offline-first list/items with IndexedDB cache + outbox sync
+# Plan — Offline UX hardening: shell-cached navigation, cached-list indicators, disabled-when-offline create ✅ done (2026-05-16)
+
+**Status**: implemented in one PR. 186 tests pass (+31 new). `npm run build` clean. Awaiting on-device verification per the checklist in §Verification.
+
+
 
 ## Context
 
-Now that the app is a properly-installed PWA on Android, we can build the next genuine UX win: **offline-first** lists. Today the app is online-only — every read goes to Server Components, every write goes to a Server Action. In supermarkets with bad cell signal this is fragile: toggles error, recipe import hangs, a screen lock can lose state.
+PR4 fixed the data-loss bugs in offline sync. After real-device testing, four UX gaps remain:
 
-The user's intent: open the app cold (no network) and see the last cached state instantly; mutations apply instantly to the UI and queue for server sync; when network returns, the queue drains, and any concurrent server-side changes are reconciled with a "remote edits while you were offline" banner.
+1. **`+ New list` is enabled but errors when clicked offline.** Creating a list requires the server; the affordance should be disabled with the same "Kräver anslutning" pattern used by the recipe-import button.
+2. **The `Offline` badge only appears on the list page (`/lists/[id]`), not on `/lists`.** Navigating back to the main screen while offline hides the indicator and gives a false "you're online again" impression.
+3. **Cached lists are unreachable when offline.** Clicking a list while offline either hangs at the SSR fetch or falls back to the cached `/` shell, dropping the user back to `/lists`. The user explicitly wants: cached → opens, non-cached → visibly disabled.
+4. **No visual indication of which lists are cached.** The user can't tell which lists are safe to open before going into a store with no signal.
 
-Decisions agreed with user during planning:
-- **Scope**: list / items CRUD works offline. Gemini auto-tagging, recipe extraction, image upload, invites, login/signup do **not** work offline — those UI affordances are disabled with a "Kräver anslutning" state.
-- **Sync model**: **event-driven**, not polled. Supabase Realtime drives freshness while online. Reconciliation pulls fire on `visibilitychange → visible`, the `online` event, and Realtime channel reconnect. **No 3-second poll** — `visibilitychange` covers the "phone screen off, other user edits, phone screen on" case faster and cheaper.
-- **Divergence detection**: per-item `updated_at`, no list-level version counter.
-- **Conflict policy**: server wins on same-item conflicts; a non-blocking banner lists which local edits were overwritten, with a "Visa" expand. Local mutations on items the server didn't touch are kept.
+## Decisions / scope
 
-## Scope
-
-Works offline:
-- Open any previously-loaded list.
-- Add items (without Gemini auto-tag — the item is added uncategorised and gets a category the next time it's seen).
-- Toggle checked / strikethrough.
-- Edit name, measurement, quantity.
-- Delete items.
-- Reorder items (drag-sort).
-- Merge items (edit-mode drag).
-- Create a new (private) list.
-- Delete a list.
-
-Disabled while offline (with a clear UI state):
-- Recipe / list import modal (Gemini + URL fetch).
-- "Hämta lista från bild" (Gemini vision).
-- Picture upload on items (ImgBB).
-- Invite member to shared list.
-- Auto-categorise via Gemini (item adds locally as uncategorised; if reconnect happens within session, a background backfill categorises it).
-- Login / signup (already require network).
+- Covers the four issues above only. **No new offline mutations.** No offline list-create, no offline auth.
+- A list counts as **cached** when either Dexie's `lists` table has a row for it OR Dexie's `items` table has at least one row for it. We will start writing the list row into `localDB.lists` on every list-page visit, so the cached set tracks "what the user has actually opened" — not "what was in the most recent `/lists` query when online".
+- The Service Worker becomes a proper offline shell: it caches each successful navigation HTML response by exact URL and serves them from cache on offline navigation. Client Components on those pages hydrate from Dexie, which already has the freshest local data, so stale SSR HTML is fine as a shell.
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────┐
-│  UI (Client Components: ItemList, etc.)              │
-│  reads ← local store (Dexie)                         │
-│  writes → local store + outbox (single transaction)  │
-└──────────┬───────────────────────────────────────────┘
-           │
-           ▼
-┌──────────────────────────────┐   ┌──────────────────────────────┐
-│  Local store (IndexedDB)     │   │  Sync engine (main thread)   │
-│  - lists                     │   │  - flushOutbox()             │
-│  - items                     │◄──┤  - reconcileList(listId)     │
-│  - list_members              │   │  - realtime channels         │
-│  - user_item_history         │   │  - triggers on: visibility,  │
-│  - user_preferences          │   │    online, realtime reconnect│
-│  - outbox (queued mutations) │   └──────────────┬───────────────┘
-│  - sync_meta (per-list state)│                  │
-└──────────────────────────────┘                  ▼
-                                          Supabase (RLS-gated)
-```
+### Service Worker — per-URL navigation caching
 
-### Local store — Dexie schema
+`public/sw.js` currently network-firsts every navigation and falls back to a cached `'/'`. Change to:
 
-`src/lib/db/local.ts` (new):
+- Bump cache version → `shoplist-v4`.
+- On every successful navigation (`req.mode === 'navigate'` and `res.ok` and same-origin), `cache.put(req.url, res.clone())` so the exact URL is available offline.
+- On network failure, `cache.match(req.url)` first; if hit, serve it. If miss, fall back to cached `/lists` (more useful than `/`). If neither exists, return the 503 stub.
+- Skip caching `/auth/*`, `/share*`, and anything non-GET — auth and share are stateful or one-shot.
 
-```ts
-import Dexie from 'dexie'
+Cached HTML for `/lists/abc` may carry stale `initialItems` from the last online SSR, but `ItemList` already discards that in favour of Dexie via `useLiveQuery`, so the user sees fresh local data.
 
-class LocalDB extends Dexie {
-  lists!: Table<LocalList>
-  items!: Table<LocalItem>
-  list_members!: Table<LocalListMember>
-  user_item_history!: Table<LocalHistory>
-  user_preferences!: Table<LocalPrefs>
-  outbox!: Table<OutboxEntry>
-  sync_meta!: Table<SyncMeta>
+### Dexie now tracks `lists`, not just `items`
 
-  constructor() {
-    super('shoplist')
-    this.version(1).stores({
-      lists: 'id, owner_id',
-      items: 'id, list_id, [list_id+is_checked], updated_at',
-      list_members: '[list_id+user_id], list_id',
-      user_item_history: '[user_id+name_lower], user_id',
-      user_preferences: 'user_id',
-      outbox: '++seq, status, list_id, created_at',
-      sync_meta: 'list_id',
-    })
-  }
-}
+- `localDB.lists` table exists but is never written today. Start writing it:
+  - From `ItemList` on mount: `localDB.lists.put({id, name, owner_id, is_shared, created_at})` for the list it just opened.
+  - From the new `ListsView` Client Component (below) on mount: bulk-put the SSR `initialLists`.
+- New `reconcileLists()` in `src/lib/sync/reconcile.ts`: pulls `lists` rows from Supabase, upserts into Dexie, deletes Dexie rows that no longer exist server-side. Fires from `ListsView` on mount, plus the existing `triggerSync()` pipeline.
+
+### `/lists` page becomes Dexie-backed via a new `ListsView` Client Component
+
+`src/app/lists/page.tsx` is a Server Component today. Extract the list-rendering bit into `src/app/lists/ListsView.tsx`:
+
+- Receives `initialLists` from SSR as a hydration seed and `currentUserId` for owner/shared partitioning.
+- Uses `useLiveQuery` on `localDB.lists` to render the list of lists reactively.
+- Reads `useSyncState().isOffline`.
+- Derives the cached set in a single `useLiveQuery` against `localDB.items` (grouped by `list_id`) combined with whatever's already in `localDB.lists`.
+- When offline: non-cached lists render greyed out + `aria-disabled` + tooltip "Inte tillgänglig offline"; cached lists remain clickable.
+- On mount + `visibilitychange → visible` + `online`: calls `reconcileLists()`.
+
+The Server Component keeps auth + initial query + the page chrome; `ListsView` owns rendering and offline gating.
+
+### Header: `OfflineBadge` on the main page
+
+`OfflineBadge` is already a Client Component reading `useSyncState`. Drop it into `src/app/lists/page.tsx`'s header next to "Settings" / "Sign out". It hides itself when online, so no other change required.
+
+### `CreateListForm` — disable when offline
+
+Same pattern as the recipe-import button:
+
+```tsx
+const { isOffline } = useSyncState()
+...
+<button disabled={isOffline} title={isOffline ? 'Kräver anslutning' : undefined}>+ New list</button>
 ```
 
-`LocalItem` mirrors the Supabase `items` row plus a `_pending_local_updated_at` field used during conflict detection.
+Inside the open form, the `Create` button is also `disabled={isOffline}` with the same tooltip and a one-line hint above it.
 
-`OutboxEntry`:
-```ts
-{
-  seq: number              // auto-increment
-  list_id: string
-  type: 'item.insert' | 'item.update' | 'item.delete' |
-        'list.insert' | 'list.delete' | 'item.reorder' | 'item.merge'
-  payload: unknown         // shape per type
-  status: 'pending' | 'in_flight' | 'failed'
-  attempts: number
-  last_error?: string
-  created_at: number
-  idempotency_key: string  // client-generated UUID, attached to the server call
-}
-```
+### Cached-set detection (cheap)
 
-`SyncMeta` per list:
-```ts
-{ list_id: string, last_sync_at: string /* ISO timestamp */ }
-```
+One `useLiveQuery` returns the set of `list_id` values present in `localDB.items`; one returns all `localDB.lists` rows. The cached set is the union of those keys. Per-list query avoided.
 
-### Sync engine
+### Edge cases handled
 
-`src/lib/sync/engine.ts` (new):
-- `flushOutbox()`: iterate `outbox where status = 'pending'`, attempt the matching server action, remove on success, mark failed + bump attempts on failure. Exponential backoff between flush cycles (1s, 5s, 30s, 5min cap). Sets a module-level `isOffline` boolean published via a tiny store (`useSyncState()` hook).
-- `reconcileList(listId)`: query Supabase `items where list_id = listId and updated_at > last_sync_at`. For each returned row:
-  - If `outbox` has a pending mutation on the same `item.id`: **conflict**. Server row wins, local mutation is discarded, item is added to a `recentConflicts` list shown by the banner.
-  - Else: write to local store.
-  Update `sync_meta.last_sync_at`.
-- `subscribeRealtime(listId)`: same channel pattern as current `ItemList.tsx` lines that subscribe to `postgres_changes`. On every event, write to local store. Currently only subscribed for shared lists; now for any open list.
-- `connectivityTriggers()`: bind `window.addEventListener('online', …)` and `document.addEventListener('visibilitychange', …)` to call `flushOutbox()` then `reconcileList(currentListId)`. Also re-subscribe Realtime if its channel went `CLOSED`.
-
-The sync engine is initialised once per session by a top-level Client Component injected from `RootLayout`.
-
-### Conflict detection — exact rule
-
-A row returned by `reconcileList`'s diff query has `server_updated_at`. The conflict check:
-
-```
-local_pending = outbox.find(e => e.list_id == listId &&
-                                  e.payload.id == server_row.id &&
-                                  e.status == 'pending')
-if (local_pending && server_updated_at > local_pending.created_at) {
-  // Server changed the same item after our local mutation was queued.
-  // Drop local mutation, apply server row, record conflict for the banner.
-  remove(local_pending)
-  recentConflicts.push({ name: server_row.name, fields: ... })
-  applyServerRow(server_row)
-} else {
-  applyServerRow(server_row)  // no local pending or server is older → safe
-}
-```
-
-This is simple "server-wins on same row" and matches the user's spec.
-
-### Outbox → server action mapping
-
-Each outbox `type` maps to an existing server action in `src/app/lists/[id]/actions.ts`. We need to:
-
-1. Allow the **client to pick item IDs** so retries are idempotent. Migration adds nothing (Postgres already accepts explicit `id` on insert; we just need to change `addItem` to accept it). Client generates `crypto.randomUUID()` for new items.
-2. Add an `idempotency_key` param to mutating server actions and a tiny `idempotency_keys` table (`key uuid pk, processed_at timestamptz`) so a duplicate retry returns the previous result instead of double-applying. **Most** operations (UPDATE, DELETE by id) are already idempotent — we only really need the key for INSERTs.
-
-For v1 I'm going to **skip the idempotency_keys table** and rely on:
-- INSERTs being idempotent via client-generated `items.id` + `ON CONFLICT (id) DO NOTHING`.
-- UPDATEs being naturally idempotent (set fields by id).
-- DELETEs being naturally idempotent.
-
-This avoids a new table and matches "simplest thing that works."
-
-### Schema changes — migration `0011_offline_sync.sql`
-
-```sql
--- updated_at on items: required by the offline-sync reconciler to do
--- "pull rows changed since I last synced" without scanning every row.
-alter table public.items
-  add column if not exists updated_at timestamptz not null default now();
-
-create index if not exists items_list_updated_at_idx
-  on public.items (list_id, updated_at);
-
-create or replace function public.bump_items_updated_at()
-returns trigger language plpgsql as $$
-begin new.updated_at := now(); return new; end $$;
-
-drop trigger if exists items_updated_at on public.items;
-create trigger items_updated_at
-  before update on public.items
-  for each row execute function public.bump_items_updated_at();
-
--- addItem inserts must be allowed to specify the row id (client-generated UUIDs
--- for outbox idempotency). The current default still works for any insert that
--- doesn't supply one.
--- No schema change needed — existing definition already has 'id uuid default gen_random_uuid()'.
-```
-
-### Realtime subscriptions
-
-`src/lib/sync/realtime.ts` (new): wraps the channel-subscribe pattern from `ItemList.tsx`. Subscribes to `items` filtered by `list_id`, and to `lists`/`list_members` for the user. Events feed into the local store. **Subscribe regardless of `is_shared`** — for private lists the channel will be silent, but having it ready means we don't have to special-case anything.
-
-The existing channel code in `ItemList.tsx` (lines ~270+ per CLAUDE.md) is removed; the sync engine becomes the single source of realtime truth. `ItemList` just reads from Dexie.
-
-### UI changes
-
-**`ItemList.tsx`** — significant rewrite:
-- Drop the `initialItems` prop. Read items live via a `useLiveQuery` hook from Dexie (Dexie provides reactive queries that re-render on data change).
-- All mutation handlers now call helpers in `src/lib/sync/mutations.ts` instead of server actions directly.
-- Optimistic update / rollback logic is gone — local store IS the truth from the UI's POV.
-
-**`src/app/lists/[id]/page.tsx`** — Server Component:
-- Still does initial server-side fetch (for first-ever load). The Client Component receives `initialItems` only as a hydration seed for the local store when the local store is empty for that list. After that, server-rendered data is ignored.
-
-**Offline indicator** — small badge in the page header (`src/app/lists/[id]/page.tsx` chrome). Reads `useSyncState().isOffline`. Renders "Offline" pill with a count: "Offline · 3 ändringar väntar".
-
-**Conflict banner** — new component `src/components/ConflictBanner.tsx` in `RootLayout`. Reads `useSyncState().recentConflicts`. Renders sticky toast at top with `N varor uppdaterades på servern medan du var offline. [Visa]`. Click expands to a list of `<name>: ditt redigerade <field> ersattes`. Auto-dismiss after 30s OR explicit close button.
-
-**Disabled-when-offline affordances**:
-- Recipe import button: disabled, tooltip "Kräver anslutning".
-- Picture input: disabled with same tooltip.
-- Invite form: hidden / disabled.
-- New item add: works, but if Gemini-categorise was going to fire, skip it; the item gets categorised later via a backfill on reconnect.
-
-### Persistent storage + Service Worker
-
-- On first run after install, call `navigator.storage.persist()` to request the browser not evict our IndexedDB. Log the boolean result.
-- Extend `public/sw.js` to:
-  - Cache the app shell (`/`, `/lists`, static chunks) for offline navigation.
-  - Register a `sync` event handler that calls into the sync engine to flush the outbox. This lets queued mutations drain even if the tab was closed when the network returned.
-  - Bump cache version → `shoplist-v3`.
+- **Shared list never opened**: not cached, greyed out offline. Acceptable — open it once online to cache it.
+- **List deleted server-side but still in Dexie**: `reconcileLists()` removes the orphaned Dexie row and any orphan items for it. Single pass on reconcile.
+- **List with zero items the user has opened**: still cached because `localDB.lists` has the row.
+- **Stale SSR in cached HTML**: doesn't matter; `useLiveQuery` overrides it on first paint.
 
 ## Critical files
 
 New:
-- `src/lib/db/local.ts` — Dexie database definition.
-- `src/lib/db/types.ts` — TypeScript shapes for local rows.
-- `src/lib/sync/engine.ts` — flushOutbox, reconcileList, triggers, state store.
-- `src/lib/sync/realtime.ts` — Supabase Realtime wrapper feeding local store.
-- `src/lib/sync/mutations.ts` — typed helpers that wrap (a) local-store write + (b) outbox insert. Each replaces a current server-action call site.
-- `src/components/SyncProvider.tsx` — Client Component injected from `RootLayout`; initialises the engine and exposes `useSyncState()`.
-- `src/components/OfflineBadge.tsx` — pill rendered in list header.
-- `src/components/ConflictBanner.tsx` — sticky toast.
-- `supabase/migrations/0011_offline_sync.sql` — `updated_at` column + trigger + index on items.
-- `tests/lib/sync/engine.test.ts` — unit tests for reconciliation + conflict detection (mock supabase).
-- `tests/lib/sync/outbox.test.ts` — outbox flush sequencing, retry behaviour.
+- `src/app/lists/ListsView.tsx` — Client Component, replaces the rendering JSX in `page.tsx`.
+- `src/lib/sync/reconcile.ts` — gains `reconcileLists()` (kept in the same file so engine's lazy import doesn't grow another module).
+- `tests/lib/sync/reconcileLists.test.ts` — mirrors the items-reconcile tests.
+- `tests/components/CreateListForm.test.tsx` — covers the offline-disabled state.
 
 Modified:
-- `src/app/lists/[id]/ItemList.tsx` — read via `useLiveQuery`, write via `mutations.ts`. Drop optimistic-update + rollback code, drop direct realtime channel (moved to sync engine).
-- `src/app/lists/[id]/page.tsx` — pass server-fetched items only as a hydration seed.
-- `src/app/lists/page.tsx` — same: hydration seed for the list of lists.
-- `src/app/layout.tsx` — mount `SyncProvider`.
-- `src/app/lists/[id]/RecipeImportModal.tsx` — disable when offline.
-- `src/app/lists/[id]/PictureInput.tsx` — disable when offline.
-- `public/sw.js` — app-shell cache + `sync` event + version bump.
-- `package.json` — add `dexie` and `dexie-react-hooks`.
-- `CLAUDE.md` — new architecture section.
-
-## Existing utilities reused
-
-- `createClient` from `@/lib/supabase/client` — the browser Supabase client (already used for Realtime).
-- Server actions in `src/app/lists/[id]/actions.ts` — `addItem`, `setItemChecked`, `updateItem`, `deleteItem`, `addItems`, `reorderItems`, `mergeItems`, etc. The outbox calls these directly; we don't reimplement server logic. Some may need a small change to accept a client-provided `id` for inserts.
-- The Realtime channel pattern in `ItemList.tsx` (current `postgres_changes` subscription) — extracted into `src/lib/sync/realtime.ts`.
-- `EditModeContext` — unchanged, still drives edit-mode UI.
+- `public/sw.js` — per-URL navigation caching, fallback order. Cache version → `shoplist-v4`.
+- `src/app/lists/page.tsx` — mounts `ListsView`, adds `<OfflineBadge />` in header.
+- `src/app/lists/[id]/ItemList.tsx` — writes its list row into `localDB.lists` on mount.
+- `src/app/lists/CreateListForm.tsx` — disabled state and tooltip when `isOffline`.
+- `src/lib/sync/engine.ts` — `triggerSync()` calls `reconcileLists()` in addition to the active list reconcile (so the lists table is kept current even when the user is on `/lists`).
 
 ## Phased delivery
 
-This is a big change. I'd ship it in **three PRs** to keep each one reviewable and reverting-friendly:
+One PR. The pieces are tightly coupled: changing the SW without disabling create-when-offline is half a fix. Each individual change is small (≈30–60 LOC).
 
-**PR 1 — Schema + dependency + local store foundation** ✅ done (2026-05-15)
-- Migration 0011 (`updated_at` + trigger).
-- Add `dexie` and `dexie-react-hooks`.
-- `src/lib/db/local.ts`, `src/lib/db/types.ts`.
-- `SyncProvider` shell (initialises Dexie, no sync logic yet).
-- Verification: `npm run build`, migration applied, IndexedDB visible in DevTools.
+## Tests
 
-**PR 2 — Read path through local store + realtime** ✅ done (2026-05-15)
-- `src/lib/sync/realtime.ts`: Supabase channel writes events to Dexie. Fires `onReconnect` on reconnect (not initial subscribe).
-- `src/lib/sync/reconcile.ts`: full-fetch from server → replaces Dexie items atomically (handles deletes too).
-- `ItemList` reads from Dexie via `useLiveQuery`. Falls back to SSR `initialItems` while Dexie hydrates.
-- All mutations write to Dexie first → server action → roll back Dexie on error.
-- `visibilitychange` + `online` → `reconcileList`. Realtime reconnect → `reconcileList`.
-- Subscribes regardless of `isShared` (private channels stay silent).
-- Verification: open list on phone, lock screen, change items from desktop, unlock phone → UI updates within a second of unlock without polling.
+Each test is written against the actual public surface of the unit (no implementation-detail mocks beyond Dexie and Supabase, both of which already have established mock patterns in the repo). All tests should fail against `main` and pass after the change — otherwise the test isn't covering the regression.
 
-**PR 4 — Offline sync recovery patch** ✅ done (2026-05-16)
-- `updateItem` action now accepts `is_checked` (root cause of "mark shopped lost"). Field allow-list extracted into `src/lib/itemUpdate.ts` and unit-tested so the next missing column is loud, not silent.
-- Outbox `dispatch()` throws on `{ error }` server-action returns instead of treating them as success.
-- `reconcileList` protects items with `'failed'` outbox entries (previously only `'pending'` and `'in_flight'`), so reconnect can't clobber queued-but-failed local edits.
-- Real offline detection: `markOffline` / `markOnlineIfBrowserAgrees` plus `online`/`offline` listeners in `SyncProvider`. Sync state now respects `navigator.onLine`, so the Offline badge appears the moment the browser drops connectivity.
-- `triggerSync()` is now the single ordered entrypoint — awaits `flushOutbox` before `reconcileList`, eliminating the race that caused mobile "edits flash then revert".
-- `SyncProvider` owns all connectivity triggers; `ItemList` registers itself as the active list via `setActiveList()` and no longer competes with its own online/visibility listeners.
-- `ItemList` now reconciles on every mount (not just seed-on-empty), so a refresh actually heals a stale Dexie cache.
-- Tests: 155/155 pass. New coverage for the toggle round-trip, dispatch error propagation, failed-entry reconcile protection, and offline-flag transitions.
+### `tests/lib/sync/reconcileLists.test.ts` (new file)
 
-**PR 3 — Write path through outbox + conflict UX** ✅ done (2026-05-15)
-- `src/lib/sync/engine.ts`: pub-sub sync store, `useSyncState()`, `flushOutbox()` with retry backoff.
-- `src/lib/sync/mutations.ts`: atomic Dexie+outbox writes for all item mutations.
-- `src/lib/sync/reconcile.ts`: updated to be outbox-aware (conflict detection, server-wins policy).
-- `src/app/lists/[id]/actions.ts`: `addItem` accepts optional `clientId` for idempotent inserts.
-- `ItemList.tsx`: all mutations route through `mutations.ts`; recipe/picture buttons disabled when offline.
-- `src/components/OfflineBadge.tsx` + `ConflictBanner.tsx`: offline state UI.
-- `public/sw.js`: SW background-sync handler posts `outbox-flush` message to clients; version bumped to `shoplist-v3`.
-- Lint: 0 errors. Tests: 118/118 pass. Build: clean.
+Mirrors the structure of `tests/lib/sync/reconcile.test.ts` — hoisted `db` + `serverData`, mocked `@/lib/db/local` and `@/lib/supabase/client`.
 
-## Verification
+- `writes server lists into Dexie when local is empty` — server returns 2 lists, Dexie has none → both upserted by id, names match.
+- `upserts an existing local list with server values` — Dexie has `{id, name: 'Stale'}`, server returns `{id, name: 'Fresh'}` → Dexie row replaced with 'Fresh'.
+- `deletes a Dexie list row that the server no longer has` — Dexie has list X, server response omits it → Dexie row gone.
+- `also drops orphan items for a deleted list` — Dexie has list X plus 3 items for X, server omits list X → both the list row and all 3 items deleted from Dexie.
+- `leaves lists from other list_ids untouched when reconciling` — sanity check that the items-cleanup query is scoped to the deleted list, not a wildcard.
+- `handles an empty server response by clearing Dexie` — server returns `[]`, Dexie had 2 lists → Dexie now empty (catches RLS-revoke / signed-out-elsewhere edge case).
+- `network error from supabase is swallowed without throwing` — `select()` rejects → function resolves, Dexie untouched (mirrors the items-reconcile defensive behaviour).
 
-End-to-end after PR 3:
+### `tests/components/ListsView.test.tsx` (new file)
 
-1. **Cold offline boot**: install PWA, open a list with content, force-quit the app, enable airplane mode, reopen the app — list and items render from cache instantly.
-2. **Offline writes**: while airplane mode is on, add/toggle/edit/delete several items — UI responds instantly, items reflect changes, offline badge shows "Offline · N ändringar väntar".
-3. **Drain on reconnect**: disable airplane mode — badge clears, server log shows the queued mutations replayed in order.
-4. **Backgrounded freshness**: phone foregrounded with list open → lock screen → another user (or another browser tab) edits items → unlock → within ~500ms of unlock the items update.
-5. **Conflict**: phone offline. Edit item X locally to "5 dl". Meanwhile, edit item X on desktop to "3 dl" (online). Reconnect phone. Expect: item X shows "3 dl" (server wins), conflict banner shows "1 vara uppdaterades på servern" with "Visa" listing item X.
-6. **Token expiry edge**: stay offline >1h. Reconnect. Supabase auto-refresh kicks in, outbox drains, no user action needed. (If refresh token also expired: surface "logga in igen" state — won't implement in v1, document as known edge case.)
-7. **Tests**: `npm test` passes; new tests cover outbox sequencing and conflict detection.
+Uses RTL with mocked `@/lib/db/local` (Dexie) and the `useSyncState` hook from `@/lib/sync/engine`. The cached set comes from `useLiveQuery` against items — mock `dexie-react-hooks` to return canned data per test (existing tests don't use `useLiveQuery`, so the mock pattern is set here for future component tests).
+
+- `renders all lists from initialItems while Dexie is hydrating` — `useLiveQuery` returns `undefined` → falls back to SSR seed, all lists visible and clickable.
+- `online: every list is a clickable Link regardless of cache status` — verifies the "cached vs not" affordance only applies offline.
+- `offline + list is cached: link is enabled` — list-id present in items query → renders as a normal `<Link>`, click navigates (assert the rendered `<a href>`).
+- `offline + list is not cached: link is aria-disabled and click is suppressed` — non-cached list renders with `aria-disabled="true"` and `opacity-50`, `onClick` calls `preventDefault`. Use `fireEvent.click` + assert no `router.push` (or that the anchor has no `href` / a `tabindex="-1"`).
+- `offline + non-cached list shows the "Inte tillgänglig offline" affordance` — assert the `title` attribute exactly. This is the user-facing message — keep it stable so future a11y review can land translations cleanly.
+- `cached set is the union of localDB.lists rows and items.list_id values` — list known via items only (no `lists` row) is still cached; list known via `lists` row only (zero items) is still cached. Both behaviours via separate test cases so a regression in either source is loud.
+- `splits "My lists" vs "Shared with me" using owner_id` — pass `currentUserId='user-a'`, mix of owned and not-owned, verify partitioning unchanged from the Server Component.
+- `OfflineBadge presence does not depend on this component` — the badge lives in the page header; this test stays focused on the list rendering.
+
+### `tests/components/CreateListForm.test.tsx` (new file)
+
+Mocks `./actions` (`createList`) and `useSyncState`.
+
+- `online: the "+ New list" trigger is enabled and clicking it opens the form` — baseline that the disabled-when-offline change doesn't break the existing happy path.
+- `offline: the "+ New list" trigger is disabled` — assert `disabled` attribute true and `title="Kräver anslutning"`.
+- `offline: clicking the disabled trigger does not open the form` — `fireEvent.click` → form fields not rendered.
+- `online then go offline while the form is open: Create button becomes disabled` — flip `useSyncState` between renders, assert the submit button is now disabled with the same tooltip. Catches the case where the user opens the form online, loses connection, and tries to submit.
+- `offline: createList action is never invoked` — verify the mocked action has zero calls in the disabled-submit case.
+
+### `tests/components/OfflineBadgeOnLists.test.tsx` (new file, small)
+
+The existing `OfflineBadge` is already tested implicitly via `useSyncState` tests, but we want a smoke test for its new mount location.
+
+- `OfflineBadge is rendered inside the lists-page header` — render the page-header fragment with `useSyncState` mocked to `isOffline=true`, assert "Offline" text is in the DOM.
+- `OfflineBadge renders nothing when online and no pending writes` — same fragment with `isOffline=false`, no badge text present.
+
+(If extracting the page-header fragment isn't ergonomic, this collapses into the `ListsView` test file as an in-context assertion.)
+
+### `tests/sw/navigation-cache.test.ts` (new file, optional)
+
+Service-worker logic is plain JS and can be tested by importing `public/sw.js` into a Vitest module with the `self` global stubbed (`self = { addEventListener, caches, clients, location, skipWaiting }`). One test per branch:
+
+- `successful navigation: cache.put is called with the request URL` — stub `fetch` to return `200`, invoke the `fetch` listener with a navigation request, assert `cache.put` called with `/lists/abc` (not `/`).
+- `failed navigation: serves the URL-keyed cache hit when present` — stub `fetch` to reject, pre-populate `caches.match` to resolve for `/lists/abc`, assert that response is returned.
+- `failed navigation: falls back to cached /lists when exact URL is not cached` — `caches.match('/lists/abc')` → null, `caches.match('/lists')` → response, assert the fallback response is served.
+- `failed navigation: returns the 503 stub when nothing is cached` — both lookups null, assert the response body and status.
+- `auth and share routes are not cached on success` — assert `cache.put` is **not** called for `/auth/login` or `/share`.
+- `non-navigation requests are pass-through` — assert `cache.put` is not called for an asset GET.
+
+If the SW import friction is high (it ships as a plain script, not an ES module), keep this as manual verification and rely on the playbook in §Verification.
+
+### Existing tests to extend
+
+- `tests/lib/sync/engine.test.ts` — add: `triggerSync calls both reconcileList and reconcileLists when an active list is registered; reconcileLists only when activeListId is null`. Mock `./reconcile` and verify the call counts. Catches a future refactor where someone removes `reconcileLists()` from the engine.
+- `tests/lib/sync/outbox.test.ts` — no change.
+
+### Manual verification (only for SW navigation cache if the unit tests are skipped)
+
+The §Verification checklist already covers this end-to-end. If the SW unit tests are skipped, this becomes the primary regression net for the navigation cache and must be re-run on a real Android device before each release that touches `public/sw.js`.
+
+## Verification (manual)
+
+1. **Offline create-list**: disconnect on `/lists` → `+ New list` greyed out with tooltip; opening the form (if visible) keeps Create disabled.
+2. **Offline badge persists across navigation**: open a list, disconnect → badge appears. Go back to `/lists` → badge still visible.
+3. **Cached list while offline**: while online, open list A (caches it). Go offline. From `/lists` click list A → opens, items render from Dexie, offline badge visible.
+4. **Non-cached list while offline**: a list never opened locally is greyed out; click is a no-op.
+5. **Refresh `/lists` while offline**: SW serves cached `/lists`; `ListsView` hydrates from Dexie; cached lists clickable.
+6. **`npm test`** passes; new tests cover reconcileLists, `ListsView`, and `CreateListForm`.
 
 ## Out of scope (explicit)
 
-- True offline auth (cached login). Stays the same: login needs network.
-- Conflict UI that lets the user pick a winner. Server wins, period.
-- Offline image upload. Image is a multi-MB blob that we'd rather not queue indefinitely.
-- Offline Gemini calls (Gemini is server-side and needs network — items just stay uncategorised until reconnect, then a backfill categorises them).
-- Multi-device offline conflict resolution beyond same-item server-wins.
-- iOS Background Sync (not supported; sync triggers fall back to `online` + `visibilitychange` which iOS Safari does fire).
-- Periodic Background Sync (Chrome-only and patchy; the `visibilitychange` trigger is good enough).
+- Offline list create (needs a server insert).
+- Offline auth / token refresh after long-duration offline.
+- SW push notifications, periodic background sync.
+- Eviction of cached HTML on sign-out — accepted minor leak between accounts on the same install (family-shared scope).
 
 ## Follow-up after approval
 
-- Mirror plan to `PLAN.md`.
-- Update project `CLAUDE.md` "Active plan" entry.
-- Start with PR 1 (schema + Dexie scaffolding) — small, reversible, unblocks the rest.
+- Mirror this file as the active plan (already at `PLAN.md`).
+- Update the "Active plan" entry in `CLAUDE.md` to point here, dated 2026-05-16.
+- Implement as one PR — only after an explicit "go".

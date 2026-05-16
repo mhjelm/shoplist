@@ -1,5 +1,12 @@
-const CACHE = 'shoplist-v3'
+const CACHE = 'shoplist-v4'
 const SHELL = ['/']
+
+// Stateful or one-shot routes that must never be served from cache.
+function shouldCacheNav(url) {
+  if (url.pathname.startsWith('/auth')) return false
+  if (url.pathname.startsWith('/share')) return false
+  return true
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()))
@@ -25,16 +32,28 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Page navigations: network-first, fall back to the cached shell when offline.
-  if (req.mode === 'navigate') {
+  // Page navigations: network-first, fall back to a per-URL cache hit, then
+  // /lists, then a stub. Caches HTML by exact URL so an offline reload of a
+  // previously-visited list page returns the right shell.
+  if (req.mode === 'navigate' && req.method === 'GET') {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone()
-          caches.open(CACHE).then((c) => c.put('/', copy))
+          if (res.ok && shouldCacheNav(url)) {
+            const copy = res.clone()
+            caches.open(CACHE).then((c) => c.put(req.url, copy))
+          }
           return res
         })
-        .catch(() => caches.match('/').then((r) => r ?? new Response('Offline', { status: 503 }))),
+        .catch(() =>
+          caches.match(req.url).then((hit) =>
+            hit ?? caches.match('/lists').then((listsHit) =>
+              listsHit ?? caches.match('/').then((rootHit) =>
+                rootHit ?? new Response('Offline', { status: 503 })
+              )
+            )
+          )
+        ),
     )
     return
   }

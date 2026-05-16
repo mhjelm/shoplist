@@ -4,7 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Active plan
 
-- **Offline-first list/items with IndexedDB cache + outbox sync** — `PLAN.md` (2026-05-15). Local Dexie store backs the UI; Realtime + event-driven reconciliation keeps it fresh; mutations queue through an outbox while offline.
+- _None._ Last completed plan: **Offline UX hardening (PR5)** — 2026-05-16 — SW per-URL navigation cache, `/lists` Dexie-backed via `ListsView`, `+ New list` and `OfflineBadge` gated on `useSyncState`. Full plan archived in `PLAN.md`.
+- **Offline-first list/items with IndexedDB cache + outbox sync** — completed PR1–PR4 (2026-05-15 → 2026-05-16). Local Dexie store backs the UI; Realtime + event-driven reconciliation keeps it fresh; mutations queue through an outbox while offline. See git history for PR-level detail.
 
 ## Project
 

@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/client'
 import { localDB } from '@/lib/db/local'
-import type { LocalItem, OutboxEntry } from '@/lib/db/types'
+import type { LocalItem, LocalList, OutboxEntry } from '@/lib/db/types'
 import { addConflicts } from './engine'
 
 export async function reconcileList(listId: string): Promise<void> {
@@ -60,4 +60,41 @@ export async function reconcileList(listId: string): Promise<void> {
   })
 
   if (conflicts.length > 0) addConflicts(conflicts)
+}
+
+// Mirrors reconcileList but for the lists table. Drives the offline "which
+// lists are cached?" affordance on /lists — a list counts as cached if Dexie
+// has its row OR any of its items. We write the row here so the user can
+// always see lists they've recently seen online, even if they never opened
+// them on this device.
+export async function reconcileLists(): Promise<void> {
+  let rows: Array<Record<string, unknown>> | null
+  try {
+    const supabase = createClient()
+    const result = await supabase.from('lists').select('*')
+    if (result.error || !result.data) return
+    rows = result.data
+  } catch {
+    // Network errors here are expected (e.g. just-went-offline). Stay quiet
+    // and leave Dexie untouched — the next reconcile will refresh it.
+    return
+  }
+
+  await localDB.transaction('rw', [localDB.lists, localDB.items], async () => {
+    const serverIds = new Set(rows!.map(r => r.id as string))
+    const localLists = await localDB.lists.toArray()
+
+    // Drop lists the server no longer reports, plus any orphan items they had.
+    for (const local of localLists) {
+      if (!serverIds.has(local.id)) {
+        await localDB.lists.delete(local.id)
+        const orphanIds = (await localDB.items.where('list_id').equals(local.id).toArray()).map(i => i.id)
+        if (orphanIds.length > 0) await localDB.items.bulkDelete(orphanIds)
+      }
+    }
+
+    for (const row of rows!) {
+      await localDB.lists.put(row as unknown as LocalList)
+    }
+  })
 }

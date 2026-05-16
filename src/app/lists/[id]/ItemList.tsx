@@ -34,6 +34,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 
 interface Props {
+  list: List
   initialItems: Item[]
   listId: string
   isShared: boolean
@@ -77,7 +78,7 @@ function localItemToItem(li: LocalItem): Item {
   }
 }
 
-export default function ItemList({ initialItems, listId, suggestions, textSize, categoryOrder, availableLists, currentUserId }: Props) {
+export default function ItemList({ list, initialItems, listId, suggestions, textSize, categoryOrder, availableLists, currentUserId }: Props) {
   const itemTextClass = textSize === 'large' ? 'text-base' : 'text-sm'
   const thumbSizeClass = textSize === 'large' ? 'w-16 h-16' : 'w-12 h-12'
   const [input, setInput] = useState('')
@@ -111,6 +112,10 @@ export default function ItemList({ initialItems, listId, suggestions, textSize, 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
+      // Cache the list row itself so /lists can show this list as "cached"
+      // when offline. Done unconditionally — even a list with no items still
+      // counts as cached once the user has visited it.
+      await localDB.lists.put(list)
       if (initialItems.length > 0) {
         const existing = await localDB.items.where('list_id').equals(listId).count()
         if (!cancelled && existing === 0) {
@@ -121,7 +126,7 @@ export default function ItemList({ initialItems, listId, suggestions, textSize, 
       reconcileList(listId).catch(err => console.error('reconcile failed:', err))
     })()
     return () => { cancelled = true }
-  }, [listId, initialItems])
+  }, [list, listId, initialItems])
 
   // Subscribe to Realtime for all lists (private channels stay silent but are ready).
   // On reconnect, reconcile to catch any missed events.
