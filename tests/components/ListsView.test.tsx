@@ -96,6 +96,14 @@ describe('ListsView', () => {
     expect(screen.getByRole('link', { name: /List b/ })).toHaveAttribute('href', '/lists/b')
   })
 
+  it('online: clicking a list shows the navigation loading affordance', () => {
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} currentUserId="me" />)
+    const link = screen.getByRole('link', { name: /List a/ })
+    link.addEventListener('click', event => event.preventDefault())
+    fireEvent.click(link)
+    expect(screen.getByRole('status')).toHaveTextContent('Laddar...')
+  })
+
   it('shows "shared" badge when memberCounts says a list has members', () => {
     render(<ListsView initialLists={[mkList('a')]} memberCounts={{ a: true }} currentUserId="me" />)
     expect(screen.getByText('shared')).toBeInTheDocument()

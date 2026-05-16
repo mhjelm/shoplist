@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { localDB } from '@/lib/db/local'
@@ -17,6 +17,7 @@ interface Props {
 
 export default function ListsView({ initialLists, memberCounts, currentUserId }: Props) {
   const { isOffline } = useSyncState()
+  const [navigatingToListId, setNavigatingToListId] = useState<string | null>(null)
 
   // Reconcile on mount so existing Dexie `lists` rows get refreshed against
   // the server. We do NOT seed Dexie from initialLists here — Dexie's `lists`
@@ -46,6 +47,21 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
 
   return (
     <div className="space-y-8">
+      {navigatingToListId && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 text-gray-500 backdrop-blur-sm dark:bg-gray-950/80 dark:text-gray-400"
+        >
+          <div className="flex items-center justify-center gap-3">
+            <span
+              className="inline-block w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-700 border-t-gray-600 dark:border-t-gray-300 animate-spin"
+              aria-hidden
+            />
+            <span className="text-sm">Laddar...</span>
+          </div>
+        </div>
+      )}
       <section>
         <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">My lists</h2>
         {myLists.length === 0 ? (
@@ -59,6 +75,7 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
                 hasMembers={memberCounts[list.id] ?? false}
                 cached={cachedIds.has(list.id)}
                 isOffline={isOffline}
+                onNavigate={setNavigatingToListId}
                 showDelete
               />
             ))}
@@ -77,6 +94,7 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
                 hasMembers={false}
                 cached={cachedIds.has(list.id)}
                 isOffline={isOffline}
+                onNavigate={setNavigatingToListId}
               />
             ))}
           </ul>
@@ -86,11 +104,12 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
   )
 }
 
-function ListRow({ list, hasMembers, cached, isOffline, showDelete }: {
+function ListRow({ list, hasMembers, cached, isOffline, onNavigate, showDelete }: {
   list: List
   hasMembers: boolean
   cached: boolean
   isOffline: boolean
+  onNavigate: (listId: string) => void
   showDelete?: boolean
 }) {
   const disabled = isOffline && !cached
@@ -130,6 +149,7 @@ function ListRow({ list, hasMembers, cached, isOffline, showDelete }: {
         <a
           href={`/lists/${list.id}`}
           className={`${labelClasses} ${hoverClasses}`}
+          onClick={() => onNavigate(list.id)}
         >
           {inner}
         </a>
@@ -137,6 +157,7 @@ function ListRow({ list, hasMembers, cached, isOffline, showDelete }: {
         <Link
           href={`/lists/${list.id}`}
           className={`${labelClasses} ${hoverClasses}`}
+          onClick={() => onNavigate(list.id)}
         >
           {inner}
         </Link>
