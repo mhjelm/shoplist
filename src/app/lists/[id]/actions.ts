@@ -215,25 +215,30 @@ export async function clearAllItems(listId: string) {
   revalidatePath(`/lists/${listId}`)
 }
 
-export async function addItems(listId: string, incoming: Array<{ name: string; category?: string | null; measurement?: string | null }>) {
+export async function addItems(listId: string, incoming: Array<{ name: string; category?: string | null; measurement?: string | null; quantity?: number }>) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
   // Collapse duplicates within the input by lowercased name.
-  const byLower = new Map<string, { display: string; nakedCount: number; measurements: string[]; category: CategorySlug | null }>()
-  for (const { name, category, measurement } of incoming) {
-    const t = name.trim()
+  // qSum tracks total desired quantity. When `quantity` is explicitly provided it
+  // counts unconditionally; when absent (e.g. recipe import) it only counts for
+  // measurement-free entries, preserving the original behaviour for those callers.
+  const byLower = new Map<string, { display: string; qSum: number; measurements: string[]; category: CategorySlug | null }>()
+  for (const it of incoming) {
+    const t = it.name.trim()
     if (!t) continue
     const key = t.toLowerCase()
-    const cat = (category && isValidCategorySlug(category)) ? category : null
-    const m = measurement?.trim() || null
+    const cat = (it.category && isValidCategorySlug(it.category)) ? it.category : null
+    const m = it.measurement?.trim() || null
+    const explicitQ = it.quantity !== undefined ? Math.max(1, Math.floor(it.quantity)) : null
+    const qIncrement = explicitQ !== null ? explicitQ : (m ? 0 : 1)
     const existing = byLower.get(key)
     if (existing) {
+      existing.qSum += qIncrement
       if (m) existing.measurements.push(m)
-      else existing.nakedCount++
     } else {
-      byLower.set(key, { display: t, nakedCount: m ? 0 : 1, measurements: m ? [m] : [], category: cat })
+      byLower.set(key, { display: t, qSum: qIncrement, measurements: m ? [m] : [], category: cat })
     }
   }
   if (byLower.size === 0) return { error: 'No items to add' }
@@ -254,7 +259,7 @@ export async function addItems(listId: string, incoming: Array<{ name: string; c
 
   const resultItems: unknown[] = []
 
-  for (const [key, { display, nakedCount, measurements, category }] of byLower) {
+  for (const [key, { display, qSum, measurements, category }] of byLower) {
     const active = activeMap.get(key)
     const shopped = shoppedMap.get(key)
     const batchMeasurement = measurements.length > 0 ? measurements.join(' + ') : null
@@ -266,7 +271,7 @@ export async function addItems(listId: string, incoming: Array<{ name: string; c
         newMeasurement = active.measurement ? `${active.measurement} + ${batchMeasurement}` : batchMeasurement
       }
       const patch: Record<string, unknown> = {
-        quantity: active.quantity + nakedCount,
+        quantity: active.quantity + qSum,
         measurement: newMeasurement,
       }
       const { data } = await supabase
@@ -280,7 +285,7 @@ export async function addItems(listId: string, incoming: Array<{ name: string; c
       // Revive: replace old measurement (treat shopped as reset boundary).
       const { data } = await supabase
         .from('items')
-        .update({ quantity: shopped.quantity + nakedCount, is_checked: false, measurement: batchMeasurement })
+        .update({ quantity: shopped.quantity + qSum, is_checked: false, measurement: batchMeasurement })
         .eq('id', shopped.id)
         .select()
         .single()
@@ -288,7 +293,7 @@ export async function addItems(listId: string, incoming: Array<{ name: string; c
     } else {
       const { data } = await supabase
         .from('items')
-        .insert({ list_id: listId, added_by: user.id, name: display, quantity: Math.max(1, nakedCount), category, measurement: batchMeasurement })
+        .insert({ list_id: listId, added_by: user.id, name: display, quantity: Math.max(1, qSum), category, measurement: batchMeasurement })
         .select()
         .single()
       if (data) resultItems.push(data)
@@ -297,6 +302,59 @@ export async function addItems(listId: string, incoming: Array<{ name: string; c
 
   revalidatePath(`/lists/${listId}`)
   return { items: resultItems }
+}
+
+export async function extractAddItems(text: string) {
+  if (!text.trim()) return { error: 'No input' }
+  if (!process.env.GEMINI_API_KEY) return { error: 'GEMINI_API_KEY not configured' }
+
+  const categoryList = `frukt-gront, mejeri, kott-fisk, brod, frys, skafferi, drycker, snacks, hushall, hygien, ovrigt`
+
+  const exampleInput = `2 mjölk\nbanan\npasta 500g\n3 burkar krossade tomater`
+  const exampleOutput = `{"items":[{"name":"Mjölk","quantity":2,"measurement":null,"category":"mejeri"},{"name":"Banan","quantity":1,"measurement":null,"category":"frukt-gront"},{"name":"Pasta","quantity":1,"measurement":"500 g","category":"skafferi"},{"name":"Krossade tomater","quantity":3,"measurement":"3 burkar","category":"skafferi"}]}`
+
+  try {
+    const parsed = (await callGemini(
+      `Parse this user-typed shopping list into structured items. Each line or comma-separated segment is one item. For each, extract:
+- "name": the grocery item in Swedish (1-4 words, capitalize first word only)
+- "quantity": positive integer (default 1). Use when a clear count is stated, e.g. "2 mjölk" → 2, "3 burkar tonfisk" → 3.
+- "measurement": copy the unit/amount phrase VERBATIM from the input (e.g. "500 g", "3 burkar", "1,5 dl"). Set to null if none.
+- "category": one of these slugs: ${categoryList}
+
+CRITICAL: Never invent or modify measurements. Copy exactly as written, including fractions (½), approximations (ca), and Swedish decimal commas (1,5). When a number is a count of a named unit ("3 burkar tonfisk" → quantity 3, measurement "3 burkar"), include it in both. When a number is purely an amount ("500 g pasta" → quantity 1, measurement "500 g"). When uncertain, prefer quantity 1.
+
+Example input:
+${exampleInput}
+
+Example output:
+${exampleOutput}
+
+Return JSON only: {"items": [{"name": "...", "quantity": 1, "measurement": "..." or null, "category": "slug"}, ...]}
+
+Input:
+${text}`,
+      { temperature: 0 }
+    )) as { items?: unknown }
+
+    if (!Array.isArray(parsed.items)) return { items: [] }
+
+    const items = (parsed.items as unknown[])
+      .filter((i): i is { name: string; quantity?: unknown; measurement?: unknown; category?: string } =>
+        typeof i === 'object' && i !== null && typeof (i as Record<string, unknown>).name === 'string'
+      )
+      .map(i => ({
+        name: i.name.trim(),
+        quantity: (typeof i.quantity === 'number' && i.quantity > 0) ? Math.max(1, Math.floor(i.quantity)) : 1,
+        category: (i.category && isValidCategorySlug(i.category)) ? i.category : null,
+        measurement: (typeof i.measurement === 'string' && i.measurement.trim()) ? i.measurement.trim() : null,
+      }))
+      .filter(i => i.name.length > 0)
+
+    return { items }
+  } catch (e) {
+    console.error('[extractAddItems] failed', e)
+    return { error: e instanceof Error ? e.message : 'Could not parse Gemini response' }
+  }
 }
 
 type CopyItem = {

@@ -9,7 +9,8 @@ import { reconcileList } from '@/lib/sync/reconcile'
 import { subscribeToList } from '@/lib/sync/realtime'
 import type { Item, List, ListTextSize } from '@/lib/types'
 import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
-import { copyItemsToList, moveItemsToList } from './actions'
+import { addItems, copyItemsToList, extractAddItems, moveItemsToList } from './actions'
+import { splitPlainItems } from '@/lib/parseAddInput'
 import { muAddItem, muUpdateItem, muSetCategory, muDeleteItem, muBulkDelete, muReorderItem, muMergeItems } from '@/lib/sync/mutations'
 import { useSyncState, setActiveList } from '@/lib/sync/engine'
 import { useEditMode } from './EditModeContext'
@@ -110,7 +111,8 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
   const [confirmingClear, setConfirmingClear] = useState(false)
   const [editMode] = useEditMode()
   const { isOffline } = useSyncState()
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const [addError, setAddError] = useState<string | null>(null)
 
   // Register this list as the active one so the SyncProvider's connectivity
   // triggers (online/visibilitychange) know which list to reconcile.
@@ -260,7 +262,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
   function handleInputChange(value: string) {
     setInput(value)
     setHighlightIdx(-1)
-    if (value.trim().length < 1) { setFiltered([]); return }
+    if (value.trim().length < 1 || /[,\n\d]/.test(value)) { setFiltered([]); return }
     const lower = value.toLowerCase()
     setFiltered(suggestions.filter(s => s.toLowerCase().includes(lower)).slice(0, 6))
   }
@@ -272,40 +274,86 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
   }
 
   async function handleAdd() {
-    const name = input.trim()
-    if (!name) return
+    const raw = input.trim()
+    if (!raw) return
+    setAddError(null)
+
+    const hasSplit = /[,\n]/.test(raw)
+    const hasDigit = /\d/.test(raw)
+
+    if (!hasSplit && !hasDigit) {
+      // Fast path: plain single name, works offline via local outbox.
+      setLoading(true)
+      setInput('')
+      setFiltered([])
+      if (inputRef.current) inputRef.current.style.height = 'auto'
+      const pictureUrl = urlInput.trim() || undefined
+      setUrlInput('')
+
+      const lowerName = raw.toLowerCase()
+      const activeMatch = items.find(i => !i.is_checked && i.name.toLowerCase() === lowerName)
+      const shoppedMatch = !activeMatch ? items.find(i => i.is_checked && i.name.toLowerCase() === lowerName) : undefined
+      const match = activeMatch ?? shoppedMatch
+
+      if (match) {
+        await muUpdateItem(listId, match.id, { quantity: match.quantity + 1, is_checked: false })
+      } else {
+        const newItem: LocalItem = {
+          id: crypto.randomUUID(),
+          list_id: listId,
+          added_by: '',
+          name: raw,
+          is_checked: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          picture_url: pictureUrl ?? null,
+          sort_order: null,
+          quantity: 1,
+          category: null,
+          measurement: null,
+        }
+        await muAddItem(newItem)
+      }
+      setLoading(false)
+      return
+    }
+
+    // Multi-item or digit-bearing: requires a server call.
     setLoading(true)
     setInput('')
     setFiltered([])
-    const pictureUrl = urlInput.trim() || undefined
-    setUrlInput('')
+    if (inputRef.current) inputRef.current.style.height = 'auto'
 
-    const lowerName = name.toLowerCase()
-    const activeMatch = items.find(i => !i.is_checked && i.name.toLowerCase() === lowerName)
-    const shoppedMatch = !activeMatch ? items.find(i => i.is_checked && i.name.toLowerCase() === lowerName) : undefined
-    const match = activeMatch ?? shoppedMatch
+    let itemsToAdd: Array<{ name: string; quantity?: number; measurement?: string | null; category?: string | null }>
 
-    if (match) {
-      await muUpdateItem(listId, match.id, { quantity: match.quantity + 1, is_checked: false })
+    if (hasSplit && !hasDigit) {
+      itemsToAdd = splitPlainItems(raw).map(name => ({ name }))
     } else {
-      const newItem: LocalItem = {
-        id: crypto.randomUUID(),
-        list_id: listId,
-        added_by: '',
-        name,
-        is_checked: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        picture_url: pictureUrl ?? null,
-        sort_order: null,
-        quantity: 1,
-        category: null,
-        measurement: null,
+      const extracted = await extractAddItems(raw)
+      if (extracted.error || !extracted.items) {
+        setAddError(extracted.error ?? 'Kunde inte tolka listan')
+        setInput(raw)
+        setLoading(false)
+        return
       }
-      await muAddItem(newItem)
+      itemsToAdd = extracted.items
     }
 
+    if (itemsToAdd.length === 0) {
+      setLoading(false)
+      return
+    }
+
+    const result = await addItems(listId, itemsToAdd)
     setLoading(false)
+    if (result.error) {
+      setAddError(result.error)
+      return
+    }
+    if (result.items) {
+      localDB.items.bulkPut((result.items as Item[]).map(itemToLocalItem))
+        .catch(err => console.error('Failed to put items in local db:', err))
+    }
   }
 
   function spawnGhost(item: Item, rect: DOMRect) {
@@ -415,21 +463,27 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
       <div className="space-y-2">
         <div className="relative">
           <div className="flex gap-2">
-            <input
+            <textarea
               ref={inputRef}
               value={input}
-              onChange={e => handleInputChange(e.target.value)}
+              rows={1}
+              onChange={e => {
+                handleInputChange(e.target.value)
+                e.target.style.height = 'auto'
+                e.target.style.height = `${e.target.scrollHeight}px`
+              }}
               onKeyDown={e => {
-                if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightIdx(i => Math.min(i + 1, filtered.length - 1)) }
-                else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightIdx(i => Math.max(i - 1, -1)) }
-                else if (e.key === 'Enter') {
+                if (e.key === 'ArrowDown' && !e.shiftKey) { e.preventDefault(); setHighlightIdx(i => Math.min(i + 1, filtered.length - 1)) }
+                else if (e.key === 'ArrowUp' && !e.shiftKey) { e.preventDefault(); setHighlightIdx(i => Math.max(i - 1, -1)) }
+                else if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
                   if (highlightIdx >= 0 && filtered[highlightIdx]) selectSuggestion(filtered[highlightIdx])
                   else handleAdd()
                 }
                 else if (e.key === 'Escape') setFiltered([])
               }}
               placeholder="Add an item…"
-              className="flex-1 min-w-0 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 min-w-0 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden leading-normal"
             />
             <button
               onClick={() => setShowUrlInput(v => !v)}
@@ -481,6 +535,10 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
             onChange={setUrlInput}
             onSuggestName={name => setInput(prev => prev.trim() ? prev : name)}
           />
+        )}
+
+        {addError && (
+          <p className="text-xs text-red-600 dark:text-red-400">{addError}</p>
         )}
       </div>
 
