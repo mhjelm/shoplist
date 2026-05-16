@@ -102,7 +102,7 @@ export default function ShareSection({ listId, initialMembers, initialInvitees }
           type="submit"
           disabled={loading || isOffline}
           title={isOffline ? 'Kräver anslutning' : undefined}
-          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg px-4 transition-colors"
+          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg px-4 transition-colors whitespace-nowrap shrink-0"
         >
           Bjud in
         </button>
