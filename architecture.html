@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Shoplist — Architecture</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0f1115;
+    --panel: #161a22;
+    --border: #262b36;
+    --text: #e6e8ee;
+    --muted: #9aa3b2;
+    --accent: #6aa3ff;
+  }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  header { padding: 24px 32px; border-bottom: 1px solid var(--border); }
+  header h1 { margin: 0 0 4px; font-size: 22px; }
+  header p { margin: 0; color: var(--muted); }
+  main { padding: 24px 32px 48px; max-width: 1400px; margin: 0 auto; }
+  section { margin: 32px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+  section h2 { margin: 0 0 4px; font-size: 17px; }
+  section p.lede { margin: 0 0 16px; color: var(--muted); }
+  .mermaid { background: #fff; border-radius: 8px; padding: 12px; overflow-x: auto; }
+  code { background: #2a2f3a; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  ul { margin: 0; padding-left: 18px; }
+  li { margin: 2px 0; color: var(--muted); }
+  li b { color: var(--text); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Shoplist — Architecture</h1>
+  <p>Family shopping list PWA: Next.js 16 App Router · React 19 · Supabase · Gemini · Dexie/IndexedDB offline cache.</p>
+</header>
+
+<main>
+
+<section>
+  <h2>1. High-level architecture</h2>
+  <p class="lede">Browser tier (PWA + offline cache) ↔ Next.js (edge middleware, server components, server actions) ↔ Supabase &amp; external AI/image services.</p>
+  <div class="mermaid">
+flowchart LR
+  subgraph BROWSER["🌐 Browser (PWA, installable)"]
+    direction TB
+    SW["public/sw.js<br/>Service Worker<br/>(per-URL nav cache)"]
+    SWReg["ServiceWorkerRegister.tsx"]
+    Manifest["app/manifest.ts<br/>+ share_target"]
+    subgraph RC["React tree"]
+      direction TB
+      Layout["app/layout.tsx<br/>(applies theme)"]
+      SyncProv["SyncProvider<br/>(useSyncState)"]
+      Pages["Pages:<br/>/lists, /lists/[id],<br/>/settings, /share/*, /auth/*"]
+      ItemList["ItemList.tsx<br/>(optimistic UI<br/>+ dnd-kit + Realtime)"]
+      Modals["RecipeImportModal<br/>ShareSection<br/>EditModeContext"]
+    end
+    subgraph LOCAL["Local persistence"]
+      direction TB
+      Dexie[("Dexie / IndexedDB<br/>lists · items · outbox")]
+      Outbox["Outbox queue"]
+    end
+  end
+
+  subgraph EDGE["⚡ Next.js Edge"]
+    Proxy["src/proxy.ts<br/>(auth gate + redirects)<br/>updateSession()"]
+  end
+
+  subgraph SERVER["🟢 Next.js Server (App Router)"]
+    direction TB
+    SC["Server Components<br/>(list pages, settings,<br/>share/[importId])"]
+    Actions["Server Actions<br/>lists/actions.ts<br/>lists/[id]/actions.ts<br/>settings/actions.ts<br/>share/actions.ts<br/>auth/actions.ts"]
+    ShareRoute["share/route.ts<br/>(POST handler for<br/>Android share sheet)"]
+    Prefs["lib/preferences.ts<br/>(React.cache)"]
+    SbServer["lib/supabase/server.ts"]
+    SbMiddleware["lib/supabase/middleware.ts"]
+  end
+
+  subgraph SYNC["🔄 Sync layer (client)"]
+    direction TB
+    Engine["lib/sync/engine.ts<br/>(state · outbox flush)"]
+    Realtime["lib/sync/realtime.ts"]
+    Reconcile["lib/sync/reconcile.ts"]
+    Mutations["lib/sync/mutations.ts"]
+  end
+
+  subgraph SUPA["☁️ Supabase"]
+    direction TB
+    Auth["Auth<br/>(cookies)"]
+    PG[("Postgres<br/>lists · list_members · items<br/>user_item_history<br/>user_preferences<br/>pending_imports<br/>+ RLS policies")]
+    RT["Realtime<br/>(items, lists, list_members)"]
+  end
+
+  subgraph EXT["🌍 External services"]
+    Gemini["Gemini 2.5 Flash<br/>lib/gemini.ts"]
+    ImgBB["ImgBB"]
+  end
+
+  %% browser internals
+  Layout --> SyncProv --> Pages --> ItemList
+  Pages --> Modals
+  SWReg -.registers.-> SW
+  Layout -.declares.-> Manifest
+
+  %% offline cache wiring
+  ItemList <--> Mutations
+  Mutations --> Dexie
+  Mutations --> Outbox
+  Engine --> Outbox
+  Engine --> Dexie
+  SyncProv --> Engine
+  Realtime --> Dexie
+  Reconcile --> Dexie
+
+  %% request flow
+  Pages -- "navigation / fetch" --> Proxy
+  Proxy --> SC
+  Proxy --> ShareRoute
+  Proxy -- "refresh cookie" --> SbMiddleware
+  SC --> Prefs
+  SC --> SbServer
+  Actions --> SbServer
+  ShareRoute --> SbServer
+  ShareRoute --> Gemini
+
+  %% client -> server
+  ItemList -- "Server Actions<br/>(addItem, toggle,<br/>setCategory, merge…)" --> Actions
+  Modals -- "extractRecipeItems<br/>extractListItemsFromImage" --> Actions
+  Engine -- "flush mutations" --> Actions
+
+  %% supabase
+  SbServer --> Auth
+  SbServer --> PG
+  SbMiddleware --> Auth
+  Realtime -- "WebSocket<br/>filter list_id" --> RT
+  RT --> PG
+  Actions --> Gemini
+  Actions --> ImgBB
+
+  %% manifest share target
+  Manifest -. "POST multipart" .-> ShareRoute
+
+  classDef ext fill:#fef3c7,stroke:#a16207,color:#000;
+  classDef supa fill:#d1fae5,stroke:#047857,color:#000;
+  classDef client fill:#e0e7ff,stroke:#3730a3,color:#000;
+  classDef server fill:#ffe4e6,stroke:#9f1239,color:#000;
+  classDef sync fill:#fce7f3,stroke:#9d174d,color:#000;
+  classDef edge fill:#fef9c3,stroke:#854d0e,color:#000;
+  class Gemini,ImgBB ext;
+  class Auth,PG,RT supa;
+  class SW,SWReg,Manifest,Layout,SyncProv,Pages,ItemList,Modals,Dexie,Outbox client;
+  class SC,Actions,ShareRoute,Prefs,SbServer,SbMiddleware server;
+  class Engine,Realtime,Reconcile,Mutations sync;
+  class Proxy edge;
+  </div>
+</section>
+
+<section>
+  <h2>2. Mutation path (write a row)</h2>
+  <p class="lede">Every write is optimistic locally, queued in the outbox if offline, and reconciled via Realtime echoes.</p>
+  <div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant IL as ItemList.tsx
+  participant M as sync/mutations.ts
+  participant DX as Dexie (local)
+  participant OB as Outbox
+  participant E as sync/engine.ts
+  participant SA as Server Action
+  participant PG as Postgres (RLS)
+  participant RT as Realtime
+  participant RC as sync/reconcile.ts
+
+  U->>IL: tap "add item"
+  IL->>IL: optimistic insert into local state
+  IL->>M: mutate(addItem)
+  M->>DX: write local row
+  M->>OB: enqueue mutation
+  par offline-safe flush
+    E->>OB: drain queue
+    E->>SA: call server action
+    SA->>PG: insert / update (RLS-checked)
+    PG-->>SA: ok / no rows
+    SA-->>E: { error? }
+    E->>OB: ack or retry
+  and realtime echo
+    PG->>RT: change feed
+    RT-->>RC: INSERT/UPDATE/DELETE
+    RC->>DX: merge into cache
+    RC-->>IL: state update
+  end
+  alt server returned error
+    SA-->>IL: { error }
+    IL->>IL: rollback from snapshot
+  end
+  </div>
+</section>
+
+<section>
+  <h2>3. Share / recipe import flow</h2>
+  <p class="lede">URLs, pasted text, picked or clipboard images, and Android share-sheet posts all converge on <code>addItems()</code>.</p>
+  <div class="mermaid">
+flowchart TB
+  subgraph SRC["Input sources"]
+    A1["In-app modal:<br/>URL / pasted text"]
+    A2["In-app modal:<br/>image upload / camera"]
+    A3["In-app modal:<br/>clipboard image (auto)"]
+    A4["Android system<br/>share sheet"]
+  end
+
+  ShareRoute["share/route.ts<br/>(POST /share, auth-gated)"]
+  Extract1["extractRecipeItems()<br/>JSON-LD → HTML+Gemini"]
+  Extract2["extractListItemsFromImage()<br/>Gemini Vision"]
+  Pending[("pending_imports<br/>(RLS by user)")]
+  ShareUI["share/[importId]/page.tsx<br/>+ ShareImportClient.tsx<br/>(list picker + accept/reject)"]
+  AddItems["addItems()<br/>server action<br/>(dedupe · combine · revive · insert)"]
+  Items[("items table")]
+
+  A1 --> Extract1
+  A2 --> Extract2
+  A3 --> Extract2
+  A4 --> ShareRoute
+  ShareRoute -->|image present| Extract2
+  ShareRoute -->|text / URL| Extract1
+  Extract1 --> Pending
+  Extract2 --> Pending
+  Pending --> ShareUI
+  ShareUI -->|confirmShareImport| AddItems
+  Extract1 -. in-app modal .-> AddItems
+  Extract2 -. in-app modal .-> AddItems
+  AddItems --> Items
+
+  classDef ext fill:#fef3c7,stroke:#a16207,color:#000;
+  classDef db fill:#d1fae5,stroke:#047857,color:#000;
+  class Extract1,Extract2 ext;
+  class Pending,Items db;
+  </div>
+</section>
+
+<section>
+  <h2>4. Data model (Supabase)</h2>
+  <p class="lede">Authorization lives in Postgres via RLS using <code>has_list_access(uuid)</code>; the app does not re-check.</p>
+  <div class="mermaid">
+erDiagram
+  AUTH_USERS ||--o{ LISTS : owns
+  AUTH_USERS ||--o{ LIST_MEMBERS : "member of"
+  AUTH_USERS ||--o{ USER_ITEM_HISTORY : ""
+  AUTH_USERS ||--|| USER_PREFERENCES : ""
+  AUTH_USERS ||--o{ PENDING_IMPORTS : ""
+  LISTS ||--o{ ITEMS : contains
+  LISTS ||--o{ LIST_MEMBERS : "shared with"
+
+  AUTH_USERS {
+    uuid id PK
+    text email
+  }
+  LISTS {
+    uuid id PK
+    text name
+    uuid owner_id FK
+    timestamptz created_at
+  }
+  LIST_MEMBERS {
+    uuid list_id FK
+    uuid user_id FK
+    timestamptz added_at
+  }
+  ITEMS {
+    uuid id PK
+    uuid list_id FK
+    uuid added_by FK
+    text name
+    bool is_checked
+    text picture_url
+    int sort_order
+    int quantity
+    text category
+    text measurement
+    timestamptz created_at
+  }
+  USER_ITEM_HISTORY {
+    uuid user_id FK
+    text name
+    text category
+    int use_count
+    timestamptz last_used_at
+  }
+  USER_PREFERENCES {
+    uuid user_id PK
+    text theme
+    text list_text_size
+    text_array category_order
+    timestamptz updated_at
+  }
+  PENDING_IMPORTS {
+    uuid id PK
+    uuid user_id FK
+    jsonb payload
+    timestamptz created_at
+  }
+  </div>
+</section>
+
+<section>
+  <h2>Notes</h2>
+  <ul>
+    <li><b>Three Supabase clients</b> — <code>server.ts</code> (Server Components/Actions), <code>client.ts</code> (browser, Realtime), <code>middleware.ts</code> (edge). Don't mix them.</li>
+    <li><b>Edge middleware = <code>src/proxy.ts</code></b> — Next 16 rename. Excludes <code>/manifest.webmanifest</code> and <code>/sw.js</code> so Chrome's PWA installability check passes.</li>
+    <li><b>Optimistic UI lives in <code>ItemList.tsx</code></b>; every handler snapshots, mutates locally, awaits the server action, rolls back on error, and reconciles with the Realtime echo.</li>
+    <li><b>Offline cache</b> — Dexie/IndexedDB holds lists and items; mutations queue through an outbox flushed by <code>sync/engine.ts</code>; <code>reconcile.ts</code> merges Realtime events.</li>
+    <li><b>Categories</b> — 11-slug closed enum in <code>lib/categories.ts</code>; first hit via <code>user_item_history</code>, fallback to Gemini, manual override in edit modal.</li>
+  </ul>
+</section>
+
+</main>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "default", securityLevel: "loose", flowchart: { htmlLabels: true, curve: "basis" } });
+</script>
+</body>
+</html>
