@@ -103,14 +103,24 @@ describe('ListsView', () => {
     expect(link.tagName).toBe('A')
   })
 
-  it('cached list shows the offline-cached dot indicator (even online)', () => {
+  it('offline + cached: shows the offline-cached dot indicator', () => {
+    sync.isOffline = true
     live.lists = [mkList('a')]
     live.items = []
     render(<ListsView initialLists={[mkList('a')]} currentUserId="me" />)
     expect(screen.getByLabelText('Sparad offline')).toBeInTheDocument()
   })
 
-  it('uncached list does NOT show the cached dot', () => {
+  it('online: cached list does NOT show the dot (only relevant offline)', () => {
+    sync.isOffline = false
+    live.lists = [mkList('a')]
+    live.items = []
+    render(<ListsView initialLists={[mkList('a')]} currentUserId="me" />)
+    expect(screen.queryByLabelText('Sparad offline')).not.toBeInTheDocument()
+  })
+
+  it('offline + uncached: does NOT show the dot', () => {
+    sync.isOffline = true
     live.lists = []
     live.items = []
     render(<ListsView initialLists={[mkList('a')]} currentUserId="me" />)

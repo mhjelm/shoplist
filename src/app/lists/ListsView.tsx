@@ -97,7 +97,7 @@ function ListRow({ list, cached, isOffline, showDelete }: {
 
   const inner = (
     <>
-      {cached && (
+      {isOffline && cached && (
         <span
           aria-label="Sparad offline"
           title="Sparad offline"
