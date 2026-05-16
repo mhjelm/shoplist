@@ -35,7 +35,10 @@
       "Bash(curl -sL https://shoplist-eta.vercel.app/auth/login)",
       "Bash(curl *)",
       "Bash(node *)",
-      "Bash(npx vitest *)"
+      "Bash(npx vitest *)",
+      "Bash(git -C C:/proj/shoplist log --oneline --all -- src/app/lists/\\\\[id\\\\]/ItemList.tsx)",
+      "Bash(git -C C:/proj/shoplist log -p --all -S \"categorizeItem\\(\" -- src/app/lists/\\\\[id\\\\]/ItemList.tsx)",
+      "Bash(dir src *)"
     ]
   }
 }
