@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import type { Theme, ListTextSize } from '@/lib/types'
 import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
 import { updateSettings, updateCategoryOrder } from './actions'
+import { useSyncState } from '@/lib/sync/engine'
 import {
   DndContext,
   type DragEndEvent,
@@ -35,9 +36,11 @@ export default function SettingsForm({ initialTheme, initialListTextSize, initia
   const [highContrast, setHighContrast] = useState<boolean>(initialHighContrast)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const { isOffline } = useSyncState()
 
   function save(nextTheme: Theme, nextSize: ListTextSize, nextHighContrast: boolean) {
     setError(null)
+    if (isOffline) return
     startTransition(async () => {
       const result = await updateSettings(nextTheme, nextSize, nextHighContrast)
       if (result?.error) setError(result.error)
@@ -70,6 +73,7 @@ export default function SettingsForm({ initialTheme, initialListTextSize, initia
     const next = arrayMove(categoryOrder, oldIndex, newIndex)
     setCategoryOrder(next)
     setError(null)
+    if (isOffline) return
     startTransition(async () => {
       const result = await updateCategoryOrder(next)
       if (result?.error) setError(result.error)

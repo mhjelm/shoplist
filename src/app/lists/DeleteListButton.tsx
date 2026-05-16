@@ -1,17 +1,21 @@
 'use client'
 
 import { useState } from 'react'
+import { useSyncState } from '@/lib/sync/engine'
 import { deleteList } from './actions'
 
 export default function DeleteListButton({ listId }: { listId: string }) {
   const [confirming, setConfirming] = useState(false)
+  const { isOffline } = useSyncState()
 
   if (confirming) {
     return (
       <div className="flex items-center gap-1 ml-2">
         <button
           onClick={async () => { await deleteList(listId); setConfirming(false) }}
-          className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium"
+          disabled={isOffline}
+          title={isOffline ? 'Kräver anslutning' : undefined}
+          className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium disabled:opacity-40"
         >
           Delete
         </button>
@@ -25,7 +29,9 @@ export default function DeleteListButton({ listId }: { listId: string }) {
   return (
     <button
       onClick={() => setConfirming(true)}
-      className="ml-2 text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none"
+      disabled={isOffline}
+      title={isOffline ? 'Kräver anslutning' : undefined}
+      className="ml-2 text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none disabled:opacity-40"
       aria-label="Delete list"
     >
       ×

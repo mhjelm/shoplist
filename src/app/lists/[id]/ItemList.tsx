@@ -333,7 +333,24 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     let itemsToAdd: Array<{ name: string; quantity?: number; measurement?: string | null; category?: string | null }>
 
     if (hasSplit && !hasDigit) {
-      itemsToAdd = splitPlainItems(raw).map(name => ({ name }))
+      // Plain names only — route through local outbox so it works offline too.
+      for (const name of splitPlainItems(raw)) {
+        const lowerName = name.toLowerCase()
+        const activeMatch = items.find(i => !i.is_checked && i.name.toLowerCase() === lowerName)
+        const shoppedMatch = !activeMatch ? items.find(i => i.is_checked && i.name.toLowerCase() === lowerName) : undefined
+        const match = activeMatch ?? shoppedMatch
+        if (match) {
+          await muUpdateItem(listId, match.id, { quantity: match.quantity + 1, is_checked: false })
+        } else {
+          await muAddItem({
+            id: crypto.randomUUID(), list_id: listId, added_by: '', name,
+            is_checked: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            picture_url: null, sort_order: null, quantity: 1, category: null, measurement: null,
+          })
+        }
+      }
+      setLoading(false)
+      return
     } else {
       const extracted = await extractAddItems(raw)
       if (extracted.error || !extracted.items) {
@@ -443,12 +460,17 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     setPickerError(null)
     if (mode === 'move') {
       await muBulkDelete(listId, ids)
-      const res = await moveItemsToList(listId, targetListId, ids, payload)
-      if (res?.error) {
-        // Restore items to Dexie if server move failed.
+      try {
+        const res = await moveItemsToList(listId, targetListId, ids, payload)
+        if (res?.error) {
+          await localDB.items.bulkPut(selectedItems.map(itemToLocalItem))
+          setPickerError(res.error)
+          throw new Error(res.error)
+        }
+      } catch (e) {
+        // Restore items on network throw (res?.error path re-throws, caught here too — bulkPut is idempotent).
         await localDB.items.bulkPut(selectedItems.map(itemToLocalItem))
-        setPickerError(res.error)
-        throw new Error(res.error)
+        throw e
       }
     } else {
       const res = await copyItemsToList(targetListId, payload)
@@ -713,13 +735,17 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
           <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 min-w-0">{selectedIds.size} valda</span>
           <button
             onClick={() => { setPickerError(null); setPickerMode('copy') }}
-            className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            disabled={isOffline}
+            title={isOffline ? 'Kräver anslutning' : undefined}
+            className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40"
           >
             Kopiera till…
           </button>
           <button
             onClick={() => { setPickerError(null); setPickerMode('move') }}
-            className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+            disabled={isOffline}
+            title={isOffline ? 'Kräver anslutning' : undefined}
+            className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors disabled:opacity-40"
           >
             Flytta till…
           </button>
