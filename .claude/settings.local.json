@@ -38,7 +38,8 @@
       "Bash(npx vitest *)",
       "Bash(git -C C:/proj/shoplist log --oneline --all -- src/app/lists/\\\\[id\\\\]/ItemList.tsx)",
       "Bash(git -C C:/proj/shoplist log -p --all -S \"categorizeItem\\(\" -- src/app/lists/\\\\[id\\\\]/ItemList.tsx)",
-      "Bash(dir src *)"
+      "Bash(dir src *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\proj\\\\shoplist\" -Recurse -Filter \"*.tsx\")"
     ]
   }
 }
