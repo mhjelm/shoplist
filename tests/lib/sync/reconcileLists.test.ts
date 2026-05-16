@@ -89,17 +89,19 @@ beforeEach(() => {
 })
 
 describe('reconcileLists', () => {
-  it('writes server lists into Dexie when local is empty', async () => {
+  it('does NOT insert server lists Dexie has never seen', async () => {
+    // Dexie's `lists` table only tracks lists the user has actually opened on
+    // this device — that drives the offline "cached" indicator. Reconcile must
+    // not seed unknown lists here, otherwise every server-visible list would
+    // appear cached and the offline gating on /lists would be a no-op.
     serverData.rows = [makeList('a', 'Veckohandling'), makeList('b', 'Helghandling')]
 
     await reconcileLists()
 
-    expect(db.lists).toHaveLength(2)
-    expect(db.lists.map(l => l.id).sort()).toEqual(['a', 'b'])
-    expect(db.lists.find(l => l.id === 'a')?.name).toBe('Veckohandling')
+    expect(db.lists).toHaveLength(0)
   })
 
-  it('upserts an existing local list with server values', async () => {
+  it('refreshes an existing local list with server values', async () => {
     db.lists = [makeList('a', 'Stale')]
     serverData.rows = [makeList('a', 'Fresh')]
 
@@ -107,6 +109,16 @@ describe('reconcileLists', () => {
 
     expect(db.lists).toHaveLength(1)
     expect(db.lists[0].name).toBe('Fresh')
+  })
+
+  it('only refreshes locally-known lists, ignoring unknown server rows', async () => {
+    db.lists = [makeList('known', 'Stale')]
+    serverData.rows = [makeList('known', 'Fresh'), makeList('unknown', 'New')]
+
+    await reconcileLists()
+
+    expect(db.lists.map(l => l.id).sort()).toEqual(['known'])
+    expect(db.lists.find(l => l.id === 'known')?.name).toBe('Fresh')
   })
 
   it('deletes a Dexie list row that the server no longer has', async () => {

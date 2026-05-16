@@ -1,4 +1,4 @@
-const CACHE = 'shoplist-v4'
+const CACHE = 'shoplist-v5'
 const SHELL = ['/']
 
 // Stateful or one-shot routes that must never be served from cache.
@@ -6,6 +6,15 @@ function shouldCacheNav(url) {
   if (url.pathname.startsWith('/auth')) return false
   if (url.pathname.startsWith('/share')) return false
   return true
+}
+
+// Strip the Next.js RSC marker query param so the cache key matches the bare
+// document URL. We never cache the _rsc payload itself — Next.js will fall back
+// to hard nav when its RSC fetch fails, and at that point we serve cached HTML.
+function bareUrl(reqUrl) {
+  const u = new URL(reqUrl)
+  u.searchParams.delete('_rsc')
+  return u.toString()
 }
 
 self.addEventListener('install', (event) => {
@@ -54,6 +63,35 @@ self.addEventListener('fetch', (event) => {
             )
           )
         ),
+    )
+    return
+  }
+
+  // Next.js soft navigations are RSC fetches (header `RSC: 1` or `?_rsc=`).
+  // They're not mode='navigate' so they don't seed the HTML cache on their own.
+  // We don't cache the RSC payload — Next.js will hard-nav on failure — but we
+  // DO opportunistically fetch the bare HTML in the background so a subsequent
+  // offline visit has something to serve. Without this, Link-clicking into a
+  // list page never caches its HTML, and offline navigation bounces back to
+  // /lists.
+  const isRsc = req.method === 'GET'
+    && (req.headers.get('RSC') === '1' || url.searchParams.has('_rsc'))
+  if (isRsc) {
+    event.respondWith(
+      fetch(req).then((res) => {
+        if (res.ok && shouldCacheNav(url)) {
+          const htmlUrl = bareUrl(req.url)
+          // Fire-and-forget: don't block the RSC response on this side-fetch.
+          fetch(htmlUrl, { credentials: 'same-origin' })
+            .then((htmlRes) => {
+              if (htmlRes.ok) {
+                caches.open(CACHE).then((c) => c.put(htmlUrl, htmlRes))
+              }
+            })
+            .catch(() => {})
+        }
+        return res
+      })
     )
     return
   }

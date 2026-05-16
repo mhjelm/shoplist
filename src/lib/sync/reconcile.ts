@@ -64,9 +64,11 @@ export async function reconcileList(listId: string): Promise<void> {
 
 // Mirrors reconcileList but for the lists table. Drives the offline "which
 // lists are cached?" affordance on /lists — a list counts as cached if Dexie
-// has its row OR any of its items. We write the row here so the user can
-// always see lists they've recently seen online, even if they never opened
-// them on this device.
+// has its row OR any of its items. Dexie's `lists` table is only ever
+// populated by ItemList mount (i.e. the user actually opened that list); we
+// must not insert here, otherwise every server-visible list would look
+// "cached" and the offline gating would be a no-op. We only refresh rows that
+// already exist and prune ones the server has dropped.
 export async function reconcileLists(): Promise<void> {
   let rows: Array<Record<string, unknown>> | null
   try {
@@ -81,20 +83,28 @@ export async function reconcileLists(): Promise<void> {
   }
 
   await localDB.transaction('rw', [localDB.lists, localDB.items], async () => {
-    const serverIds = new Set(rows!.map(r => r.id as string))
+    const serverById = new Map<string, Record<string, unknown>>()
+    for (const row of rows!) serverById.set(row.id as string, row)
+
     const localLists = await localDB.lists.toArray()
+    const localIds = new Set(localLists.map(l => l.id))
 
     // Drop lists the server no longer reports, plus any orphan items they had.
     for (const local of localLists) {
-      if (!serverIds.has(local.id)) {
+      if (!serverById.has(local.id)) {
         await localDB.lists.delete(local.id)
         const orphanIds = (await localDB.items.where('list_id').equals(local.id).toArray()).map(i => i.id)
         if (orphanIds.length > 0) await localDB.items.bulkDelete(orphanIds)
       }
     }
 
+    // Refresh existing rows with server values, but do NOT insert new ones —
+    // see the comment above. Discovering a list locally is the user's job
+    // (open it once online → ItemList mount writes the row).
     for (const row of rows!) {
-      await localDB.lists.put(row as unknown as LocalList)
+      if (localIds.has(row.id as string)) {
+        await localDB.lists.put(row as unknown as LocalList)
+      }
     }
   })
 }

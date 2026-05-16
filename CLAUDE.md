@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Active plan
 
-- _None._ Last completed plan: **Offline UX hardening (PR5)** — 2026-05-16 — SW per-URL navigation cache, `/lists` Dexie-backed via `ListsView`, `+ New list` and `OfflineBadge` gated on `useSyncState`. Full plan archived in `PLAN.md`.
+- _None._ Last completed plan: **Offline UX hardening (PR5)** — 2026-05-16 — SW per-URL navigation cache, `/lists` Dexie-backed via `ListsView`, `+ New list` and `OfflineBadge` gated on `useSyncState`. Follow-up fix (same day) addresses: (a) RSC fetches now also seed the HTML cache so Link-clicked list pages survive offline; (b) `reconcileLists` no longer inserts unknown server rows — Dexie's `lists` table only tracks lists actually opened on this device, so the cached set is meaningful; (c) cached lists now show a positive green-dot indicator and force hard navigation when offline. Full plan archived in `PLAN.md`.
 - **Offline-first list/items with IndexedDB cache + outbox sync** — completed PR1–PR4 (2026-05-15 → 2026-05-16). Local Dexie store backs the UI; Realtime + event-driven reconciliation keeps it fresh; mutations queue through an outbox while offline. See git history for PR-level detail.
 
 ## Project
