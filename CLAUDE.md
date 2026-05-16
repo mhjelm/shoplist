@@ -5,13 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Pending manual tasks
 
 - [ ] **Restrict signup to invited users only** — In Supabase dashboard: Authentication → Settings → disable "Enable email signup". Then add family members via Authentication → Users → "Invite user". Do this before sharing the app URL publicly.
+- [ ] **Migration naming conflict** — Two migrations share the `0014_` prefix: `0014_fix_bump_item_history_conflict.sql` (trigger fix) and `0014_theme_shoplist.sql` (Shoplist theme). Both have been applied manually. The next migration must use `0015_` to avoid confusion.
 
 ## Active plan
 
-- _None._ Last completed plan: **Shoplist theme** — 2026-05-17. New third theme using the app-icon palette (pink/teal/orange/yellow/blue). Migration 0014 expands the `theme` CHECK to include `shoplist`; `.shoplist` class on `<html>` drives a gradient body background and per-item pastel tints picked deterministically from `item.id` via `data-sl-color`; marking an item shopped fires an 8-particle radial firework (Web Animations API, portal'd like the existing ghost) — gated to this theme. Previously completed: **Smarter Add-item input** — 2026-05-16. Hybrid parser: plain single name → instant local insert (unchanged); multi-segment with no digits → deterministic newline/comma split → `addItems()`; anything with a digit → new `extractAddItems()` Gemini action returning `{name, quantity, measurement, category}`. `addItems()` gains optional `quantity` per entry. Add input becomes an auto-growing textarea. Previously: **High-contrast accessibility mode** — 2026-05-16. Adds a `high_contrast` boolean preference (migration 0013), `hc` class on `<html>`, global CSS overrides in `globals.css`, and a toggle in Settings. Previously: **UI polish: list nav loading + shop ghost animation** — 2026-05-16. Adds `loading.tsx` for `/lists/[id]` (Suspense "Laddar…" spinner) and a ghost-fade animation when an item is marked shopped (faded duplicate row drifts down ~36px and fades, via portal + `@keyframes shop-ghost`). Touches `ItemList.tsx` (state, handleToggle, SortableRow onToggle prop) and `globals.css`.
-- Previously completed: **Sharing moves into list edit mode, with member history** — 2026-05-16. Drops `lists.is_shared`; sharing is derived from `list_members` membership. New inline `ShareSection` inside edit mode shows current members (with remove ×), invite form, and quick-pick chips for previously-invited emails.
-- Previously completed: **Offline UX hardening (PR5)** — 2026-05-16 — SW per-URL navigation cache, `/lists` Dexie-backed via `ListsView`, `+ New list` and `OfflineBadge` gated on `useSyncState`. Follow-up fix (same day): RSC fetches seed the HTML cache so Link-clicked list pages survive offline; `reconcileLists` no longer inserts unknown server rows; cached lists show a positive green-dot indicator (offline only) and force hard navigation when offline.
-- **Offline-first list/items with IndexedDB cache + outbox sync** — completed PR1–PR4 (2026-05-15 → 2026-05-16). Local Dexie store backs the UI; Realtime + event-driven reconciliation keeps it fresh; mutations queue through an outbox while offline. See git history for PR-level detail.
+- _None._ Last completed plan: **Shoplist theme** — 2026-05-17. Third theme option using the app-icon palette (pink/teal/orange/yellow/blue). Migration `0014_theme_shoplist.sql` widens the `theme` CHECK constraint. `.shoplist` class on `<html>` (set server-side in layout, instantly client-side in `SettingsForm`) drives: a fixed radial-gradient body background; transparent `min-h-screen` wrappers so the gradient shows through; frosted-glass `<header>` (`rgba(255,255,255,0.75)` + `backdrop-filter: blur`); per-item pastel tints via `data-sl-color="0..3"` on each `<li>`, index assigned by deterministic hash of `item.id`. Checking off an item fires a canvas-based particle burst: 52 physics particles (velocity, drag 0.966–0.980, gravity, fade, glow shadows, sparkle crosses) via `requestAnimationFrame` loop in `FireworkCanvas` — only active in Shoplist theme, `prefers-reduced-motion` safe.
 
 ## Project
 
@@ -98,9 +96,10 @@ Realtime subscribes unconditionally for every list — there is no `is_shared` g
 
 User-level UI preferences live in the `user_preferences` table (one row per user, lazily upserted). `src/lib/preferences.ts` exposes `getUserPreferences()` — wrapped in `React.cache` so multiple Server Components in the same request share one query, and returns `DEFAULT_PREFERENCES` for unauthenticated users or users without a row.
 
-Three preferences today:
-- `theme` (`light` | `dark`) — applied by adding `dark` to `<html>` in `src/app/layout.tsx`. Tailwind v4 uses class-based dark mode via `@custom-variant dark` in `globals.css`. Reading the theme server-side avoids any flash-of-wrong-theme on first paint.
-- `list_text_size` (`normal` | `large`) — read in `src/app/lists/[id]/page.tsx` and passed as `textSize` to `ItemList`, which scales the item rows only (the rest of the chrome stays at its normal size).
+Four preferences today:
+- `theme` (`'light'` | `'dark'` | `'shoplist'`) — applied by adding `dark` or `shoplist` to `<html>` in `src/app/layout.tsx`. `SettingsForm` also toggles these classes immediately on the client for instant feedback. The `shoplist` variant drives a gradient background, frosted headers, and per-item pastel tints (see CSS in `globals.css`). The `theme` value is also passed as a prop from `src/app/lists/[id]/page.tsx` → `ItemList` so the list page can gate the `FireworkCanvas` and per-item `data-sl-color` attributes.
+- `high_contrast` (`boolean`) — adds `hc` to `<html>`. CSS in `globals.css` overrides Tailwind gray tokens to push text and border contrast to the extreme.
+- `list_text_size` (`'normal'` | `'large'`) — read in `src/app/lists/[id]/page.tsx` and passed as `textSize` to `ItemList`, which scales the item rows only (the rest of the chrome stays at its normal size).
 - `category_order` (`text[]`) — the user's preferred order for the 11 grocery categories. Used to sort the to-shop section. Defaults to `DEFAULT_CATEGORY_ORDER` from `src/lib/categories.ts`.
 
 **Writes** go through `src/app/settings/actions.ts` and call `revalidatePath('/', 'layout')` so the next render reflects the new preference without a reload.
@@ -114,6 +113,14 @@ How items get categorised:
 2. **Gemini fallback**: if no cached category, fire `categorizeItem()` server action in the background after the optimistic insert; it calls Gemini and writes the result to both `items.category` and `user_item_history.category`. UI updates via the realtime echo or the awaited result.
 3. **Recipe import**: Gemini returns categories in the same call that extracts ingredients (no extra round-trip). These bypass the per-item categorize call.
 4. **Manual override**: the edit modal has a category dropdown; `setItemCategory()` writes both `items.category` and `user_item_history.category` so future adds inherit the user's choice.
+
+### Smart add-item input
+
+The add-item textarea (`ItemList.tsx`) auto-grows and supports three modes:
+
+1. **Single plain name** (no digits, no separators) → instant optimistic local insert, then background Gemini categorization.
+2. **Multi-segment, no digits** (newline or comma separators, no quantities) → deterministic split via `splitPlainItems()` → `addItems()`.
+3. **Anything with digits or ambiguous quantity** → `extractAddItems()` server action calls Gemini, which returns `{ name, quantity, measurement, category }` per item → `addItems()` with per-item quantities.
 
 ### Recipe / list import (`RecipeImportModal.tsx` + `extractRecipeItems` / `extractListItemsFromImage` actions)
 
@@ -188,13 +195,14 @@ A separate UI mode toggled from the page header that swaps the per-row pencil fo
 
 ## Data Model
 
-Five tables. Initial schema in `supabase/migrations/0001_init.sql`; subsequent migrations add columns and a preferences table:
+Six tables. Initial schema in `supabase/migrations/0001_init.sql`; subsequent migrations add columns and tables:
 
 - `lists` (id, name, owner_id, created_at) — `is_shared` was dropped in migration 0012; shared status is now derived from `list_members` having rows
 - `list_members` (list_id, user_id, added_at) — join table for sharing
-- `items` (id, list_id, added_by, name, is_checked, created_at, **picture_url**, **sort_order**, **quantity**, **category**, **measurement**)
-- `user_item_history` (user_id, name, last_used_at, use_count, **category**) — autocomplete source
-- `user_preferences` (user_id, theme, list_text_size, **category_order**, updated_at)
+- `items` (id, list_id, added_by, name, is_checked, created_at, picture_url, sort_order, quantity, category, measurement)
+- `user_item_history` (user_id, name, last_used_at, use_count, category) — autocomplete source
+- `user_preferences` (user_id, theme, list_text_size, category_order, high_contrast, updated_at) — `theme` is `'light' | 'dark' | 'shoplist'`
+- `pending_imports` (id, user_id, items jsonb, created_at) — transient store for Web Share Target payloads
 
 TypeScript mirrors of these are in `src/lib/types.ts`. Keep them in sync when the schema changes.
 
@@ -223,4 +231,4 @@ Realtime publication includes `items`, `lists`, and `list_members`. `items` uses
 
 - **`@/...` imports** resolve to `src/...` (Next.js default).
 - **Tailwind v4** — uses `@tailwindcss/postcss`; no `tailwind.config.js`.
-- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`).
+- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0015_`.
