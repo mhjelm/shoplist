@@ -574,7 +574,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
         )}
       </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext id="items-dnd" sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         {/* Items to shop, grouped by category */}
         {groupedToShop.length === 0 ? (
           <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">
