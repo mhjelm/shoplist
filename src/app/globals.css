@@ -48,6 +48,8 @@ body {
   --color-gray-400: oklch(100% 0 0);
   --color-gray-500: oklch(100% 0 0);
   --color-gray-600: oklch(100% 0 0);
+  /* Restore gray-200 to near-white (.hc overrides it to dark for light-mode borders) */
+  --color-gray-200: oklch(90% 0 0);
   /* Dark card/page backgrounds → pure black */
   --color-gray-900: oklch(0% 0 0);
   --color-gray-950: oklch(0% 0 0);
