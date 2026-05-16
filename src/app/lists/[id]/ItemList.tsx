@@ -275,7 +275,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
 
   function handleDeleteSuggestion(name: string) {
     setFiltered(f => f.filter(s => s !== name))
-    deleteHistoryItem(name)
+    if (!isOffline) deleteHistoryItem(name)
     inputRef.current?.focus()
   }
 
