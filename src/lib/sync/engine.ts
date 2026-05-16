@@ -13,6 +13,7 @@ type SyncState = {
   isOffline: boolean
   pendingCount: number
   recentConflicts: ConflictItem[]
+  lastSyncError: string | null
 }
 
 function initialOffline(): boolean {
@@ -20,7 +21,7 @@ function initialOffline(): boolean {
   return navigator.onLine === false
 }
 
-let syncState: SyncState = { isOffline: initialOffline(), pendingCount: 0, recentConflicts: [] }
+let syncState: SyncState = { isOffline: initialOffline(), pendingCount: 0, recentConflicts: [], lastSyncError: null }
 const listeners = new Set<(s: SyncState) => void>()
 
 function setSync(partial: Partial<SyncState>) {
@@ -161,7 +162,7 @@ export async function flushOutbox(): Promise<void> {
       .sortBy('seq')
 
     if (pending.length === 0) {
-      setSync({ pendingCount: 0 })
+      setSync({ pendingCount: 0, lastSyncError: null })
       markOnlineIfBrowserAgrees()
       return
     }
@@ -174,14 +175,23 @@ export async function flushOutbox(): Promise<void> {
         await dispatch(entry)
         await localDB.outbox.delete(entry.seq!)
         const remaining = await localDB.outbox.where('status').anyOf(['pending', 'failed']).count()
-        setSync({ pendingCount: remaining })
+        setSync({ pendingCount: remaining, lastSyncError: null })
         markOnlineIfBrowserAgrees()
       } catch (err) {
+        const errMsg = String(err)
+        console.error('[outbox] dispatch failed', {
+          type: entry.type,
+          seq: entry.seq,
+          attempts: entry.attempts + 1,
+          payload: entry.payload,
+          error: errMsg,
+        })
         await localDB.outbox.update(entry.seq!, {
           status: 'failed',
           attempts: entry.attempts + 1,
-          last_error: String(err),
+          last_error: errMsg,
         })
+        setSync({ lastSyncError: errMsg })
         markOffline()
         const delay = RETRY_DELAYS[Math.min(entry.attempts, RETRY_DELAYS.length - 1)]
         setTimeout(() => { isFlushing = false; flushOutbox() }, delay)
