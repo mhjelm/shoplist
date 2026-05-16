@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 const sync = vi.hoisted(() => ({ isOffline: false }))
+const router = vi.hoisted(() => ({ push: vi.fn() }))
 
 vi.mock('@/app/lists/actions', () => ({
   createList: vi.fn().mockResolvedValue({ list: { id: 'new', name: 'Ny', owner_id: 'me', created_at: '' } }),
+}))
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => router,
 }))
 
 vi.mock('@/lib/sync/engine', () => ({
@@ -18,6 +23,7 @@ const mockCreateList = vi.mocked(createList)
 beforeEach(() => {
   vi.clearAllMocks()
   sync.isOffline = false
+  mockCreateList.mockResolvedValue({ list: { id: 'new', name: 'Ny', owner_id: 'me', created_at: '' } })
 })
 
 describe('CreateListForm', () => {
@@ -57,6 +63,30 @@ describe('CreateListForm', () => {
     expect(submit).toBeDisabled()
     expect(submit).toHaveAttribute('title', 'Kräver anslutning')
     expect(screen.getByText('Kräver anslutning')).toBeInTheDocument()
+  })
+
+  it('online: successful create navigates to the new list', async () => {
+    render(<CreateListForm />)
+    fireEvent.click(screen.getByRole('button', { name: /\+ new list/i }))
+    fireEvent.change(screen.getByPlaceholderText(/list name/i), { target: { value: 'Ny' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(router.push).toHaveBeenCalledWith('/lists/new')
+    })
+  })
+
+  it('online: create errors are shown without navigating', async () => {
+    mockCreateList.mockResolvedValueOnce({ error: 'Nope' })
+    render(<CreateListForm />)
+    fireEvent.click(screen.getByRole('button', { name: /\+ new list/i }))
+    fireEvent.change(screen.getByPlaceholderText(/list name/i), { target: { value: 'Ny' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    expect(await screen.findByText('Nope')).toBeInTheDocument()
+    expect(router.push).not.toHaveBeenCalled()
   })
 
   it('offline: createList action is never invoked even if the form is somehow submitted', async () => {
