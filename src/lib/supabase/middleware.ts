@@ -27,12 +27,16 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthRoute = request.nextUrl.pathname.startsWith('/auth')
   const isRoot = request.nextUrl.pathname === '/'
+  // The recovery callback establishes a session before the user lands on
+  // /auth/update-password — let authed users through so they can finish setting
+  // a new password instead of being bounced to /lists.
+  const isPostRecoveryRoute = request.nextUrl.pathname === '/auth/update-password'
 
   if (!user && !isAuthRoute) {
     return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
-  if (user && isAuthRoute) {
+  if (user && isAuthRoute && !isPostRecoveryRoute) {
     return NextResponse.redirect(new URL('/lists', request.url))
   }
 
