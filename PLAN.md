@@ -1,92 +1,114 @@
-# Plan — Introduce "Store mode" on the item list view
+# Anti-fumble swipe-to-check in Store mode
 
 ## Context
 
-When the user is actually inside a grocery store using the app, the current list page has a lot of UI overhead that gets in the way: the page header (back arrow, list title, edit toggle, settings), the add-item textarea + Add button + icon row, the drag handles, and the per-row edit pencils. None of that is useful while shopping — the user just wants to read items and tap to mark them shopped.
+Store mode keeps the screen awake while shopping. The user found that putting the phone in/out of a pocket while store mode was active accidentally marked a bunch of items as shopped — pocket fabric produces stray taps on rows. The whole row currently has `onClick → handleToggle`, so any touch on a row checks it off.
 
-This plan adds a **Store mode** the user can toggle from the bottom of the list (next to the existing "Clear list" button). When on, the chrome collapses away and the items become a clean, full-width, larger-text list. The check-off interaction (including the existing firework/ghost animation) keeps working exactly as in normal mode. Edit and rearrange are unavailable while store mode is active.
+Goal: in store mode only, replace tap-to-check with **right-swipe-to-toggle**, so pocket fabric (which can't produce a clean horizontal swipe) won't trigger checks. The normal list page outside of store mode is unchanged — tap stays fast.
 
-Store mode is **client-only state** — it resets when the page is reloaded. No DB migration is needed.
+Decisions confirmed with user:
+- **Right-swipe in either direction-of-state**: same gesture toggles `is_checked` for both active and shopped rows. Lowest cognitive load; reversing an accidental swipe is also a swipe.
+- **Tap shows a brief hint overlay**: a tap (without a swipe) flashes "Svep för att bocka av" on the row for ~1 s, then fades. Makes the new mechanism discoverable on first use.
 
-## Behavior summary
+Non-goals:
+- No `Touch.radiusX/Y` filtering (unreliable across devices).
+- No proximity/ambient-light heuristics (Proximity API is dead; Ambient Light is gated).
+- No long-press alternative — committed to swipe.
+- No changes outside store mode.
 
-When `storeMode === true`:
-- The page `<header>` is hidden (back arrow, title, edit toggle, leave button).
-- The whole add-item section is hidden (textarea + Add + icon buttons + PictureInput).
-- `<main>`'s `max-w-lg` cap is dropped so the item rows span the full viewport width; horizontal padding shrinks.
-- Item rows render without the drag handle and without the right-side edit pencil.
-- Item name text is bumped to `text-lg` (overriding the `textSize` prop for the duration).
-- Category labels and the Shopped section remain visible.
-- The bottom toggle button stays visible so the user can exit store mode.
-- Tapping a row still calls `handleToggle` → `muUpdateItem({ is_checked: !... })` and triggers the ghost / shoplist firework just like normal mode.
-- `editMode` is force-cleared when entering store mode (defensive — header is hidden so the user couldn't toggle it back off).
+## Files to modify
 
-## Files to change
+- **`src/app/lists/[id]/ItemList.tsx`** — only file with code changes.
 
-1. **`src/app/lists/[id]/StoreModeContext.tsx`** (new) — mirror `EditModeContext.tsx` exactly:
-   - `[boolean, (next: boolean) => void]` tuple context
-   - `StoreModeProvider` component (one `useState`)
-   - `useStoreMode()` hook
+That's it. Wake-lock logic in `StoreModeContext.tsx` stays as-is.
 
-2. **`src/app/lists/[id]/page.tsx`** — wrap the existing `EditModeProvider` content (or be siblings) with `StoreModeProvider` so both `<header>` and `<main>` are inside it. No other changes here — the header stays defined in this server component; CSS will hide it.
+## Implementation
 
-3. **`src/app/lists/[id]/ItemList.tsx`** — the bulk of the work:
-   - `const [storeMode, setStoreMode] = useStoreMode()`
-   - `useEffect` that adds/removes `store-mode` class on `document.body` based on `storeMode`. Clean up on unmount.
-   - When entering store mode, also call `setEditMode(false)` (read both contexts).
-   - Wrap the add-item block (`ItemList.tsx:515–626`) in `{!storeMode && (...)}` so the textarea, Add button, icon row, suggestions, PictureInput, and `addError` all disappear.
-   - Pass `storeMode` as a prop down to `SortableRow` (and the plain `<li>` shopped-row branch at `ItemList.tsx:706–730`).
-   - In `SortableRow` (`ItemList.tsx:1044–1143`):
-     - Hide the drag-handle `<button>` (`:1097–1107`) when `storeMode`.
-     - Hide the right-side edit pencil button (`:1135–1141`) when `storeMode`. Don't render the delete button either — `editMode` is forced off so this branch is already inactive.
-     - Compute `itemTextClass` locally: `storeMode ? 'text-lg' : textSize === 'large' ? 'text-base' : 'text-sm'` (override the prop-derived value when storeMode is on). Same idea for `thumbSizeClass` — keep large when storeMode (e.g. `'w-16 h-16'`).
-     - Keep the row's `onClick` → `onToggle(rect)` path unchanged (the editMode branch is dead because editMode is forced off, but no need to specifically guard against it).
-   - At the bottom (`ItemList.tsx:735–761`), put the Store-mode toggle in the same centered flex row as the "Clear list" button:
-     ```jsx
-     <div className="flex justify-center items-center gap-4 pt-2">
-       {!isEmpty && (confirmingClear ? <Clear / Cancel> : <Clear list button>)}
-       <button
-         onClick={() => setStoreMode(!storeMode)}
-         className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-       >
-         {storeMode ? 'Sluta handla' : 'Handla'}
-       </button>
-     </div>
-     ```
-     Always visible (even when `isEmpty`), so the toggle is reachable to leave store mode.
+### 1. Add a `useStoreModeSwipe` hook in `ItemList.tsx`
 
-4. **`src/app/globals.css`** — append rules that hide chrome when `.store-mode` is on `<body>`:
-   ```css
-   /* Store mode: hide page chrome and let items span full width */
-   body.store-mode header { display: none; }
-   body.store-mode main {
-     max-width: none !important;
-     padding-left: 0.5rem;
-     padding-right: 0.5rem;
-   }
-   ```
-   These CSS rules let us hide the server-rendered `<header>` from a client-side state change without restructuring `page.tsx`. Matches the existing pattern of body/html-class-driven styling already used by the `.shoplist`, `.dark`, and `.hc` variants.
+Local hook (not exported, defined near the bottom alongside `GhostOverlay` / `FireworkCanvas`). Signature:
 
-## Existing patterns being reused
+```ts
+function useStoreModeSwipe(opts: {
+  enabled: boolean
+  onCommit: (rect: DOMRect) => void
+  onTap: () => void  // fires on a tap that didn't reach the swipe threshold
+}): {
+  bind: {
+    ref: React.RefObject<HTMLLIElement | null>
+    onPointerDown: (e: React.PointerEvent) => void
+    onPointerMove: (e: React.PointerEvent) => void
+    onPointerUp: (e: React.PointerEvent) => void
+    onPointerCancel: (e: React.PointerEvent) => void
+  }
+  dx: number          // current translateX (for inline style)
+  committed: boolean  // briefly true during the commit-snap animation
+}
+```
 
-- **`EditModeContext` (`src/app/lists/[id]/EditModeContext.tsx`)** — `StoreModeContext` is a structural copy: tuple context, `useState` provider, hook, plus the same `useRef` pattern in `ItemList` if needed for drag callbacks. Read both contexts in `ItemList` so the toggle can force-clear edit mode.
-- **`handleToggle` / `muUpdateItem` / `spawnGhost` / firework (`ItemList.tsx:415–425`)** — unchanged; this is the path that fires when a row is tapped to mark shopped, and we want store mode to use it exactly as is.
-- **Body/HTML class-driven CSS** — already how `.shoplist` and `.hc` themes hide/replace chrome (`globals.css:62–104`). Reuse the same mechanism for `.store-mode`.
-- **`textSize` prop wiring (`ItemList.tsx:114–115`)** — locally overridden inside `SortableRow` when `storeMode`, no plumbing changes needed.
+Implementation notes:
+- Use **Pointer Events** (`onPointerDown/Move/Up/Cancel`) rather than touch — single unified API, gives us pointerId so we can `setPointerCapture` and avoid losing tracking when the finger drifts off the row.
+- Track `startX`, `startY`, `startT`, and `dxRef` on a single mutable ref object — re-rendering on every move would tank perf. Read/write the inline transform via `ref.current.style.transform` directly inside `onPointerMove`. Update React state `dx` only at the very end (for snap-back animation via CSS transition) and during commit.
+- **Direction lock**: on the first move, if `|dy| > |dx|` and `|dy| > 6 px`, abort the gesture (treat as scroll). If `|dx| > |dy|` and `|dx| > 6 px`, lock to swipe and `setPointerCapture`. Until lock, do nothing.
+- **Direction**: only positive `dx` (right). Negative `dx` clamps to 0 (no left swipe response).
+- **Visual**: while swiping, set `transform: translateX(${dx}px)` and expose a CSS class on the row so a green check icon under the row becomes visible (reveal-from-behind feel). Use `ease-out` snap-back via a one-shot `transition: transform 180ms` toggled with a CSS class.
+- **Commit threshold**: `dx >= rect.width * 0.40` OR (`dx >= 60 && velocity >= 0.5 px/ms`). On commit:
+  1. Animate `dx → rect.width` over ~150 ms.
+  2. Call `onCommit(rect)` (which fires the existing `handleToggle` so ghost + firework still play).
+  3. Reset `dx` to 0 on the next frame (the row's `is_checked` flip will re-render it; the transform reset is just defensive).
+- **Tap detection**: on `pointerup`, if total `dx < 6 && dy < 6 && elapsed < 250 ms` and no direction lock occurred → call `onTap()`.
+- **Cancel cases**: `pointercancel`, or pointerup-before-lock with no tap match → snap dx back to 0.
+
+### 2. Wire the hook into `SortableRow`
+
+In `SortableRow` (line 1061+):
+- Add `storeMode` (already a prop) gating.
+- Replace the existing `onClick={editMode ? onToggleSelect : e => onToggle(...)}` so that in store mode, `onClick` is removed and replaced with the swipe hook's bindings + a tap callback that shows the hint.
+- Add local state `showHint: boolean` with a `setTimeout(() => setShowHint(false), 1000)` clear.
+- Render the hint as an absolutely-positioned overlay inside the `<li>` with `pointer-events: none`, classes for fade-in/out via `opacity` transition.
+- Render a check-reveal layer behind the row content: an absolutely-positioned `<div>` on the left side, full row height, background `#10B981` (emerald-500) or `#14B8A6` (shoplist teal), with a centered check SVG. It's hidden when `dx === 0`, revealed as the row slides right.
+- The row container needs `position: relative; overflow: hidden; touch-action: pan-y` so vertical scrolling still works while the swipe handler claims horizontal pans.
+
+Critical: when `storeMode` is true, the drag handle isn't rendered (line 1118 guard already handles this), and dnd-kit's `useSortable` listeners aren't attached to the row, so pointer events go straight to our handler. No coordination with dnd-kit needed.
+
+### 3. Wire the hook into the shopped-section `<li>` (line 720)
+
+The "Shopped" section in non-edit-mode renders raw `<li>` elements with an inline `onClick={e => handleToggle(item, ...)}` (line 723). This path is hit in store mode too (edit mode is force-off when store mode is on, per the existing `useEffect` at line 132).
+
+Extract that `<li>` into a small `ShoppedRow` component so it can host the swipe hook the same way `SortableRow` does. Pass `storeMode` and the same `onToggle` / `onTap` callbacks. The visual reveal can be the same emerald layer (it just means "toggle" — covers both check and uncheck).
+
+### 4. CSS
+
+Add a couple of small inline styles or Tailwind utilities in the components themselves — no `globals.css` change needed. Specifically:
+- `touch-action: pan-y` on the row in store mode (so vertical scroll still works).
+- The reveal layer is absolute-positioned within the row's `position: relative; overflow: hidden`.
+
+### 5. Don't touch outside store mode
+
+Every change above is guarded by `storeMode`. When `storeMode` is false:
+- Row keeps its existing `onClick` toggle.
+- No pointer-event handlers attached (or they early-return).
+- No `touch-action` override (drag handle's `touch-none` continues to work).
+
+## Existing code to reuse
+
+- `handleToggle(item, sourceRect)` (ItemList.tsx:426) — already produces the ghost animation, fireworks (when theme=shoplist), and calls `muUpdateItem`. The swipe `onCommit` calls this verbatim, passing the row's `getBoundingClientRect()`.
+- `useStoreMode()` (StoreModeContext.tsx:59) — already consumed by `ItemList`, passed to `SortableRow` as a prop. Same wiring for the new `ShoppedRow`.
 
 ## Verification
 
-1. `npm run dev`, open a list with several items in normal mode → confirm header, add-item area, drag handles, edit pencils all visible and behave as before.
-2. Tap **Handla** at the bottom:
-   - Header disappears.
-   - Add-item area disappears.
-   - Items stretch full viewport width, item names are visibly larger.
-   - Drag handles and edit pencils gone from each row.
-   - Category labels and shopped section still rendered.
-   - The toggle now reads **Sluta handla**.
-3. Tap an unshopped row in store mode → it animates shopped (ghost flies to the shopped section; on the `shoplist` theme the firework still fires).
-4. Tap a shopped row → moves back to unshopped section.
-5. Tap **Sluta handla** → full chrome returns; previously-edited-mode state is off (defensive force-clear).
-6. Reload the page while in store mode → store mode is off (client-only, expected).
-7. Toggle edit mode in normal mode, then enter store mode → edit affordances vanish; on exit, edit mode stays off (because we cleared it on entry).
-8. `npm run lint` clean; `npm test` still green (no test changes expected — store mode logic isn't covered by the existing test files).
+Manual, on a real phone (Android Chrome is the primary target since iOS PWA install is limited):
+
+1. **Tap fallback** — in store mode, tap a row. Item does NOT toggle. Hint "Svep för att bocka av" flashes for ~1 s.
+2. **Swipe commits** — slowly drag a row right past ~40%. Row slides, reveal layer appears. Release: item gets checked off; ghost + firework animation plays.
+3. **Swipe cancels** — drag a row 10–20% right and release. Row snaps back. Nothing toggles.
+4. **Scroll preserved** — vertical drag still scrolls the list, no row movement.
+5. **Pocket test** — put the phone in a pocket with store mode active. Walk around. No items should get checked. (The real acceptance test.)
+6. **Unshopping** — swipe a row in the "Shopped" section. It moves back to active.
+7. **Outside store mode** — toggle store mode off. Tap-to-check on rows works as before. Drag handle still reorders. Edit mode still merges.
+
+Smoke checks:
+- `npm run lint`
+- `npm test` (existing tests for `MeasurementBadge`, `EditModeContext`, `RecipeImportModal` don't exercise the swipe path, so they should pass unchanged).
+
+No new unit tests — the swipe behavior is gesture-driven and hard to assert in jsdom; manual verification on device is the source of truth, consistent with how `ItemList` is currently tested (CLAUDE.md "What is deliberately not tested" section).

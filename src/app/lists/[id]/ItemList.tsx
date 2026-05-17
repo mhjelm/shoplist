@@ -718,26 +718,16 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
             ) : (
               <ul className="space-y-1">
                 {shopped.map(item => (
-                  <li
+                  <ShoppedRow
                     key={item.id}
-                    onClick={e => handleToggle(item, (e.currentTarget as HTMLElement).getBoundingClientRect())}
-                    className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800/50 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors select-none cursor-pointer"
-                    data-sl-color={theme === 'shoplist' ? slColorFor(item.id) : undefined}
-                    data-muted="true"
-                  >
-                    {item.picture_url && (
-                      <img
-                        src={item.picture_url}
-                        alt=""
-                        onError={e => { e.currentTarget.style.display = 'none' }}
-                        className={`${storeMode ? 'w-16 h-16' : thumbSizeClass} rounded object-cover flex-shrink-0 opacity-60`}
-                      />
-                    )}
-                    <span className={`${storeMode ? 'text-lg' : itemTextClass} flex-1 min-w-0 truncate text-gray-400 dark:text-gray-500`}>
-                      {item.name}
-                    </span>
-                    <MeasurementBadge item={item} muted onCombine={combined => handleMeasurementCombine(item, combined)} />
-                  </li>
+                    item={item}
+                    storeMode={storeMode}
+                    theme={theme}
+                    itemTextClass={itemTextClass}
+                    thumbSizeClass={thumbSizeClass}
+                    onToggle={rect => handleToggle(item, rect)}
+                    onCombine={combined => handleMeasurementCombine(item, combined)}
+                  />
                 ))}
               </ul>
             )}
@@ -904,6 +894,82 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
       {theme === 'shoplist' && <FireworkCanvas ref={fwCanvasRef} />}
     </div>
   )
+}
+
+function useStoreModeSwipe({
+  enabled,
+  transformRef,
+  onCommit,
+  onTap,
+}: {
+  enabled: boolean
+  transformRef: React.RefObject<HTMLDivElement | null>
+  onCommit: () => void
+  onTap: () => void
+}): React.HTMLAttributes<HTMLLIElement> {
+  const g = useRef({ active: false, locked: false, aborted: false, startX: 0, startY: 0, startT: 0, pid: -1, dx: 0 })
+
+  if (!enabled) return {}
+
+  function slide(dx: number) {
+    const el = transformRef.current
+    if (el) el.style.transform = dx > 0 ? `translateX(${dx}px)` : ''
+  }
+
+  function snapBack() {
+    const el = transformRef.current
+    if (!el) return
+    el.style.transition = 'transform 180ms ease-out'
+    el.style.transform = 'translateX(0)'
+    setTimeout(() => { const e = transformRef.current; if (e) { e.style.transition = ''; e.style.transform = '' } }, 200)
+  }
+
+  return {
+    onPointerDown(e: React.PointerEvent<HTMLLIElement>) {
+      if (e.pointerType === 'mouse') return
+      const s = g.current
+      s.active = true; s.locked = false; s.aborted = false
+      s.startX = e.clientX; s.startY = e.clientY; s.startT = e.timeStamp; s.pid = e.pointerId; s.dx = 0
+    },
+    onPointerMove(e: React.PointerEvent<HTMLLIElement>) {
+      const s = g.current
+      if (!s.active || s.aborted || e.pointerId !== s.pid) return
+      const adx = Math.abs(e.clientX - s.startX)
+      const ady = Math.abs(e.clientY - s.startY)
+      if (!s.locked) {
+        if (ady > 6 && ady > adx) { s.aborted = true; return }
+        if (adx > 6 && adx > ady) { s.locked = true; try { e.currentTarget.setPointerCapture(e.pointerId) } catch {} }
+        else return
+      }
+      s.dx = Math.max(0, e.clientX - s.startX)
+      slide(s.dx)
+    },
+    onPointerUp(e: React.PointerEvent<HTMLLIElement>) {
+      const s = g.current
+      if (!s.active || e.pointerId !== s.pid) return
+      s.active = false
+      const adx = Math.abs(e.clientX - s.startX)
+      const ady = Math.abs(e.clientY - s.startY)
+      const elapsed = e.timeStamp - s.startT
+      if (!s.locked && !s.aborted && adx < 6 && ady < 6 && elapsed < 250) { onTap(); return }
+      if (!s.locked || s.aborted) { snapBack(); return }
+      const w = transformRef.current?.getBoundingClientRect().width ?? 300
+      const velocity = elapsed > 0 ? s.dx / elapsed : 0
+      if (s.dx >= w * 0.4 || (s.dx >= 60 && velocity >= 0.5)) {
+        const el = transformRef.current
+        if (el) { el.style.transition = 'transform 120ms ease-out'; el.style.transform = `translateX(${w}px)` }
+        setTimeout(() => { slide(0); const e2 = transformRef.current; if (e2) e2.style.transition = ''; onCommit() }, 130)
+      } else {
+        snapBack()
+      }
+    },
+    onPointerCancel(e: React.PointerEvent<HTMLLIElement>) {
+      const s = g.current
+      if (!s.active || e.pointerId !== s.pid) return
+      s.active = false
+      snapBack()
+    },
+  }
 }
 
 function GhostOverlay({ ghost, onDone }: { ghost: GhostItem; onDone: () => void }) {
@@ -1076,6 +1142,22 @@ export function SortableRow({
   onToggleSelect?: () => void
   slColor?: 0 | 1 | 2 | 3
 }) {
+  const [showHint, setShowHint] = useState(false)
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  useEffect(() => () => { if (hintTimerRef.current) clearTimeout(hintTimerRef.current) }, [])
+
+  const swipeHandlers = useStoreModeSwipe({
+    enabled: !!storeMode,
+    transformRef: contentRef,
+    onCommit: () => { const rect = contentRef.current?.getBoundingClientRect(); if (rect) onToggle(rect) },
+    onTap: () => {
+      setShowHint(true)
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
+      hintTimerRef.current = setTimeout(() => setShowHint(false), 1000)
+    },
+  })
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
   const style = {
     transform: editMode ? undefined : CSS.Transform.toString(transform),
@@ -1106,6 +1188,48 @@ export function SortableRow({
   const rowItemTextClass = storeMode ? 'text-lg' : itemTextClass
   const rowThumbSizeClass = storeMode ? 'w-16 h-16' : thumbSizeClass
 
+  if (storeMode) {
+    return (
+      <li
+        ref={setNodeRef}
+        style={{ ...style, touchAction: 'pan-y' }}
+        className={`${bgClass} rounded-xl border overflow-hidden relative select-none`}
+        data-sl-color={slColor}
+        data-muted={muted ? 'true' : undefined}
+        {...swipeHandlers}
+      >
+        {/* Green reveal layer, exposed as the content slides right */}
+        <div className="absolute inset-0 flex items-center pl-5 bg-emerald-500" aria-hidden="true">
+          <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+          </svg>
+        </div>
+        {/* Content wrapper — slides right to reveal the green layer behind it */}
+        <div
+          ref={contentRef}
+          className="relative flex items-center gap-3 px-4 py-3 w-full"
+          style={{ background: 'inherit' }}
+        >
+          {item.picture_url && (
+            <img
+              src={item.picture_url}
+              alt=""
+              onError={e => { e.currentTarget.style.display = 'none' }}
+              className={`${rowThumbSizeClass} rounded object-cover flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
+            />
+          )}
+          <span className={`${rowItemTextClass} flex-1 min-w-0 truncate ${nameClass}`}>{item.name}</span>
+          <MeasurementBadge item={item} muted={muted} onCombine={onCombine} />
+          {showHint && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30 rounded-xl">
+              <span className="text-white text-sm font-medium">Svep för att bocka av</span>
+            </div>
+          )}
+        </div>
+      </li>
+    )
+  }
+
   return (
     <li
       ref={setNodeRef}
@@ -1115,19 +1239,17 @@ export function SortableRow({
       data-sl-color={slColor}
       data-muted={muted ? 'true' : undefined}
     >
-      {!storeMode && (
-        <button
-          {...attributes}
-          {...listeners}
-          onClick={e => e.stopPropagation()}
-          aria-label={editMode ? 'Drag to merge' : 'Reorder item'}
-          className="touch-none cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 -ml-1 px-1 py-1"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
-          </svg>
-        </button>
-      )}
+      <button
+        {...attributes}
+        {...listeners}
+        onClick={e => e.stopPropagation()}
+        aria-label={editMode ? 'Drag to merge' : 'Reorder item'}
+        className="touch-none cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 -ml-1 px-1 py-1"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+        </svg>
+      </button>
       {item.picture_url && (
         <img
           src={item.picture_url}
@@ -1141,7 +1263,7 @@ export function SortableRow({
         {item.name}
       </span>
       <MeasurementBadge item={item} muted={muted} onCombine={onCombine} />
-      {!storeMode && (editMode ? (
+      {editMode ? (
         <button
           onClick={e => { e.stopPropagation(); onDelete?.() }}
           className="text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 transition-colors"
@@ -1161,7 +1283,96 @@ export function SortableRow({
             <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
           </svg>
         </button>
-      ))}
+      )}
+    </li>
+  )
+}
+
+function ShoppedRow({
+  item, storeMode, theme, itemTextClass, thumbSizeClass, onToggle, onCombine,
+}: {
+  item: Item
+  storeMode: boolean
+  theme: Theme
+  itemTextClass: string
+  thumbSizeClass: string
+  onToggle: (rect: DOMRect) => void
+  onCombine: (combined: string) => void
+}) {
+  const [showHint, setShowHint] = useState(false)
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const liRef = useRef<HTMLLIElement>(null)
+  useEffect(() => () => { if (hintTimerRef.current) clearTimeout(hintTimerRef.current) }, [])
+
+  const swipeHandlers = useStoreModeSwipe({
+    enabled: storeMode,
+    transformRef: contentRef,
+    onCommit: () => {
+      const rect = contentRef.current?.getBoundingClientRect() ?? liRef.current?.getBoundingClientRect() ?? new DOMRect()
+      onToggle(rect)
+    },
+    onTap: () => {
+      setShowHint(true)
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
+      hintTimerRef.current = setTimeout(() => setShowHint(false), 1000)
+    },
+  })
+
+  const slColor = theme === 'shoplist' ? slColorFor(item.id) : undefined
+  const thumbClass = storeMode ? 'w-16 h-16' : thumbSizeClass
+  const textClass = storeMode ? 'text-lg' : itemTextClass
+
+  if (storeMode) {
+    return (
+      <li
+        ref={liRef}
+        className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800/50 overflow-hidden relative select-none"
+        style={{ touchAction: 'pan-y' }}
+        data-sl-color={slColor}
+        data-muted="true"
+        {...swipeHandlers}
+      >
+        <div className="absolute inset-0 flex items-center pl-5 bg-emerald-500" aria-hidden="true">
+          <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+          </svg>
+        </div>
+        <div
+          ref={contentRef}
+          className="relative flex items-center gap-3 px-4 py-3 w-full"
+          style={{ background: 'inherit' }}
+        >
+          {item.picture_url && (
+            <img src={item.picture_url} alt="" onError={e => { e.currentTarget.style.display = 'none' }}
+              className={`${thumbClass} rounded object-cover flex-shrink-0 opacity-60`} />
+          )}
+          <span className={`${textClass} flex-1 min-w-0 truncate text-gray-400 dark:text-gray-500`}>{item.name}</span>
+          <MeasurementBadge item={item} muted onCombine={onCombine} />
+          {showHint && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30 rounded-xl">
+              <span className="text-white text-sm font-medium">Svep för att bocka av</span>
+            </div>
+          )}
+        </div>
+      </li>
+    )
+  }
+
+  return (
+    <li
+      ref={liRef}
+      onClick={e => onToggle((e.currentTarget as HTMLElement).getBoundingClientRect())}
+      className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800/50 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors select-none cursor-pointer"
+      data-sl-color={slColor}
+      data-muted="true"
+    >
+      {item.picture_url && (
+        <img src={item.picture_url} alt="" onError={e => { e.currentTarget.style.display = 'none' }}
+          className={`${thumbClass} rounded object-cover flex-shrink-0 opacity-60`} />
+      )}
+      <span className={`${textClass} flex-1 min-w-0 truncate text-gray-400 dark:text-gray-500`}>{item.name}</span>
+      <MeasurementBadge item={item} muted onCombine={onCombine} />
     </li>
   )
 }

@@ -120,11 +120,11 @@ describe('SortableRow — store mode', () => {
     expect(screen.getByText('Mjölk')).not.toHaveClass('text-sm')
   })
 
-  it('clicking the row still calls onToggle', () => {
+  it('does not call onToggle on plain click (swipe-to-check replaces tap)', () => {
     const onToggle = vi.fn()
     render(<ul><SortableRow {...defaultProps} storeMode onToggle={onToggle} /></ul>)
     fireEvent.click(screen.getByRole('listitem'))
-    expect(onToggle).toHaveBeenCalledOnce()
+    expect(onToggle).not.toHaveBeenCalled()
   })
 
   it('renders the item name', () => {
