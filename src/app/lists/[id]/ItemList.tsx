@@ -14,6 +14,7 @@ import { splitPlainItems } from '@/lib/parseAddInput'
 import { muAddItem, muUpdateItem, muSetCategory, muDeleteItem, muBulkDelete, muReorderItem, muMergeItems } from '@/lib/sync/mutations'
 import { useSyncState, setActiveList } from '@/lib/sync/engine'
 import { useEditMode } from './EditModeContext'
+import { useStoreMode } from './StoreModeContext'
 import { MeasurementBadge } from './MeasurementBadge'
 import PictureInput from './PictureInput'
 import RecipeImportModal from './RecipeImportModal'
@@ -129,8 +130,19 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
   const [ghosts, setGhosts] = useState<GhostItem[]>([])
   const fwCanvasRef = useRef<{ explode: (x: number, y: number) => void } | null>(null)
   const [confirmingClear, setConfirmingClear] = useState(false)
-  const [editMode] = useEditMode()
+  const [editMode, setEditMode] = useEditMode()
+  const [storeMode, setStoreMode] = useStoreMode()
   const { isOffline } = useSyncState()
+
+  useEffect(() => {
+    if (storeMode) {
+      document.body.classList.add('store-mode')
+      setEditMode(false)
+    } else {
+      document.body.classList.remove('store-mode')
+    }
+    return () => { document.body.classList.remove('store-mode') }
+  }, [storeMode, setEditMode])
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [addError, setAddError] = useState<string | null>(null)
 
@@ -513,7 +525,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
   return (
     <div className="space-y-4">
       {/* Add item */}
-      <div className="flex flex-col gap-2">
+      {!storeMode && <div className="flex flex-col gap-2">
         <div className="relative">
           <div className="flex gap-2 items-stretch">
             <div className="relative flex-1 min-w-0">
@@ -623,7 +635,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
         {addError && (
           <p className="text-xs text-red-600 dark:text-red-400">{addError}</p>
         )}
-      </div>
+      </div>}
 
       <DndContext id="items-dnd" sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         {/* Items to shop, grouped by category */}
@@ -653,6 +665,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
                         onPicture={() => item.picture_url && setLightboxUrl(item.picture_url)}
                         onCombine={combined => handleMeasurementCombine(item, combined)}
                         editMode={editMode}
+                        storeMode={storeMode}
                         onDelete={() => handleDelete(item)}
                         selected={selectedIds.has(item.id)}
                         onToggleSelect={() => toggleSelect(item.id)}
@@ -693,6 +706,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
                       onPicture={() => item.picture_url && setLightboxUrl(item.picture_url)}
                       onCombine={combined => handleMeasurementCombine(item, combined)}
                       editMode={editMode}
+                      storeMode={storeMode}
                       onDelete={() => handleDelete(item)}
                       muted
                       selected={selectedIds.has(item.id)}
@@ -717,10 +731,10 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
                         src={item.picture_url}
                         alt=""
                         onError={e => { e.currentTarget.style.display = 'none' }}
-                        className={`${thumbSizeClass} rounded object-cover flex-shrink-0 opacity-60`}
+                        className={`${storeMode ? 'w-16 h-16' : thumbSizeClass} rounded object-cover flex-shrink-0 opacity-60`}
                       />
                     )}
-                    <span className={`${itemTextClass} flex-1 min-w-0 truncate text-gray-400 dark:text-gray-500`}>
+                    <span className={`${storeMode ? 'text-lg' : itemTextClass} flex-1 min-w-0 truncate text-gray-400 dark:text-gray-500`}>
                       {item.name}
                     </span>
                     <MeasurementBadge item={item} muted onCombine={combined => handleMeasurementCombine(item, combined)} />
@@ -732,33 +746,37 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
         )}
       </DndContext>
 
-      {!isEmpty && (
-        <div className="flex justify-center pt-2">
-          {confirmingClear ? (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={async () => { await handleClearAll(); setConfirmingClear(false) }}
-                className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium"
-              >
-                Clear
-              </button>
-              <button
-                onClick={() => setConfirmingClear(false)}
-                className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
+      <div className="flex justify-center items-center gap-4 pt-2">
+        {!isEmpty && (confirmingClear ? (
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => setConfirmingClear(true)}
-              className="text-xs text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors"
+              onClick={async () => { await handleClearAll(); setConfirmingClear(false) }}
+              className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium"
             >
-              Clear list
+              Clear
             </button>
-          )}
-        </div>
-      )}
+            <button
+              onClick={() => setConfirmingClear(false)}
+              className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmingClear(true)}
+            className="text-xs text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors"
+          >
+            Clear list
+          </button>
+        ))}
+        <button
+          onClick={() => setStoreMode(!storeMode)}
+          className={`text-xs transition-colors ${storeMode ? 'text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'}`}
+        >
+          {storeMode ? 'Sluta handla' : 'Handla'}
+        </button>
+      </div>
 
       {editMode && selectedIds.size > 0 && (
         <div
@@ -1041,8 +1059,8 @@ const FireworkCanvas = forwardRef<{ explode: (x: number, y: number) => void }, o
   }
 )
 
-function SortableRow({
-  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onPicture, onCombine, editMode, onDelete, muted, selected, onToggleSelect, slColor,
+export function SortableRow({
+  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onPicture, onCombine, editMode, storeMode, onDelete, muted, selected, onToggleSelect, slColor,
 }: {
   item: Item
   itemTextClass: string
@@ -1052,6 +1070,7 @@ function SortableRow({
   onPicture: () => void
   onCombine: (combined: string) => void
   editMode?: boolean
+  storeMode?: boolean
   onDelete?: () => void
   muted?: boolean
   selected?: boolean
@@ -1085,6 +1104,9 @@ function SortableRow({
       ? 'text-blue-800 dark:text-blue-100 font-medium'
       : muted ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'
 
+  const rowItemTextClass = storeMode ? 'text-lg' : itemTextClass
+  const rowThumbSizeClass = storeMode ? 'w-16 h-16' : thumbSizeClass
+
   return (
     <li
       ref={setNodeRef}
@@ -1094,31 +1116,33 @@ function SortableRow({
       data-sl-color={slColor}
       data-muted={muted ? 'true' : undefined}
     >
-      <button
-        {...attributes}
-        {...listeners}
-        onClick={e => e.stopPropagation()}
-        aria-label={editMode ? 'Drag to merge' : 'Reorder item'}
-        className="touch-none cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 -ml-1 px-1 py-1"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
-        </svg>
-      </button>
+      {!storeMode && (
+        <button
+          {...attributes}
+          {...listeners}
+          onClick={e => e.stopPropagation()}
+          aria-label={editMode ? 'Drag to merge' : 'Reorder item'}
+          className="touch-none cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 -ml-1 px-1 py-1"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+          </svg>
+        </button>
+      )}
       {item.picture_url && (
         <img
           src={item.picture_url}
           alt=""
           onClick={e => { e.stopPropagation(); onPicture() }}
           onError={e => { e.currentTarget.style.display = 'none' }}
-          className={`${thumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
+          className={`${rowThumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
         />
       )}
-      <span className={`${itemTextClass} flex-1 min-w-0 truncate ${nameClass}`}>
+      <span className={`${rowItemTextClass} flex-1 min-w-0 truncate ${nameClass}`}>
         {item.name}
       </span>
       <MeasurementBadge item={item} muted={muted} onCombine={onCombine} />
-      {editMode ? (
+      {!storeMode && (editMode ? (
         <button
           onClick={e => { e.stopPropagation(); onDelete?.() }}
           className="text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 transition-colors"
@@ -1138,7 +1162,7 @@ function SortableRow({
             <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
           </svg>
         </button>
-      )}
+      ))}
     </li>
   )
 }

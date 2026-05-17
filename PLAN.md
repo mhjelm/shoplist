@@ -1,132 +1,92 @@
-# Smarter Add-item input
+# Plan — Introduce "Store mode" on the item list view
 
 ## Context
 
-Today the add-item field accepts a single name and inserts one item with `quantity: 1`. Users often want to paste several items at once — a screenshot's worth of ingredients, a comma-separated brainstorm — and they want quantities and free-form measurements lifted out of the typed text. Hand-rolling a parser is brittle (the unit space is huge: `dl`, `g`, `burkar`, `pkt`, `förp`, `påsar`, …), and we already have Gemini wired up for exactly this kind of free-text → structured-items extraction in `extractRecipeItems` / `extractListItemsFromImage`.
+When the user is actually inside a grocery store using the app, the current list page has a lot of UI overhead that gets in the way: the page header (back arrow, list title, edit toggle, settings), the add-item textarea + Add button + icon row, the drag handles, and the per-row edit pencils. None of that is useful while shopping — the user just wants to read items and tap to mark them shopped.
 
-This plan adds a smarter Add input that:
+This plan adds a **Store mode** the user can toggle from the bottom of the list (next to the existing "Clear list" button). When on, the chrome collapses away and the items become a clean, full-width, larger-text list. The check-off interaction (including the existing firework/ghost animation) keeps working exactly as in normal mode. Edit and rearrange are unavailable while store mode is active.
 
-- Falls through to the existing instant local-insert path for plain single names.
-- Splits cleanly when the input is obviously multi-segment plain names (no digits anywhere).
-- Hands anything ambiguous to Gemini, which returns `{ name, quantity, measurement, category }` per item.
+Store mode is **client-only state** — it resets when the page is reloaded. No DB migration is needed.
 
-Target behaviors:
+## Behavior summary
 
-- `Chicken bacon bbq wrap\nTwister fries large\nMozarella sticks\nChili mayonäsdip` → 4 items, no Gemini call.
-- `mjölk, banan, ägg` → 3 items, no Gemini call.
-- `2 mjölk, banan, pasta 500g` → 3 items via Gemini: `{name: "mjölk", quantity: 2}`, `{name: "banan"}`, `{name: "pasta", measurement: "500 g"}`.
-- `3 burkar krossade tomater` → 1 item via Gemini: `{name: "krossade tomater", quantity: 3, measurement: "3 burkar"}` (or `quantity: 3` with no measurement — the Gemini prompt decides; see prompt spec below).
+When `storeMode === true`:
+- The page `<header>` is hidden (back arrow, title, edit toggle, leave button).
+- The whole add-item section is hidden (textarea + Add + icon buttons + PictureInput).
+- `<main>`'s `max-w-lg` cap is dropped so the item rows span the full viewport width; horizontal padding shrinks.
+- Item rows render without the drag handle and without the right-side edit pencil.
+- Item name text is bumped to `text-lg` (overriding the `textSize` prop for the duration).
+- Category labels and the Shopped section remain visible.
+- The bottom toggle button stays visible so the user can exit store mode.
+- Tapping a row still calls `handleToggle` → `muUpdateItem({ is_checked: !... })` and triggers the ghost / shoplist firework just like normal mode.
+- `editMode` is force-cleared when entering store mode (defensive — header is hidden so the user couldn't toggle it back off).
 
-## Approach
+## Files to change
 
-### 1. Dispatch logic (in `ItemList.handleAdd`)
+1. **`src/app/lists/[id]/StoreModeContext.tsx`** (new) — mirror `EditModeContext.tsx` exactly:
+   - `[boolean, (next: boolean) => void]` tuple context
+   - `StoreModeProvider` component (one `useState`)
+   - `useStoreMode()` hook
 
-Decide the path from the raw input:
+2. **`src/app/lists/[id]/page.tsx`** — wrap the existing `EditModeProvider` content (or be siblings) with `StoreModeProvider` so both `<header>` and `<main>` are inside it. No other changes here — the header stays defined in this server component; CSS will hide it.
 
-```
-const trimmed = raw.trim()
-const hasSplit = /[,\n]/.test(trimmed)
-const hasDigit = /\d/.test(trimmed)
+3. **`src/app/lists/[id]/ItemList.tsx`** — the bulk of the work:
+   - `const [storeMode, setStoreMode] = useStoreMode()`
+   - `useEffect` that adds/removes `store-mode` class on `document.body` based on `storeMode`. Clean up on unmount.
+   - When entering store mode, also call `setEditMode(false)` (read both contexts).
+   - Wrap the add-item block (`ItemList.tsx:515–626`) in `{!storeMode && (...)}` so the textarea, Add button, icon row, suggestions, PictureInput, and `addError` all disappear.
+   - Pass `storeMode` as a prop down to `SortableRow` (and the plain `<li>` shopped-row branch at `ItemList.tsx:706–730`).
+   - In `SortableRow` (`ItemList.tsx:1044–1143`):
+     - Hide the drag-handle `<button>` (`:1097–1107`) when `storeMode`.
+     - Hide the right-side edit pencil button (`:1135–1141`) when `storeMode`. Don't render the delete button either — `editMode` is forced off so this branch is already inactive.
+     - Compute `itemTextClass` locally: `storeMode ? 'text-lg' : textSize === 'large' ? 'text-base' : 'text-sm'` (override the prop-derived value when storeMode is on). Same idea for `thumbSizeClass` — keep large when storeMode (e.g. `'w-16 h-16'`).
+     - Keep the row's `onClick` → `onToggle(rect)` path unchanged (the editMode branch is dead because editMode is forced off, but no need to specifically guard against it).
+   - At the bottom (`ItemList.tsx:735–761`), put the Store-mode toggle in the same centered flex row as the "Clear list" button:
+     ```jsx
+     <div className="flex justify-center items-center gap-4 pt-2">
+       {!isEmpty && (confirmingClear ? <Clear / Cancel> : <Clear list button>)}
+       <button
+         onClick={() => setStoreMode(!storeMode)}
+         className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+       >
+         {storeMode ? 'Sluta handla' : 'Handla'}
+       </button>
+     </div>
+     ```
+     Always visible (even when `isEmpty`), so the toggle is reachable to leave store mode.
 
-if (!hasSplit && !hasDigit)        → fast path: muAddItem (unchanged)
-else if (hasSplit && !hasDigit)    → deterministic split, then addItems()
-else                               → extractAddItems(trimmed) (Gemini), then addItems()
-```
+4. **`src/app/globals.css`** — append rules that hide chrome when `.store-mode` is on `<body>`:
+   ```css
+   /* Store mode: hide page chrome and let items span full width */
+   body.store-mode header { display: none; }
+   body.store-mode main {
+     max-width: none !important;
+     padding-left: 0.5rem;
+     padding-right: 0.5rem;
+   }
+   ```
+   These CSS rules let us hide the server-rendered `<header>` from a client-side state change without restructuring `page.tsx`. Matches the existing pattern of body/html-class-driven styling already used by the `.shoplist`, `.dark`, and `.hc` variants.
 
-### 2. Deterministic splitter — `src/lib/parseAddInput.ts` (small, no units, no regex over content)
+## Existing patterns being reused
 
-```ts
-export function splitPlainItems(raw: string): string[]
-```
-
-- If input contains `\n` → split on `\n`.
-- Else if input contains `,` → split on `,`.
-- Trim each, drop empties.
-
-That's the whole helper. No quantity/measurement/unit logic — it's only invoked when we've already proven no digits are present.
-
-### 3. New server action — `src/app/lists/[id]/actions.ts`
-
-```ts
-export async function extractAddItems(text: string):
-  Promise<{ items?: Array<{ name; quantity?: number; measurement?: string | null; category?: CategorySlug | null }>; error?: string }>
-```
-
-- Calls Gemini via the existing `callGemini` helper in `src/lib/gemini.ts` (text-only — no need for the vision REST shape).
-- Prompt is a new shopping-list-tuned variant of `extractRecipeItems`'s prompt:
-  - System: "Parse a user-typed shopping list. Each line or comma-separated segment is one item. Extract `name` (the grocery, in lowercase Swedish unless the user typed otherwise), an optional positive integer `quantity` (default 1) when the user clearly wrote a count like `2 mjölk` or `3 burkar tonfisk`, an optional `measurement` string preserved verbatim from the user's text (e.g. `500 g`, `1,5 dl`, `2 burkar`), and a `category` from the closed enum. Never invent quantities or measurements. Return JSON: `{items: [...]}`."
-  - Few-shot examples covering the four target behaviors above plus one negative case (`Chicken bacon bbq wrap` → no quantity, no measurement).
-  - `temperature: 0`.
-  - Same verbatim-measurement rule as recipe extract: don't paraphrase units.
-  - Category validated through `isValidCategorySlug` before being returned; bad values → `null`.
-- Quantity clamped to `Math.max(1, Math.floor(n))` server-side.
-
-### 4. Server action change — `addItems()` accepts `quantity`
-
-Extend the input shape:
-
-```ts
-addItems(listId, incoming: Array<{ name; category?; measurement?; quantity?: number }>)
-```
-
-In the existing by-lowercase collapse loop:
-
-- Replace `nakedCount` integer tracking with `qSum`. For each entry, `qSum += Math.max(1, Math.floor(quantity ?? 1))`.
-- Measurements list behaves as today — joined with ` + `.
-- Fresh-insert branch: `quantity: Math.max(1, qSum)`.
-- Active-match branch: `quantity: active.quantity + qSum`.
-- Shopped-revive branch: `quantity: shopped.quantity + qSum`.
-
-Existing callers (`RecipeImportModal`, `share/[importId]`, `confirmShareImport`) don't pass `quantity` → behavior unchanged for them.
-
-### 5. UI change — `src/app/lists/[id]/ItemList.tsx`
-
-- Replace the single-line `<input>` for adding items with an auto-growing `<textarea rows={1}>`, styled to match the current field. Auto-grow on input via `el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'`. Reset to `rows={1}` after submit.
-- Key handling: `Enter` submits; `Shift+Enter` inserts a newline. Mobile keyboards' enter behaves as submit.
-- `handleAdd()` becomes:
-  1. Decide path per § 1.
-  2. Fast path: existing `muAddItem` flow.
-  3. Deterministic split path: `splitPlainItems(raw).map(n => ({ name: n }))` → `addItems(listId, ...)` → push returned rows into Dexie via the same `onItemsAdded`/local-bulkPut pattern `RecipeImportModal` uses.
-  4. Gemini path: show a small inline "Tolkar…" spinner next to the field (same loading idiom used elsewhere), call `extractAddItems(raw)`, then `addItems(listId, items)` with returned shape. On error, surface the message and leave the text in the field so the user can retry/edit.
-- Suppress the autocomplete suggestions dropdown when the input contains `,`, `\n`, or any digit (none of those are name-like).
-- Keep the optional URL picture field; it's only meaningful for the single-name fast path. If the user has typed a picture URL alongside a multi-item paste, ignore it (or, alternative: attach the URL only to the first parsed item — flag this small UX decision during review).
-
-### 6. Tests
-
-**New** `src/lib/parseAddInput.test.ts`:
-
-- Newline split (the 4-line wrap block).
-- Comma split (`mjölk, banan, ägg`).
-- Newline takes precedence over comma when both present.
-- Empty segments dropped (trailing comma, blank lines).
-- Trim each segment.
-
-**Update** `src/lib/gemini.ts` if we factor a shared JSON-extraction helper; otherwise leave it alone and let `extractAddItems` follow the same shape as `extractRecipeItems`.
-
-**Skip** direct tests for `extractAddItems` itself — same precedent as `extractRecipeItems`, which is integration-only (requires a real Gemini key). Component testing of the new textarea path is also skippable (`ItemList` is explicitly "deliberately not tested" per CLAUDE.md). The unit tests on `splitPlainItems` plus existing `addItems` coverage carry the safety net.
-
-Existing tests must still pass: `src/lib/measurement.test.ts`, `tests/components/RecipeImportModal.test.tsx`, `tests/components/MeasurementBadge.test.tsx`, `tests/components/EditModeContext.test.tsx`.
-
-## Files
-
-**New**
-- `src/lib/parseAddInput.ts` — tiny `splitPlainItems` helper.
-- `src/lib/parseAddInput.test.ts`.
-
-**Modified**
-- `src/app/lists/[id]/actions.ts` — add `extractAddItems` server action; extend `addItems` with optional `quantity` per entry.
-- `src/app/lists/[id]/ItemList.tsx` — input → auto-growing textarea, Enter/Shift+Enter, new dispatch logic in `handleAdd`, suppress suggestions when input is non-name-like.
+- **`EditModeContext` (`src/app/lists/[id]/EditModeContext.tsx`)** — `StoreModeContext` is a structural copy: tuple context, `useState` provider, hook, plus the same `useRef` pattern in `ItemList` if needed for drag callbacks. Read both contexts in `ItemList` so the toggle can force-clear edit mode.
+- **`handleToggle` / `muUpdateItem` / `spawnGhost` / firework (`ItemList.tsx:415–425`)** — unchanged; this is the path that fires when a row is tapped to mark shopped, and we want store mode to use it exactly as is.
+- **Body/HTML class-driven CSS** — already how `.shoplist` and `.hc` themes hide/replace chrome (`globals.css:62–104`). Reuse the same mechanism for `.store-mode`.
+- **`textSize` prop wiring (`ItemList.tsx:114–115`)** — locally overridden inside `SortableRow` when `storeMode`, no plumbing changes needed.
 
 ## Verification
 
-1. `npm test` — new `parseAddInput.test.ts` passes; nothing else regresses.
-2. `npm run lint` clean.
-3. `npm run dev`, then in a list:
-   - Plain name + Enter → instant single insert. Toggle DevTools to offline first and confirm the fast path still works offline.
-   - `Chicken bacon bbq wrap\nTwister fries large\nMozarella sticks\nChili mayonäsdip` pasted → 4 rows, no Gemini latency observable.
-   - `mjölk, banan, ägg` → 3 rows, no Gemini latency.
-   - `2 mjölk, banan, pasta 500g` → 3 rows: mjölk has qty badge "2"; pasta has measurement "500 g".
-   - `3 burkar krossade tomater` → 1 row, quantity badge "3" (or measurement "3 burkar", depending on what the Gemini prompt settles on — check this matches your preference during review and refine the prompt if not).
-   - `5 dl mjölk` → 1 row, measurement "5 dl", qty 1.
-   - Shift+Enter inside the textarea adds a newline rather than submitting.
-4. Confirm `RecipeImportModal` import and `/share` import still work (regression check on the unchanged `addItems` callers).
+1. `npm run dev`, open a list with several items in normal mode → confirm header, add-item area, drag handles, edit pencils all visible and behave as before.
+2. Tap **Handla** at the bottom:
+   - Header disappears.
+   - Add-item area disappears.
+   - Items stretch full viewport width, item names are visibly larger.
+   - Drag handles and edit pencils gone from each row.
+   - Category labels and shopped section still rendered.
+   - The toggle now reads **Sluta handla**.
+3. Tap an unshopped row in store mode → it animates shopped (ghost flies to the shopped section; on the `shoplist` theme the firework still fires).
+4. Tap a shopped row → moves back to unshopped section.
+5. Tap **Sluta handla** → full chrome returns; previously-edited-mode state is off (defensive force-clear).
+6. Reload the page while in store mode → store mode is off (client-only, expected).
+7. Toggle edit mode in normal mode, then enter store mode → edit affordances vanish; on exit, edit mode stays off (because we cleared it on entry).
+8. `npm run lint` clean; `npm test` still green (no test changes expected — store mode logic isn't covered by the existing test files).

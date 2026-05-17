@@ -103,3 +103,11 @@ body {
 /* Shopped rows keep their tint but fade out */
 .shoplist [data-sl-color][data-muted="true"] { opacity: 0.5; }
 
+/* ── Store mode: collapse page chrome and stretch items full-width ─────────── */
+body.store-mode header { display: none; }
+body.store-mode main {
+  max-width: none !important;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
