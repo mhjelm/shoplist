@@ -71,6 +71,7 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
             onPaste={handlePaste}
             placeholder={uploading ? 'Uploading…' : placeholder ?? 'Paste image, paste URL, or pick a file…'}
             disabled={uploading}
+            autoComplete="off"
             className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 pr-8"
           />
           {value && !uploading && (
