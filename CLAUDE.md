@@ -4,8 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Pending manual tasks
 
-- [ ] **Restrict signup to invited users only** — In Supabase dashboard: Authentication → Settings → disable "Enable email signup". Then add family members via Authentication → Users → "Invite user". Do this before sharing the app URL publicly.
 - [ ] **Migration naming conflict** — Two migrations share the `0014_` prefix: `0014_fix_bump_item_history_conflict.sql` (trigger fix) and `0014_theme_shoplist.sql` (Shoplist theme). Both have been applied manually. The next migration must use `0015_` to avoid confusion.
+
+> Signup is now invitation-only (done 2026-05-17). See `docs/how-to-add-new-user.html` for the invite flow and how to re-enable public signup if ever needed.
 
 ## Active plan
 

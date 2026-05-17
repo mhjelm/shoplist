@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shoplist — How to add a new user</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      line-height: 1.6;
+      padding: 2rem;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #f8fafc;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      color: #64748b;
+      font-size: 0.95rem;
+      margin-bottom: 2.5rem;
+    }
+
+    h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 2.25rem 0 1rem;
+    }
+
+    h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin: 1.5rem 0 0.5rem;
+    }
+
+    p, li {
+      color: #cbd5e1;
+      margin-bottom: 0.5rem;
+    }
+
+    ol, ul {
+      padding-left: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    li {
+      margin-bottom: 0.35rem;
+    }
+
+    code {
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      background: #1e293b;
+      color: #f8fafc;
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+
+    .panel {
+      border: 1.5px solid #334155;
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      background: #1e293b;
+      margin-bottom: 1.5rem;
+    }
+
+    .panel.warn {
+      border-color: #b45309;
+      background: #2a1e0d;
+    }
+
+    .panel.warn h3 {
+      color: #fbbf24;
+      margin-top: 0;
+    }
+
+    .crumbs {
+      color: #f8fafc;
+      font-weight: 600;
+    }
+
+    .muted {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    a { color: #7dd3fc; }
+  </style>
+</head>
+<body>
+  <h1>How to add a new user</h1>
+  <p class="subtitle">Shoplist is invitation-only. Public signup is disabled in Supabase — only users you explicitly invite can create an account.</p>
+
+  <h2>Invite a family member</h2>
+
+  <div class="panel">
+    <ol>
+      <li>Open the <a href="https://supabase.com/dashboard" target="_blank" rel="noopener">Supabase dashboard</a> and pick the Shoplist project.</li>
+      <li>Go to <span class="crumbs">Authentication → Users</span>.</li>
+      <li>Click <span class="crumbs">Add user → Send invitation</span>.</li>
+      <li>Enter the person's email address and confirm.</li>
+      <li>They receive an email with a magic link. Clicking it lets them set a password and lands them in the app at <code>/lists</code>.</li>
+    </ol>
+    <p class="muted">The invited email becomes a regular <code>auth.users</code> row, so RLS, list sharing and <code>find_user_by_email</code> all work the same as for any other user.</p>
+  </div>
+
+  <h3>If the invite email never arrives</h3>
+  <ul>
+    <li>Check the spam folder.</li>
+    <li>In the dashboard, the user shows up in <span class="crumbs">Authentication → Users</span> with status <em>Invited</em>. You can resend the invite from the row's <code>⋯</code> menu.</li>
+    <li>Supabase's default invite template is in English. Customise it under <span class="crumbs">Authentication → Email Templates → Invite user</span> if you want Swedish copy.</li>
+  </ul>
+
+  <h2>Sharing a list with the invited user</h2>
+  <p>Once they've accepted the invite and logged in at least once, you can share a list with them from inside the app:</p>
+  <ol>
+    <li>Open the list → tap the pencil/edit button in the header to enter edit mode.</li>
+    <li>Scroll to the <em>Dela med</em> section and type their email (or pick from the chips of previously-invited emails).</li>
+    <li>Submit. They'll see the list under <em>Delade listor</em> on their <code>/lists</code> page.</li>
+  </ol>
+
+  <h2>How to re-enable public (self-)signup</h2>
+
+  <div class="panel warn">
+    <h3>⚠ Only do this if you genuinely want anyone on the internet to be able to register</h3>
+    <p>Shoplist has no signup gating in app code — authorization comes from Supabase + RLS. The moment self-signup is on, anyone who knows the app URL can create an account (they won't see anyone else's lists, but they will have a working empty account on your project, count against your Supabase quotas, and be able to invite themselves into the user table).</p>
+  </div>
+
+  <div class="panel">
+    <ol>
+      <li>Open the Supabase dashboard → <span class="crumbs">Authentication → Sign In / Providers</span> (older dashboards: <span class="crumbs">Authentication → Settings</span>).</li>
+      <li>Find the <strong>Email</strong> provider.</li>
+      <li>Turn <strong>on</strong> "Allow new users to sign up" (sometimes labelled <em>Enable email signup</em> / <em>Enable signups</em>).</li>
+      <li>Save.</li>
+    </ol>
+    <p>The <code>/auth/signup</code> page in the app already exists and will start working again immediately — no code changes or redeploy required.</p>
+  </div>
+
+  <h3>Optional hardening for public-signup mode</h3>
+  <ul>
+    <li>Enable <span class="crumbs">Confirm email</span> under the Email provider so new accounts must click a link before they can log in.</li>
+    <li>Turn on Supabase's <span class="crumbs">CAPTCHA protection</span> (hCaptcha or Turnstile) to slow bot signups.</li>
+    <li>Consider adding rate-limits under <span class="crumbs">Authentication → Rate Limits</span>.</li>
+  </ul>
+
+  <h2>How to revoke access</h2>
+  <ol>
+    <li>In <span class="crumbs">Authentication → Users</span>, find the user and use the row's <code>⋯</code> menu → <em>Delete user</em>. This cascades through RLS: their <code>list_members</code> rows disappear and any lists they owned are deleted along with their items.</li>
+    <li>Alternatively, to keep their account but kick them out of a single list, open the list in edit mode and remove them from the <em>Dela med</em> section.</li>
+  </ol>
+
+  <p class="muted" style="margin-top: 3rem;">Last updated 2026-05-17.</p>
+</body>
+</html>
