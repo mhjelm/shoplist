@@ -66,21 +66,17 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
         <div
           role="status"
           aria-live="polite"
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#2563eb]"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white"
         >
-          <svg
-            viewBox="0 0 512 512"
-            className="w-56 h-56 sm:w-72 sm:h-72 loading-cart"
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/icon-512.png"
+            alt=""
             aria-hidden
-          >
-            <g fill="none" stroke="#ffffff" strokeWidth={28} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M128 152 L168 152 L208 360 L408 360" />
-              <path d="M168 152 L432 152 L400 296 L208 296" />
-              <circle cx="232" cy="408" r="20" fill="#ffffff" stroke="none" />
-              <circle cx="376" cy="408" r="20" fill="#ffffff" stroke="none" />
-            </g>
-          </svg>
-          <span className="mt-4 text-white text-base font-medium tracking-wide">Laddar...</span>
+            className="w-64 h-64 sm:w-80 sm:h-80 loading-cart select-none"
+            draggable={false}
+          />
+          <span className="mt-2 text-[#EC4899] text-lg font-semibold tracking-wide">Laddar...</span>
         </div>
       )}
 
