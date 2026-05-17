@@ -11,6 +11,7 @@ import type { Item, List, ListTextSize, Theme } from '@/lib/types'
 import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
 import { addItems, copyItemsToList, deleteHistoryItem, extractAddItems, moveItemsToList } from './actions'
 import { splitPlainItems } from '@/lib/parseAddInput'
+import { slColorFor } from '@/lib/sl-theme'
 import { muAddItem, muUpdateItem, muSetCategory, muDeleteItem, muBulkDelete, muReorderItem, muMergeItems } from '@/lib/sync/mutations'
 import { useSyncState, setActiveList } from '@/lib/sync/engine'
 import { useEditMode } from './EditModeContext'
@@ -57,12 +58,6 @@ const FW_PALETTE = [...SL_COLORS, '#ffffff']
 
 function fwRand(min: number, max: number) { return min + Math.random() * (max - min) }
 function fwPick() { return FW_PALETTE[Math.floor(Math.random() * FW_PALETTE.length)] }
-
-function slColorFor(id: string): 0 | 1 | 2 | 3 {
-  let h = 0
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0
-  return (Math.abs(h) % 4) as 0 | 1 | 2 | 3
-}
 
 interface Props {
   list: List

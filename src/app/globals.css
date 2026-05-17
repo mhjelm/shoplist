@@ -103,6 +103,29 @@ body {
 /* Shopped rows keep their tint but fade out */
 .shoplist [data-sl-color][data-muted="true"] { opacity: 0.5; }
 
+/* Subtle occasional light-flare sweeping across list cards on /lists.
+   Scoped to `.sl-tile` so only the lists-overview cards animate, not the
+   item rows inside a list (which already have the fireworks effect). */
+.shoplist .sl-tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%);
+  transform: translateX(-130%);
+  animation: sl-flare 9s ease-in-out infinite;
+  animation-delay: var(--sl-flare-delay, 0s);
+  pointer-events: none;
+}
+@keyframes sl-flare {
+  0%, 78%, 100% { transform: translateX(-130%); opacity: 0; }
+  82%           { transform: translateX(-80%);  opacity: 1; }
+  96%           { transform: translateX(130%);  opacity: 1; }
+  100%          { transform: translateX(130%);  opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shoplist .sl-tile::after { animation: none; }
+}
+
 /* ── Store mode: collapse page chrome and stretch items full-width ─────────── */
 body.store-mode header { display: none; }
 body.store-mode main {

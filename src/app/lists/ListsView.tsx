@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import Link from 'next/link'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { localDB } from '@/lib/db/local'
 import { reconcileLists } from '@/lib/sync/reconcile'
 import { useSyncState } from '@/lib/sync/engine'
 import type { List } from '@/lib/types'
+import { slColorFor, slFlareDelay } from '@/lib/sl-theme'
 import DeleteListButton from './DeleteListButton'
 import ListEditPanel from './ListEditPanel'
 
@@ -158,53 +159,61 @@ function ListRow({ list, hasMembers, cached, isOffline, onNavigate, openEditList
   )
 
   return (
-    <li className={`bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 ${disabled ? 'opacity-50' : ''}`}>
-      <div className="flex items-center justify-between gap-2">
-        {disabled ? (
-          <span
-            aria-disabled="true"
-            title="Inte tillgänglig offline"
-            className={`${labelClasses} ${hoverClasses}`}
-          >
-            {inner}
-          </span>
-        ) : isOffline ? (
-          // Hard navigation (not next/link) so the SW navigate handler runs and
-          // serves the cached HTML for /lists/[id]. Soft nav uses an RSC fetch
-          // that bypasses the navigate cache and fails offline.
-          <a
-            href={`/lists/${list.id}`}
-            className={`${labelClasses} ${hoverClasses}`}
-            onClick={() => onNavigate(list.id)}
-          >
-            {inner}
-          </a>
-        ) : (
-          <Link
-            href={`/lists/${list.id}`}
-            className={`${labelClasses} ${hoverClasses}`}
-            onClick={() => onNavigate(list.id)}
-          >
-            {inner}
-          </Link>
-        )}
-
-        {showEdit && (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onToggleEdit(list.id)}
-              aria-expanded={isEditOpen}
-              aria-label={`Redigera ${list.name}`}
-              className="text-gray-300 dark:text-gray-600 hover:text-blue-400 dark:hover:text-blue-400 transition-colors"
+    <li
+      data-sl-color={slColorFor(list.id)}
+      className={`bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 ${disabled ? 'opacity-50' : ''}`}
+    >
+      <div
+        className="sl-tile relative overflow-hidden rounded-[inherit] -mx-4 -my-3 px-4 py-3"
+        style={{ '--sl-flare-delay': slFlareDelay(list.id) } as CSSProperties}
+      >
+        <div className="flex items-center justify-between gap-2">
+          {disabled ? (
+            <span
+              aria-disabled="true"
+              title="Inte tillgänglig offline"
+              className={`${labelClasses} ${hoverClasses}`}
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
-              </svg>
-            </button>
-            <DeleteListButton listId={list.id} />
-          </div>
-        )}
+              {inner}
+            </span>
+          ) : isOffline ? (
+            // Hard navigation (not next/link) so the SW navigate handler runs and
+            // serves the cached HTML for /lists/[id]. Soft nav uses an RSC fetch
+            // that bypasses the navigate cache and fails offline.
+            <a
+              href={`/lists/${list.id}`}
+              className={`${labelClasses} ${hoverClasses}`}
+              onClick={() => onNavigate(list.id)}
+            >
+              {inner}
+            </a>
+          ) : (
+            <Link
+              href={`/lists/${list.id}`}
+              className={`${labelClasses} ${hoverClasses}`}
+              onClick={() => onNavigate(list.id)}
+            >
+              {inner}
+            </Link>
+          )}
+
+          {showEdit && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onToggleEdit(list.id)}
+                aria-expanded={isEditOpen}
+                aria-label={`Redigera ${list.name}`}
+                className="text-gray-300 dark:text-gray-600 hover:text-blue-400 dark:hover:text-blue-400 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+                </svg>
+              </button>
+              <DeleteListButton listId={list.id} />
+            </div>
+          )}
+        </div>
       </div>
 
       {showEdit && isEditOpen && (
