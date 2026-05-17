@@ -12,6 +12,11 @@ import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
 import { addItems, copyItemsToList, deleteHistoryItem, extractAddItems, moveItemsToList } from './actions'
 import { splitPlainItems } from '@/lib/parseAddInput'
 import { computeNewSortOrder, dedupeAddBatch } from '@/lib/itemListHelpers'
+import {
+  itemToLocalItem, localItemToItem,
+  sortItemsByOrder, groupByCategory,
+  findExistingItem, buildLocalItem, buildMergePatch,
+} from './itemHelpers'
 import { slColorFor } from '@/lib/sl-theme'
 import { muAddItem, muUpdateItem, muDeleteItem, muBulkDelete, muReorderItem, muMergeItems } from '@/lib/sync/mutations'
 import { useSyncState, setActiveList } from '@/lib/sync/engine'
@@ -73,39 +78,6 @@ interface Props {
 }
 
 let ghostSeq = 0
-
-function itemToLocalItem(item: Item): LocalItem {
-  return {
-    id: item.id,
-    list_id: item.list_id,
-    added_by: item.added_by,
-    name: item.name,
-    is_checked: item.is_checked,
-    created_at: item.created_at,
-    updated_at: item.updated_at ?? '',
-    picture_url: item.picture_url,
-    sort_order: item.sort_order,
-    quantity: item.quantity,
-    category: item.category,
-    measurement: item.measurement,
-  }
-}
-
-function localItemToItem(li: LocalItem): Item {
-  return {
-    id: li.id,
-    list_id: li.list_id,
-    added_by: li.added_by,
-    name: li.name,
-    is_checked: li.is_checked,
-    created_at: li.created_at,
-    picture_url: li.picture_url,
-    sort_order: li.sort_order,
-    quantity: li.quantity,
-    category: li.category,
-    measurement: li.measurement,
-  }
-}
 
 export default function ItemList({ list, initialItems, listId, suggestions, textSize, theme, categoryOrder, availableLists, currentUserId }: Props) {
   const itemTextClass = textSize === 'large' ? 'text-base' : 'text-sm'
@@ -228,20 +200,9 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     return () => window.removeEventListener('keydown', onKey)
   }, [pendingMerge])
 
-  const sortByOrder = (a: Item, b: Item) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity)
-  const toShop = useMemo(() => items.filter(i => !i.is_checked).sort(sortByOrder), [items])
-  const shopped = useMemo(() => items.filter(i => i.is_checked).sort(sortByOrder), [items])
-
-  const groupedToShop = useMemo(() => {
-    const groups = new Map<CategorySlug, Item[]>(categoryOrder.map(c => [c, []]))
-    if (!groups.has('ovrigt')) groups.set('ovrigt', [])
-    for (const item of toShop) {
-      const cat = (item.category as CategorySlug | null) ?? 'ovrigt'
-      const target = groups.get(cat) ?? groups.get('ovrigt')!
-      target.push(item)
-    }
-    return [...groups.entries()].filter(([, its]) => its.length > 0)
-  }, [toShop, categoryOrder])
+  const toShop = useMemo(() => items.filter(i => !i.is_checked).sort(sortItemsByOrder), [items])
+  const shopped = useMemo(() => items.filter(i => i.is_checked).sort(sortItemsByOrder), [items])
+  const groupedToShop = useMemo(() => groupByCategory(toShop, categoryOrder), [toShop, categoryOrder])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -324,29 +285,11 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
       const pictureUrl = urlInput.trim() || undefined
       setUrlInput('')
 
-      const lowerName = raw.toLowerCase()
-      const activeMatch = items.find(i => !i.is_checked && i.name.toLowerCase() === lowerName)
-      const shoppedMatch = !activeMatch ? items.find(i => i.is_checked && i.name.toLowerCase() === lowerName) : undefined
-      const match = activeMatch ?? shoppedMatch
-
+      const match = findExistingItem(items, raw)
       if (match) {
         await muUpdateItem(listId, match.id, { quantity: match.quantity + 1, is_checked: false })
       } else {
-        const newItem: LocalItem = {
-          id: crypto.randomUUID(),
-          list_id: listId,
-          added_by: '',
-          name: raw,
-          is_checked: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          picture_url: pictureUrl ?? null,
-          sort_order: null,
-          quantity: 1,
-          category: null,
-          measurement: null,
-        }
-        await muAddItem(newItem)
+        await muAddItem(buildLocalItem(listId, raw, { pictureUrl }))
       }
       setLoading(false)
       inputRef.current?.focus()
@@ -365,18 +308,11 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
         // Plain names only — dedupe within the batch first, then route through
         // local outbox so it works offline too.
         for (const { name, quantity } of dedupeAddBatch(splitPlainItems(raw))) {
-          const lowerName = name.toLowerCase()
-          const activeMatch = items.find(i => !i.is_checked && i.name.toLowerCase() === lowerName)
-          const shoppedMatch = !activeMatch ? items.find(i => i.is_checked && i.name.toLowerCase() === lowerName) : undefined
-          const match = activeMatch ?? shoppedMatch
+          const match = findExistingItem(items, name)
           if (match) {
             await muUpdateItem(listId, match.id, { quantity: match.quantity + quantity, is_checked: false })
           } else {
-            await muAddItem({
-              id: crypto.randomUUID(), list_id: listId, added_by: '', name,
-              is_checked: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-              picture_url: null, sort_order: null, quantity, category: null, measurement: null,
-            })
+            await muAddItem(buildLocalItem(listId, name, { quantity }))
           }
         }
       } else {
@@ -441,11 +377,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     if (!pendingMerge) return
     const { source, target } = pendingMerge
     setPendingMerge(null)
-    const mergedMeasurement =
-      [target.measurement, source.measurement]
-        .filter((m): m is string => !!m && m.trim().length > 0)
-        .join(' + ') || null
-    const mergedQuantity = target.quantity + source.quantity
+    const { measurement: mergedMeasurement, quantity: mergedQuantity } = buildMergePatch(source, target)
     await muMergeItems(listId, source.id, target.id, mergedMeasurement, mergedQuantity)
   }
 
