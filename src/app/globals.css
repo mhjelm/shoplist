@@ -126,6 +126,19 @@ body {
   .shoplist .sl-tile::after { animation: none; }
 }
 
+/* Loading overlay (list → list navigation): cart rolls back and forth */
+.loading-cart {
+  transform-origin: 50% 85%;
+  animation: loading-cart-roll 1.4s ease-in-out infinite;
+}
+@keyframes loading-cart-roll {
+  0%, 100% { transform: translateX(-10px) rotate(-3deg); }
+  50%      { transform: translateX(10px)  rotate(3deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-cart { animation: none; }
+}
+
 /* ── Store mode: collapse page chrome and stretch items full-width ─────────── */
 body.store-mode header { display: none; }
 body.store-mode main {

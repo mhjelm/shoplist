@@ -66,15 +66,21 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
         <div
           role="status"
           aria-live="polite"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 text-gray-500 backdrop-blur-sm dark:bg-gray-950/80 dark:text-gray-400"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#2563eb]"
         >
-          <div className="flex items-center justify-center gap-3">
-            <span
-              className="inline-block w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-700 border-t-gray-600 dark:border-t-gray-300 animate-spin"
-              aria-hidden
-            />
-            <span className="text-sm">Laddar...</span>
-          </div>
+          <svg
+            viewBox="0 0 512 512"
+            className="w-56 h-56 sm:w-72 sm:h-72 loading-cart"
+            aria-hidden
+          >
+            <g fill="none" stroke="#ffffff" strokeWidth={28} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M128 152 L168 152 L208 360 L408 360" />
+              <path d="M168 152 L432 152 L400 296 L208 296" />
+              <circle cx="232" cy="408" r="20" fill="#ffffff" stroke="none" />
+              <circle cx="376" cy="408" r="20" fill="#ffffff" stroke="none" />
+            </g>
+          </svg>
+          <span className="mt-4 text-white text-base font-medium tracking-wide">Laddar...</span>
         </div>
       )}
 
