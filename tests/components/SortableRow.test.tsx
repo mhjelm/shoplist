@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { SortableRow } from '@/app/lists/[id]/ItemList'
+import { SortableRow } from '@/app/lists/[id]/SortableRow'
 import type { Item } from '@/lib/types'
 
 vi.mock('@dnd-kit/sortable', () => ({

@@ -83,7 +83,7 @@ export function findExistingItem(items: Item[], name: string): Item | undefined 
 export interface BuildLocalItemOpts {
   quantity?: number
   pictureUrl?: string | null
-  category?: string | null
+  category?: CategorySlug | null
   measurement?: string | null
 }
 
