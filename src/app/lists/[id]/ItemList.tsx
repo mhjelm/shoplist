@@ -348,6 +348,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
         await muAddItem(newItem)
       }
       setLoading(false)
+      inputRef.current?.focus()
       return
     }
 
@@ -377,6 +378,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
         }
       }
       setLoading(false)
+      inputRef.current?.focus()
       return
     } else {
       const extracted = await extractAddItems(raw)
@@ -391,6 +393,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
 
     if (itemsToAdd.length === 0) {
       setLoading(false)
+      inputRef.current?.focus()
       return
     }
 
@@ -404,6 +407,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
       localDB.items.bulkPut((result.items as Item[]).map(itemToLocalItem))
         .catch(err => console.error('Failed to put items in local db:', err))
     }
+    inputRef.current?.focus()
   }
 
   function spawnGhost(item: Item, rect: DOMRect) {
@@ -543,7 +547,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
                   }
                   else if (e.key === 'Escape') setFiltered([])
                 }}
-                placeholder="Add an item…"
+                placeholder="Add items…"
                 autoComplete="off"
                 className="block w-full h-9 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden leading-normal pr-7"
               />
