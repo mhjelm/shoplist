@@ -9,7 +9,6 @@ vi.mock('@/lib/sync/mutations', () => ({
 }))
 vi.mock('./actions', () => ({
   extractAddItems: vi.fn(),
-  addItems: vi.fn(),
   deleteHistoryItem: vi.fn(),
 }))
 vi.mock('@/lib/db/local', () => ({
@@ -146,17 +145,26 @@ describe('useAddItems', () => {
   // handleAdd — digit-bearing (AI extraction path)
   // ---------------------------------------------------------------------------
 
-  it('digit-bearing add calls extractAddItems then addItems', async () => {
-    const { extractAddItems, addItems } = await import('./actions')
-    vi.mocked(extractAddItems).mockResolvedValue({ items: [{ name: 'mjölk', quantity: 2, measurement: 'dl' }] })
-    vi.mocked(addItems).mockResolvedValue({ items: [makeItem('new')] })
+  it('digit-bearing add calls extractAddItems then muAddItem per parsed item', async () => {
+    const { extractAddItems } = await import('./actions')
+    const { muAddItem } = await import('@/lib/sync/mutations')
+    vi.mocked(extractAddItems).mockResolvedValue({
+      items: [{ name: 'mjölk', quantity: 2, measurement: 'dl', category: 'mejeri' }],
+    })
 
     const { result } = renderHook(() => useAddItems(defaultProps))
     act(() => { result.current.handleInputChange('2 dl mjölk') })
     await act(async () => { await result.current.handleAdd() })
 
     expect(vi.mocked(extractAddItems)).toHaveBeenCalledWith('2 dl mjölk')
-    expect(vi.mocked(addItems)).toHaveBeenCalledWith('list-1', expect.any(Array))
+    expect(vi.mocked(muAddItem)).toHaveBeenCalledOnce()
+    expect(vi.mocked(muAddItem).mock.calls[0][0]).toMatchObject({
+      name: 'mjölk',
+      quantity: 2,
+      measurement: 'dl',
+      category: 'mejeri',
+      list_id: 'list-1',
+    })
     expect(result.current.loading).toBe(false)
     expect(result.current.input).toBe('')
   })

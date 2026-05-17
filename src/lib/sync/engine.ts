@@ -108,7 +108,15 @@ async function dispatch(entry: OutboxEntry) {
 
   switch (entry.type) {
     case 'item.insert': {
-      const result = await addItem(listId, p.name as string, p.picture_url as string | undefined, p.id as string)
+      const result = await addItem(
+        listId,
+        p.name as string,
+        p.picture_url as string | undefined,
+        p.id as string,
+        p.quantity as number | undefined,
+        p.measurement as string | null | undefined,
+        p.category as CategorySlug | null | undefined,
+      )
       check(result)
       // Gemini fallback: if the server couldn't find a cached category in
       // user_item_history, classify in the background and patch Dexie when
@@ -209,6 +217,10 @@ export async function flushOutbox(): Promise<void> {
 // parallel races: reconcile reads stale server state while flush is mid-push,
 // and the local edit gets clobbered.
 // ---------------------------------------------------------------------------
+
+// Exported for unit tests only — allows asserting that extended payload fields
+// reach the correct server action without going through the full flush flow.
+export { dispatch as _dispatchEntry }
 
 export async function triggerSync(): Promise<void> {
   await flushOutbox()

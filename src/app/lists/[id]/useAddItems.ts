@@ -1,10 +1,9 @@
 import { useRef, useState } from 'react'
-import { localDB } from '@/lib/db/local'
-import { addItems, deleteHistoryItem, extractAddItems } from './actions'
+import { deleteHistoryItem, extractAddItems } from './actions'
 import { splitPlainItems } from '@/lib/parseAddInput'
 import { dedupeAddBatch } from '@/lib/itemListHelpers'
 import { muAddItem, muUpdateItem } from '@/lib/sync/mutations'
-import { findExistingItem, buildLocalItem, itemToLocalItem } from './itemHelpers'
+import { findExistingItem, buildLocalItem } from './itemHelpers'
 import type { Item } from '@/lib/types'
 
 export function useAddItems({
@@ -94,24 +93,20 @@ export function useAddItems({
           }
         }
       } else {
-        // Digit-bearing — requires AI extraction on the server.
+        // Digit-bearing — requires AI extraction on the server. After extraction,
+        // each parsed item goes through the outbox (offline-capable, Dexie-first).
         const extracted = await extractAddItems(raw)
         if (extracted.error || !extracted.items) {
           setAddError(extracted.error ?? 'Kunde inte tolka listan')
           setInput(previousInput)
           return
         }
-        const itemsToAdd = extracted.items
-        if (itemsToAdd.length > 0) {
-          const result = await addItems(listId, itemsToAdd)
-          if (result.error) {
-            setAddError(result.error)
-            return
-          }
-          if (result.items) {
-            localDB.items.bulkPut((result.items as Item[]).map(itemToLocalItem))
-              .catch(err => console.error('Failed to put items in local db:', err))
-          }
+        for (const parsed of extracted.items) {
+          await muAddItem(buildLocalItem(listId, parsed.name, {
+            quantity: parsed.quantity,
+            measurement: parsed.measurement,
+            category: parsed.category,
+          }))
         }
       }
     } catch (e) {

@@ -27,6 +27,9 @@ export async function muAddItem(item: LocalItem): Promise<void> {
       list_id: item.list_id,
       name: item.name,
       picture_url: item.picture_url,
+      quantity: item.quantity,
+      measurement: item.measurement,
+      category: item.category,
     }))
   })
   flushOutbox()

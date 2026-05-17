@@ -6,7 +6,15 @@ import { type CategorySlug, isValidCategorySlug } from '@/lib/categories'
 import { callGemini, categorizeNames } from '@/lib/gemini'
 import { buildItemUpdatePayload, type ItemUpdatePatch } from '@/lib/itemUpdate'
 
-export async function addItem(listId: string, name: string, pictureUrl?: string, clientId?: string) {
+export async function addItem(
+  listId: string,
+  name: string,
+  pictureUrl?: string,
+  clientId?: string,
+  quantity?: number,
+  measurement?: string | null,
+  category?: CategorySlug | null,
+) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
@@ -41,7 +49,7 @@ export async function addItem(listId: string, name: string, pictureUrl?: string,
     .single()
 
   if (existing) {
-    const patch: Record<string, unknown> = { quantity: existing.quantity + 1 }
+    const patch: Record<string, unknown> = { quantity: existing.quantity + (quantity ?? 1) }
     if (existing.is_checked) patch.is_checked = false
     const { data, error } = await supabase
       .from('items')
@@ -62,7 +70,9 @@ export async function addItem(listId: string, name: string, pictureUrl?: string,
       added_by: user.id,
       name: trimmed,
       picture_url: pictureUrl?.trim() || null,
-      category: cachedCategory,
+      category: category ?? cachedCategory,
+      quantity: quantity ?? 1,
+      measurement: measurement ?? null,
     })
     .select()
     .single()
@@ -229,6 +239,8 @@ export async function clearAllItems(listId: string) {
   revalidatePath(`/lists/${listId}`)
 }
 
+// addItems: batch import entry point for RecipeImportModal and the Web Share Target route.
+// Do not call from add-item flows — those route through muAddItem (outbox) instead.
 export async function addItems(listId: string, incoming: Array<{ name: string; category?: string | null; measurement?: string | null; quantity?: number }>) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
