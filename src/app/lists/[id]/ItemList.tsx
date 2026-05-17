@@ -11,8 +11,9 @@ import type { Item, List, ListTextSize, Theme } from '@/lib/types'
 import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
 import { addItems, copyItemsToList, deleteHistoryItem, extractAddItems, moveItemsToList } from './actions'
 import { splitPlainItems } from '@/lib/parseAddInput'
+import { computeNewSortOrder, dedupeAddBatch } from '@/lib/itemListHelpers'
 import { slColorFor } from '@/lib/sl-theme'
-import { muAddItem, muUpdateItem, muSetCategory, muDeleteItem, muBulkDelete, muReorderItem, muMergeItems } from '@/lib/sync/mutations'
+import { muAddItem, muUpdateItem, muDeleteItem, muBulkDelete, muReorderItem, muMergeItems } from '@/lib/sync/mutations'
 import { useSyncState, setActiveList } from '@/lib/sync/engine'
 import { useEditMode } from './EditModeContext'
 import { useStoreMode } from './StoreModeContext'
@@ -278,11 +279,11 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     const moved = reordered[newIndex]
     const before = reordered[newIndex - 1]
     const after = reordered[newIndex + 1]
-    let newSortOrder: number
-    if (!before) newSortOrder = (after?.sort_order ?? 1) - 1
-    else if (!after) newSortOrder = (before.sort_order ?? 0) + 1
-    else newSortOrder = ((before.sort_order ?? 0) + (after.sort_order ?? 0)) / 2
-
+    const newSortOrder = computeNewSortOrder(
+      before?.sort_order ?? null,
+      after?.sort_order ?? null,
+      newIndex,
+    )
     muReorderItem(listId, moved.id, newSortOrder)
   }
 
@@ -353,59 +354,56 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     }
 
     // Multi-item or digit-bearing: requires a server call.
+    const previousInput = raw
     setLoading(true)
     setInput('')
     setFiltered([])
     if (inputRef.current) inputRef.current.style.height = 'auto'
 
-    let itemsToAdd: Array<{ name: string; quantity?: number; measurement?: string | null; category?: string | null }>
-
-    if (hasSplit && !hasDigit) {
-      // Plain names only — route through local outbox so it works offline too.
-      for (const name of splitPlainItems(raw)) {
-        const lowerName = name.toLowerCase()
-        const activeMatch = items.find(i => !i.is_checked && i.name.toLowerCase() === lowerName)
-        const shoppedMatch = !activeMatch ? items.find(i => i.is_checked && i.name.toLowerCase() === lowerName) : undefined
-        const match = activeMatch ?? shoppedMatch
-        if (match) {
-          await muUpdateItem(listId, match.id, { quantity: match.quantity + 1, is_checked: false })
-        } else {
-          await muAddItem({
-            id: crypto.randomUUID(), list_id: listId, added_by: '', name,
-            is_checked: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-            picture_url: null, sort_order: null, quantity: 1, category: null, measurement: null,
-          })
+    try {
+      if (hasSplit && !hasDigit) {
+        // Plain names only — dedupe within the batch first, then route through
+        // local outbox so it works offline too.
+        for (const { name, quantity } of dedupeAddBatch(splitPlainItems(raw))) {
+          const lowerName = name.toLowerCase()
+          const activeMatch = items.find(i => !i.is_checked && i.name.toLowerCase() === lowerName)
+          const shoppedMatch = !activeMatch ? items.find(i => i.is_checked && i.name.toLowerCase() === lowerName) : undefined
+          const match = activeMatch ?? shoppedMatch
+          if (match) {
+            await muUpdateItem(listId, match.id, { quantity: match.quantity + quantity, is_checked: false })
+          } else {
+            await muAddItem({
+              id: crypto.randomUUID(), list_id: listId, added_by: '', name,
+              is_checked: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+              picture_url: null, sort_order: null, quantity, category: null, measurement: null,
+            })
+          }
+        }
+      } else {
+        const extracted = await extractAddItems(raw)
+        if (extracted.error || !extracted.items) {
+          setAddError(extracted.error ?? 'Kunde inte tolka listan')
+          setInput(previousInput)
+          return
+        }
+        const itemsToAdd = extracted.items
+        if (itemsToAdd.length > 0) {
+          const result = await addItems(listId, itemsToAdd)
+          if (result.error) {
+            setAddError(result.error)
+            return
+          }
+          if (result.items) {
+            localDB.items.bulkPut((result.items as Item[]).map(itemToLocalItem))
+              .catch(err => console.error('Failed to put items in local db:', err))
+          }
         }
       }
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : 'Kunde inte lägga till')
+      setInput(previousInput)
+    } finally {
       setLoading(false)
-      inputRef.current?.focus()
-      return
-    } else {
-      const extracted = await extractAddItems(raw)
-      if (extracted.error || !extracted.items) {
-        setAddError(extracted.error ?? 'Kunde inte tolka listan')
-        setInput(raw)
-        setLoading(false)
-        return
-      }
-      itemsToAdd = extracted.items
-    }
-
-    if (itemsToAdd.length === 0) {
-      setLoading(false)
-      inputRef.current?.focus()
-      return
-    }
-
-    const result = await addItems(listId, itemsToAdd)
-    setLoading(false)
-    if (result.error) {
-      setAddError(result.error)
-      return
-    }
-    if (result.items) {
-      localDB.items.bulkPut((result.items as Item[]).map(itemToLocalItem))
-        .catch(err => console.error('Failed to put items in local db:', err))
     }
     inputRef.current?.focus()
   }
@@ -475,9 +473,6 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     }
     if (category !== item.category) patch.category = category
     await muUpdateItem(listId, item.id, patch)
-    if (category !== item.category) {
-      await muSetCategory(listId, item.id, category)
-    }
   }
 
   async function handlePickTarget(targetListId: string) {
@@ -495,19 +490,15 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
 
     setPickerError(null)
     if (mode === 'move') {
-      await muBulkDelete(listId, ids)
-      try {
-        const res = await moveItemsToList(listId, targetListId, ids, payload)
-        if (res?.error) {
-          await localDB.items.bulkPut(selectedItems.map(itemToLocalItem))
-          setPickerError(res.error)
-          throw new Error(res.error)
-        }
-      } catch (e) {
-        // Restore items on network throw (res?.error path re-throws, caught here too — bulkPut is idempotent).
-        await localDB.items.bulkPut(selectedItems.map(itemToLocalItem))
-        throw e
+      // Don't use the outbox for move: it's a cross-list operation and queuing
+      // local deletes before the server call succeeds creates orphan entries
+      // that would re-delete items if the server call fails and we restore them.
+      const res = await moveItemsToList(listId, targetListId, ids, payload)
+      if (res?.error) {
+        setPickerError(res.error)
+        throw new Error(res.error)
       }
+      await localDB.items.bulkDelete(ids)
     } else {
       const res = await copyItemsToList(targetListId, payload)
       if (res?.error) {

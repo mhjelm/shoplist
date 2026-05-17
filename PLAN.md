@@ -1,114 +1,170 @@
-# Anti-fumble swipe-to-check in Store mode
+# ItemList correctness fixes (from external review) ✓ DONE 2026-05-17
 
 ## Context
 
-Store mode keeps the screen awake while shopping. The user found that putting the phone in/out of a pocket while store mode was active accidentally marked a bunch of items as shopped — pocket fabric produces stray taps on rows. The whole row currently has `onClick → handleToggle`, so any touch on a row checks it off.
+An external review of `src/app/lists/[id]/ItemList.tsx` flagged five correctness issues. After verifying each against the code, four are real bugs (one is a minor duplication, three can lose or corrupt user data) and one is a corner case in reorder math. This plan addresses all five with small, surgical edits — no structural refactor, no helper extraction, no hook split. Those can come later once the file is correct.
 
-Goal: in store mode only, replace tap-to-check with **right-swipe-to-toggle**, so pocket fabric (which can't produce a clean horizontal swipe) won't trigger checks. The normal list page outside of store mode is unchanged — tap stays fast.
+The structural critique (1,400-line file, mixed mutation paths) is fair but out of scope here.
 
-Decisions confirmed with user:
-- **Right-swipe in either direction-of-state**: same gesture toggles `is_checked` for both active and shopped rows. Lowest cognitive load; reversing an accidental swipe is also a swipe.
-- **Tap shows a brief hint overlay**: a tap (without a swipe) flashes "Svep för att bocka av" on the row for ~1 s, then fades. Makes the new mechanism discoverable on first use.
+---
 
-Non-goals:
-- No `Touch.radiusX/Y` filtering (unreliable across devices).
-- No proximity/ambient-light heuristics (Proximity API is dead; Ambient Light is gated).
-- No long-press alternative — committed to swipe.
-- No changes outside store mode.
+## Fix 1 — Move-with-orphan-deletes (highest risk)
 
-## Files to modify
+**Where:** `ItemList.tsx:497–510` (`handlePickTarget`, `mode === 'move'`).
 
-- **`src/app/lists/[id]/ItemList.tsx`** — only file with code changes.
+**Bug:** `muBulkDelete` queues `item.delete` outbox entries *and* deletes locally. Then `moveItemsToList` is called directly. If the server call fails, items are restored via `localDB.items.bulkPut(...)` — but the outbox still holds the delete entries, which will fire on the next flush and re-delete the restored rows.
 
-That's it. Wake-lock logic in `StoreModeContext.tsx` stays as-is.
-
-## Implementation
-
-### 1. Add a `useStoreModeSwipe` hook in `ItemList.tsx`
-
-Local hook (not exported, defined near the bottom alongside `GhostOverlay` / `FireworkCanvas`). Signature:
+**Fix:** Do not queue local deletes for move. Move is a direct server action; the local rows should be removed *only* after the server call succeeds, and *not* via the outbox.
 
 ```ts
-function useStoreModeSwipe(opts: {
-  enabled: boolean
-  onCommit: (rect: DOMRect) => void
-  onTap: () => void  // fires on a tap that didn't reach the swipe threshold
-}): {
-  bind: {
-    ref: React.RefObject<HTMLLIElement | null>
-    onPointerDown: (e: React.PointerEvent) => void
-    onPointerMove: (e: React.PointerEvent) => void
-    onPointerUp: (e: React.PointerEvent) => void
-    onPointerCancel: (e: React.PointerEvent) => void
+if (mode === 'move') {
+  try {
+    const res = await moveItemsToList(listId, targetListId, ids, payload)
+    if (res?.error) { setPickerError(res.error); throw new Error(res.error) }
+    await localDB.items.bulkDelete(ids)   // remove locally only on success, no outbox
+  } catch (e) {
+    throw e                                // items were never removed locally; no restore needed
   }
-  dx: number          // current translateX (for inline style)
-  committed: boolean  // briefly true during the commit-snap animation
 }
 ```
 
-Implementation notes:
-- Use **Pointer Events** (`onPointerDown/Move/Up/Cancel`) rather than touch — single unified API, gives us pointerId so we can `setPointerCapture` and avoid losing tracking when the finger drifts off the row.
-- Track `startX`, `startY`, `startT`, and `dxRef` on a single mutable ref object — re-rendering on every move would tank perf. Read/write the inline transform via `ref.current.style.transform` directly inside `onPointerMove`. Update React state `dx` only at the very end (for snap-back animation via CSS transition) and during commit.
-- **Direction lock**: on the first move, if `|dy| > |dx|` and `|dy| > 6 px`, abort the gesture (treat as scroll). If `|dx| > |dy|` and `|dx| > 6 px`, lock to swipe and `setPointerCapture`. Until lock, do nothing.
-- **Direction**: only positive `dx` (right). Negative `dx` clamps to 0 (no left swipe response).
-- **Visual**: while swiping, set `transform: translateX(${dx}px)` and expose a CSS class on the row so a green check icon under the row becomes visible (reveal-from-behind feel). Use `ease-out` snap-back via a one-shot `transition: transform 180ms` toggled with a CSS class.
-- **Commit threshold**: `dx >= rect.width * 0.40` OR (`dx >= 60 && velocity >= 0.5 px/ms`). On commit:
-  1. Animate `dx → rect.width` over ~150 ms.
-  2. Call `onCommit(rect)` (which fires the existing `handleToggle` so ghost + firework still play).
-  3. Reset `dx` to 0 on the next frame (the row's `is_checked` flip will re-render it; the transform reset is just defensive).
-- **Tap detection**: on `pointerup`, if total `dx < 6 && dy < 6 && elapsed < 250 ms` and no direction lock occurred → call `onTap()`.
-- **Cancel cases**: `pointercancel`, or pointerup-before-lock with no tap match → snap dx back to 0.
+This also removes the awkward `bulkPut` restore path entirely. Copy already works correctly (no local mutation needed; new rows arrive via realtime/revalidate).
 
-### 2. Wire the hook into `SortableRow`
+**Note:** This intentionally diverges from the "everything goes through the outbox" direction. Move is inherently a two-list cross-cutting operation; the outbox is per-list. Either accept the direct-call exception (this plan) or extend the outbox with a new `item.move` entry type (larger change, out of scope).
 
-In `SortableRow` (line 1061+):
-- Add `storeMode` (already a prop) gating.
-- Replace the existing `onClick={editMode ? onToggleSelect : e => onToggle(...)}` so that in store mode, `onClick` is removed and replaced with the swipe hook's bindings + a tap callback that shows the hint.
-- Add local state `showHint: boolean` with a `setTimeout(() => setShowHint(false), 1000)` clear.
-- Render the hint as an absolutely-positioned overlay inside the `<li>` with `pointer-events: none`, classes for fade-in/out via `opacity` transition.
-- Render a check-reveal layer behind the row content: an absolutely-positioned `<div>` on the left side, full row height, background `#10B981` (emerald-500) or `#14B8A6` (shoplist teal), with a centered check SVG. It's hidden when `dx === 0`, revealed as the row slides right.
-- The row container needs `position: relative; overflow: hidden; touch-action: pan-y` so vertical scrolling still works while the swipe handler claims horizontal pans.
+---
 
-Critical: when `storeMode` is true, the drag handle isn't rendered (line 1118 guard already handles this), and dnd-kit's `useSortable` listeners aren't attached to the row, so pointer events go straight to our handler. No coordination with dnd-kit needed.
+## Fix 2 — Duplicate category dispatch
 
-### 3. Wire the hook into the shopped-section `<li>` (line 720)
+**Where:** `ItemList.tsx:476–480` (`handleUpdate`).
 
-The "Shopped" section in non-edit-mode renders raw `<li>` elements with an inline `onClick={e => handleToggle(item, ...)}` (line 723). This path is hit in store mode too (edit mode is force-off when store mode is on, per the existing `useEffect` at line 132).
+**Bug:** `patch.category = category` causes `engine.ts:127–135` to call `setItemCategory` (it splits `category` out of any `item.update` patch). The follow-up `muSetCategory` call queues a second `item.update` that runs `setItemCategory` again. Pure duplicate work.
 
-Extract that `<li>` into a small `ShoppedRow` component so it can host the swipe hook the same way `SortableRow` does. Pass `storeMode` and the same `onToggle` / `onTap` callbacks. The visual reveal can be the same emerald layer (it just means "toggle" — covers both check and uncheck).
+**Fix:** Drop the second call.
 
-### 4. CSS
+```ts
+const patch: Partial<LocalItem> = {
+  name: name.trim() || item.name,
+  picture_url: pictureUrl.trim() || null,
+  quantity: Math.max(1, quantity),
+  measurement: measurement.trim() || null,
+}
+if (category !== item.category) patch.category = category
+await muUpdateItem(listId, item.id, patch)
+// (removed redundant muSetCategory follow-up)
+```
 
-Add a couple of small inline styles or Tailwind utilities in the components themselves — no `globals.css` change needed. Specifically:
-- `touch-action: pan-y` on the row in store mode (so vertical scroll still works).
-- The reveal layer is absolute-positioned within the row's `position: relative; overflow: hidden`.
+---
 
-### 5. Don't touch outside store mode
+## Fix 3 — Loading stuck on extract/addItems throw
 
-Every change above is guarded by `storeMode`. When `storeMode` is false:
-- Row keeps its existing `onClick` toggle.
-- No pointer-event handlers attached (or they early-return).
-- No `touch-action` override (drag handle's `touch-none` continues to work).
+**Where:** `ItemList.tsx:356–411` (digit-bearing add path).
 
-## Existing code to reuse
+**Bug:** `setLoading(true)` and `setInput('')` run before `extractAddItems` / `addItems`. If either throws (network drop, server-action error not caught by the `{ error }` contract), loading stays stuck and the user's input is gone.
 
-- `handleToggle(item, sourceRect)` (ItemList.tsx:426) — already produces the ghost animation, fireworks (when theme=shoplist), and calls `muUpdateItem`. The swipe `onCommit` calls this verbatim, passing the row's `getBoundingClientRect()`.
-- `useStoreMode()` (StoreModeContext.tsx:59) — already consumed by `ItemList`, passed to `SortableRow` as a prop. Same wiring for the new `ShoppedRow`.
+**Fix:** Wrap in try/catch and surface the error; preserve the input on failure.
+
+```ts
+setLoading(true)
+const previousInput = raw
+setInput('')
+setFiltered([])
+if (inputRef.current) inputRef.current.style.height = 'auto'
+
+try {
+  // ... existing extract + addItems logic (with the early `return` on extract
+  // error changed to `throw` so the catch handles cleanup uniformly, OR keep
+  // early returns but ensure setLoading(false) runs on every exit) ...
+} catch (e) {
+  setAddError(e instanceof Error ? e.message : 'Kunde inte lägga till')
+  setInput(previousInput)
+} finally {
+  setLoading(false)
+}
+inputRef.current?.focus()
+```
+
+Same treatment for the plain multi-add branch (lines 363–382), though that path only awaits local outbox mutations so failures are less likely.
+
+---
+
+## Fix 4 — Stale `items` snapshot in plain multi-add
+
+**Where:** `ItemList.tsx:363–382`.
+
+**Bug:** The `for` loop closes over the `items` value from render. Pasting "mjölk, mjölk" makes iteration 2's `items.find(...)` miss iteration 1's just-added local row (Dexie's `useLiveQuery` hasn't re-fired yet), so both become new optimistic rows.
+
+**Fix:** Dedupe the batch before iterating. Within a single add operation we know the user's intent — duplicates in the same paste should collapse to one row with summed quantities, matching how the server-side `addItems` action behaves.
+
+```ts
+if (hasSplit && !hasDigit) {
+  const names = splitPlainItems(raw)
+  const counts = new Map<string, { name: string; quantity: number }>()
+  for (const n of names) {
+    const key = n.toLowerCase()
+    const existing = counts.get(key)
+    if (existing) existing.quantity += 1
+    else counts.set(key, { name: n, quantity: 1 })
+  }
+  for (const { name, quantity } of counts.values()) {
+    const lower = name.toLowerCase()
+    const match = items.find(i => i.name.toLowerCase() === lower)  // safe: each name appears once
+    if (match) {
+      await muUpdateItem(listId, match.id, { quantity: match.quantity + quantity, is_checked: false })
+    } else {
+      await muAddItem({ /* ...with quantity */ })
+    }
+  }
+  // setLoading(false) handled by Fix 3's finally
+  return
+}
+```
+
+---
+
+## Fix 5 — Reorder math with null neighbours
+
+**Where:** `ItemList.tsx:282–284`.
+
+**Bug:** When inserting between two rows whose `sort_order` is null, the formula yields `0`. Display sort treats null as `Infinity`, so the reordered row visually jumps to the top of the category instead of staying near where it was dropped. Repeated reorders in this state can produce duplicate `0`s.
+
+**Fix:** Branch on null neighbours rather than coalescing them to `0`/`1`.
+
+```ts
+const beforeOrder = before?.sort_order ?? null
+const afterOrder  = after?.sort_order  ?? null
+
+let newSortOrder: number
+if (beforeOrder == null && afterOrder == null) {
+  // Whole category is unsorted — use the dropped index as a stable seed.
+  newSortOrder = newIndex
+} else if (beforeOrder == null) {
+  newSortOrder = afterOrder! - 1
+} else if (afterOrder == null) {
+  newSortOrder = beforeOrder + 1
+} else {
+  newSortOrder = (beforeOrder + afterOrder) / 2
+}
+```
+
+This keeps the existing midpoint behaviour when both neighbours have orders and gives a stable result otherwise.
+
+---
+
+## Critical files
+
+- `src/app/lists/[id]/ItemList.tsx` — all five edits land here.
+
+No other files change. No tests are modified (the file is intentionally not unit-tested — see CLAUDE.md "What is deliberately not tested").
 
 ## Verification
 
-Manual, on a real phone (Android Chrome is the primary target since iOS PWA install is limited):
+Manual, in `npm run dev`:
 
-1. **Tap fallback** — in store mode, tap a row. Item does NOT toggle. Hint "Svep för att bocka av" flashes for ~1 s.
-2. **Swipe commits** — slowly drag a row right past ~40%. Row slides, reveal layer appears. Release: item gets checked off; ghost + firework animation plays.
-3. **Swipe cancels** — drag a row 10–20% right and release. Row snaps back. Nothing toggles.
-4. **Scroll preserved** — vertical drag still scrolls the list, no row movement.
-5. **Pocket test** — put the phone in a pocket with store mode active. Walk around. No items should get checked. (The real acceptance test.)
-6. **Unshopping** — swipe a row in the "Shopped" section. It moves back to active.
-7. **Outside store mode** — toggle store mode off. Tap-to-check on rows works as before. Drag handle still reorders. Edit mode still merges.
+1. **Move race** — go offline (DevTools network), select 2 items, "Flytta till lista" → another list. The move fails. Confirm items are still visible locally. Go back online; confirm the outbox flushes without deleting the visible items. (Before the fix, the items vanish on flush.)
+2. **Category dup** — open an item, change its category, save. Check network panel: exactly one `setItemCategory` server-action call (was two).
+3. **Loading stuck** — go offline, type "2 dl mjölk", press Enter. The add button should re-enable and the input should still contain the text, with an error banner. (Before: button stuck spinning, input empty.)
+4. **Plain multi-add dedup** — paste "mjölk, mjölk" into the add box, press Enter. Exactly one "mjölk" row with quantity 2 appears (was two separate rows).
+5. **Reorder with null neighbours** — clear the list, add three items (they'll all have null `sort_order` until a reorder). Drag the middle item to the top. It should stay at the top after a refresh, not jump to the bottom.
 
-Smoke checks:
-- `npm run lint`
-- `npm test` (existing tests for `MeasurementBadge`, `EditModeContext`, `RecipeImportModal` don't exercise the swipe path, so they should pass unchanged).
-
-No new unit tests — the swipe behavior is gesture-driven and hard to assert in jsdom; manual verification on device is the source of truth, consistent with how `ItemList` is currently tested (CLAUDE.md "What is deliberately not tested" section).
+No new tests; existing vitest run should remain green: `npm test`.
