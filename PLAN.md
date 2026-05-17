@@ -77,7 +77,7 @@ Owns: `ghosts`, `fwCanvasRef`, `spawnGhost`. Returns `{ ghosts, spawnGhost, fire
 
 ---
 
-## Phase 3 — Split UI components + RTL tests
+## Phase 3 — Split UI components + RTL tests ✓ DONE 2026-05-17
 
 **Goal:** The remaining JSX in `ItemList.tsx` decomposes into focused, separately-testable components.
 
@@ -102,7 +102,7 @@ Owns: `ghosts`, `fwCanvasRef`, `spawnGhost`. Returns `{ ghosts, spawnGhost, fire
 
 ---
 
-## Phase 4 — Mutation path consistency
+## Phase 4 — Mutation path consistency ✓ DONE 2026-05-17
 
 **Goal:** Each operation has one mutation path. Divergences are deliberate and documented.
 
@@ -139,7 +139,7 @@ Owns: `ghosts`, `fwCanvasRef`, `spawnGhost`. Returns `{ ghosts, spawnGhost, fire
 
 ---
 
-## Phase 5 — Enable ItemList integration tests + retire the exemption
+## Phase 5 — Enable ItemList integration tests + retire the exemption ✓ DONE 2026-05-18
 
 **Goal:** With the bulk of logic in hooks/helpers/sub-components, `ItemList.tsx` becomes thin enough to render in jsdom with a focused mock surface.
 

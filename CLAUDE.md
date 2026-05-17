@@ -85,12 +85,34 @@ All writes go through `'use server'` actions colocated next to the route (e.g., 
 
 Server Components re-render with fresh data on the next navigation; the client tier handles instantaneous UX via optimistic updates.
 
-### Optimistic UI + Realtime (in `ItemList.tsx`)
+### Mutation-path rule
 
-The item list is a Client Component that:
+**Outbox for everything offline-capable; direct server actions only for cross-list ops and pre-AI batch flows. Rollback is explicit, not via outbox compensation.**
+
+| Operation | Path | Rationale |
+|---|---|---|
+| Toggle / edit / delete / reorder / merge | Outbox (`mu*` helpers in `src/lib/sync/mutations.ts`) | Offline-capable |
+| Add — plain single or multi-name | Outbox via `muAddItem` | Offline-capable |
+| Add — digit-bearing (AI extraction) | `extractAddItems` server call, then `muAddItem` per item | AI requires server; inserts are then queued locally |
+| Copy / Move | Direct server action with rollback | Cross-list; outbox is per-list |
+| Recipe import / Web Share Target | Direct `addItems` batch action | Inherently bulk + server-AI; scoped to import flows only |
+
+The `addItems` batch action (`src/app/lists/[id]/actions.ts`) is used exclusively by `RecipeImportModal` and the share-target route — do not call it from the add-item UI flow.
+
+### Optimistic UI + Realtime
+
+Logic is split across focused hooks in `src/app/lists/[id]/`:
+
+- **`useListItemsSync`** — Dexie seed, realtime subscription, reconcile-on-mount
+- **`useItemSelection`** — selection state, copy/move picker
+- **`useAddItems`** — add-item input, suggestions, multi-add, digit-bearing AI extraction
+- **`useDragMergeReorder`** — dnd-kit sensors, reorder vs. merge routing, merge confirmation
+- **`useItemCelebrations`** — ghost animation, firework canvas
+
+The item list Client Component (`ItemList.tsx`):
 
 1. Receives `initialItems` from the server.
-2. Maintains local state for instant feedback on every mutation — add, toggle, edit, delete, reorder, merge, measurement combine, category change, recipe-import bulk add. Each handler applies the change locally first, then awaits the server action, then rolls back from a snapshot on `{ error }`.
+2. Routes mutations through the outbox (see mutation-path rule above) for instant local feedback. Cross-list ops (copy/move) use direct server actions with explicit rollback.
 3. Subscribes to a Supabase Realtime channel filtered by `list_id` and merges INSERT/UPDATE/DELETE events into local state. Optimistic INSERTs are matched by `(added_by === '' && name === incoming.name)` and reconciled when the real row arrives.
 
 Realtime subscribes unconditionally for every list — there is no `is_shared` gate. When changing mutation logic, update both the optimistic path *and* ensure the eventual server response/realtime echo doesn't double-apply.
@@ -218,10 +240,9 @@ Realtime publication includes `items`, `lists`, and `list_members`. `items` uses
 **Two tiers:**
 
 - **Unit tests** (`src/lib/*.test.ts`) — pure logic, no DOM. Currently cover `parseMeasurement` / `tryCombine` in `measurement.ts` and the category helpers in `categories.ts`. Run in the same jsdom environment but never touch the DOM.
-- **Component tests** (`tests/components/*.test.tsx`) — render real components into jsdom via RTL and assert on the DOM. Currently cover `EditModeContext`, `MeasurementBadge`, and `RecipeImportModal`.
+- **Component tests** (`tests/components/*.test.tsx`) — render real components into jsdom via RTL and assert on the DOM. Cover `ItemList` (smoke tests), all extracted sub-components, `EditModeContext`, `MeasurementBadge`, `RecipeImportModal`, and more.
 
 **What is deliberately not tested:**
-- `ItemList` itself — too entangled with dnd-kit and server actions to test in-process. Cover end-to-end flows with a browser tool instead.
 - Server Actions directly — they require a real Supabase connection; mock them at the module boundary in component tests with `vi.mock('@/app/lists/[id]/actions', ...)`.
 
 **Conventions:**
