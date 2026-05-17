@@ -2,56 +2,35 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { localDB } from '@/lib/db/local'
 import type { LocalItem } from '@/lib/db/types'
-import { reconcileList } from '@/lib/sync/reconcile'
-import { subscribeToList } from '@/lib/sync/realtime'
 import type { Item, List, ListTextSize, Theme } from '@/lib/types'
 import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
-import { addItems, copyItemsToList, deleteHistoryItem, extractAddItems, moveItemsToList } from './actions'
-import { splitPlainItems } from '@/lib/parseAddInput'
-import { computeNewSortOrder, dedupeAddBatch } from '@/lib/itemListHelpers'
-import {
-  itemToLocalItem, localItemToItem,
-  sortItemsByOrder, groupByCategory,
-  findExistingItem, buildLocalItem, buildMergePatch,
-} from './itemHelpers'
+import { itemToLocalItem, sortItemsByOrder, groupByCategory } from './itemHelpers'
 import { slColorFor } from '@/lib/sl-theme'
-import { muAddItem, muUpdateItem, muDeleteItem, muBulkDelete, muReorderItem, muMergeItems } from '@/lib/sync/mutations'
-import { useSyncState, setActiveList } from '@/lib/sync/engine'
+import { muUpdateItem, muDeleteItem, muBulkDelete } from '@/lib/sync/mutations'
+import { useSyncState } from '@/lib/sync/engine'
 import { useEditMode } from './EditModeContext'
 import { useStoreMode } from './StoreModeContext'
+import { useListItemsSync } from './useListItemsSync'
+import { useItemSelection } from './useItemSelection'
+import { useAddItems } from './useAddItems'
+import { useDragMergeReorder } from './useDragMergeReorder'
+import { useItemCelebrations, type GhostItem } from './useItemCelebrations'
 import { MeasurementBadge } from './MeasurementBadge'
 import PictureInput from './PictureInput'
 import RecipeImportModal from './RecipeImportModal'
 import TargetListModal from './TargetListModal'
 import {
   DndContext,
-  type DragEndEvent,
-  PointerSensor,
-  TouchSensor,
   closestCenter,
-  useSensor,
-  useSensors,
 } from '@dnd-kit/core'
 import {
   SortableContext,
-  arrayMove,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-
-interface GhostItem {
-  key: string
-  name: string
-  picture_url: string | null
-  measurement: string | null
-  rect: DOMRect
-  itemTextClass: string
-  thumbSizeClass: string
-}
 
 interface FWParticle {
   x: number; y: number; vx: number; vy: number
@@ -77,26 +56,12 @@ interface Props {
   currentUserId: string
 }
 
-let ghostSeq = 0
-
 export default function ItemList({ list, initialItems, listId, suggestions, textSize, theme, categoryOrder, availableLists, currentUserId }: Props) {
   const itemTextClass = textSize === 'large' ? 'text-base' : 'text-sm'
   const thumbSizeClass = textSize === 'large' ? 'w-16 h-16' : 'w-12 h-12'
-  const [input, setInput] = useState('')
-  const [filtered, setFiltered] = useState<string[]>([])
-  const [highlightIdx, setHighlightIdx] = useState(-1)
-  const [loading, setLoading] = useState(false)
-  const [showUrlInput, setShowUrlInput] = useState(false)
-  const [urlInput, setUrlInput] = useState('')
   const [editingItem, setEditingItem] = useState<Item | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const [showRecipe, setShowRecipe] = useState(false)
-  const [pendingMerge, setPendingMerge] = useState<{ source: Item; target: Item } | null>(null)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [pickerMode, setPickerMode] = useState<'copy' | 'move' | null>(null)
-  const [pickerError, setPickerError] = useState<string | null>(null)
-  const [ghosts, setGhosts] = useState<GhostItem[]>([])
-  const fwCanvasRef = useRef<{ explode: (x: number, y: number) => void } | null>(null)
   const [confirmingClear, setConfirmingClear] = useState(false)
   const [editMode, setEditMode] = useEditMode()
   const [storeMode, setStoreMode] = useStoreMode()
@@ -111,80 +76,6 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     }
     return () => { document.body.classList.remove('store-mode') }
   }, [storeMode, setEditMode])
-  const inputRef = useRef<HTMLTextAreaElement>(null)
-  const [addError, setAddError] = useState<string | null>(null)
-
-  // Register this list as the active one so the SyncProvider's connectivity
-  // triggers (online/visibilitychange) know which list to reconcile.
-  useEffect(() => {
-    setActiveList(listId)
-    return () => { setActiveList(null) }
-  }, [listId])
-
-  // Seed Dexie from SSR data so the first paint is correct, then always
-  // reconcile from the server. The seed is harmless if Dexie already has rows
-  // for this list (bulkPut is idempotent); reconcile is the authoritative pass
-  // that heals stale Dexie state after a refresh.
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      // Cache the list row itself so /lists can show this list as "cached"
-      // when offline. Done unconditionally — even a list with no items still
-      // counts as cached once the user has visited it.
-      await localDB.lists.put(list)
-      if (initialItems.length > 0) {
-        const existing = await localDB.items.where('list_id').equals(listId).count()
-        if (!cancelled && existing === 0) {
-          await localDB.items.bulkPut(initialItems.map(itemToLocalItem))
-        }
-      }
-      if (cancelled) return
-      reconcileList(listId).catch(err => console.error('reconcile failed:', err))
-    })()
-    return () => { cancelled = true }
-  }, [list, listId, initialItems])
-
-  // Subscribe to Realtime for all lists (private channels stay silent but are ready).
-  // On reconnect, reconcile to catch any missed events.
-  useEffect(() => {
-    return subscribeToList(listId, () => { reconcileList(listId) })
-  }, [listId])
-
-  // Live reactive read from Dexie. Falls back to SSR data while IndexedDB hydrates.
-  const liveItems = useLiveQuery(
-    () => localDB.items.where('list_id').equals(listId).toArray(),
-    [listId],
-  )
-  const items: Item[] = useMemo(
-    () => liveItems ? liveItems.map(localItemToItem) : initialItems,
-    [liveItems, initialItems],
-  )
-
-  // Refs so handleDragEnd always reads the latest values even if dnd-kit holds a stale callback.
-  const editModeRef = useRef(editMode)
-  const itemsRef = useRef(items)
-  useEffect(() => { editModeRef.current = editMode }, [editMode])
-  useEffect(() => { itemsRef.current = items }, [items])
-
-  // Clear selection when leaving edit mode.
-  const [prevEditMode, setPrevEditMode] = useState(editMode)
-  if (prevEditMode !== editMode) {
-    setPrevEditMode(editMode)
-    if (!editMode) {
-      setSelectedIds(new Set())
-      setPickerMode(null)
-      setPickerError(null)
-    }
-  }
-
-  function toggleSelect(id: string) {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
 
   useEffect(() => {
     if (!lightboxUrl) return
@@ -193,169 +84,15 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     return () => window.removeEventListener('keydown', onKey)
   }, [lightboxUrl])
 
-  useEffect(() => {
-    if (!pendingMerge) return
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setPendingMerge(null) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [pendingMerge])
+  const { items } = useListItemsSync(list, listId, initialItems)
+  const { input, setInput, filtered, setFiltered, highlightIdx, setHighlightIdx, loading, addError, showUrlInput, setShowUrlInput, urlInput, setUrlInput, inputRef, handleInputChange, selectSuggestion, handleDeleteSuggestion, handleAdd } = useAddItems({ listId, items, suggestions, isOffline })
+  const { selectedIds, setSelectedIds, pickerMode, setPickerMode, pickerError, setPickerError, toggleSelect, handlePickTarget } = useItemSelection({ editMode, items, listId })
+  const { sensors, handleDragEnd, pendingMerge, setPendingMerge, handleMergeConfirm } = useDragMergeReorder({ listId, items, editMode })
+  const { ghosts, setGhosts, fwCanvasRef, spawnGhost } = useItemCelebrations({ itemTextClass, thumbSizeClass })
 
   const toShop = useMemo(() => items.filter(i => !i.is_checked).sort(sortItemsByOrder), [items])
   const shopped = useMemo(() => items.filter(i => i.is_checked).sort(sortItemsByOrder), [items])
   const groupedToShop = useMemo(() => groupByCategory(toShop, categoryOrder), [toShop, categoryOrder])
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
-  )
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-
-    if (editModeRef.current) {
-      const activeItem = itemsRef.current.find(i => i.id === active.id)
-      const overItem = itemsRef.current.find(i => i.id === over.id)
-      if (activeItem && overItem) {
-        setPendingMerge({ source: activeItem, target: overItem })
-      }
-      return
-    }
-
-    const allItems = itemsRef.current
-    const currentToShop = allItems.filter(i => !i.is_checked).sort(sortByOrder)
-    const activeItem = currentToShop.find(i => i.id === active.id)
-    const overItem = currentToShop.find(i => i.id === over.id)
-    if (!activeItem || !overItem) return
-    const activeCat = activeItem.category ?? 'ovrigt'
-    const overCat = overItem.category ?? 'ovrigt'
-    if (activeCat !== overCat) return
-
-    const catItems = currentToShop.filter(i => (i.category ?? 'ovrigt') === activeCat)
-    const oldIndex = catItems.findIndex(i => i.id === active.id)
-    const newIndex = catItems.findIndex(i => i.id === over.id)
-    if (oldIndex === -1 || newIndex === -1) return
-
-    const reordered = arrayMove(catItems, oldIndex, newIndex)
-    const moved = reordered[newIndex]
-    const before = reordered[newIndex - 1]
-    const after = reordered[newIndex + 1]
-    const newSortOrder = computeNewSortOrder(
-      before?.sort_order ?? null,
-      after?.sort_order ?? null,
-      newIndex,
-    )
-    muReorderItem(listId, moved.id, newSortOrder)
-  }
-
-  function handleInputChange(value: string) {
-    setInput(value)
-    setHighlightIdx(-1)
-    if (value.trim().length < 1 || /[,\n\d]/.test(value)) { setFiltered([]); return }
-    const lower = value.toLowerCase()
-    setFiltered(suggestions.filter(s => s.toLowerCase().includes(lower)).slice(0, 6))
-  }
-
-  function selectSuggestion(name: string) {
-    setInput(name)
-    setFiltered([])
-    inputRef.current?.focus()
-  }
-
-  function handleDeleteSuggestion(name: string) {
-    setFiltered(f => f.filter(s => s !== name))
-    if (!isOffline) deleteHistoryItem(name)
-    inputRef.current?.focus()
-  }
-
-  async function handleAdd() {
-    const raw = input.trim()
-    if (!raw) return
-    setAddError(null)
-
-    const hasSplit = /[,\n]/.test(raw)
-    const hasDigit = /\d/.test(raw)
-
-    if (!hasSplit && !hasDigit) {
-      // Fast path: plain single name, works offline via local outbox.
-      setLoading(true)
-      setInput('')
-      setFiltered([])
-      if (inputRef.current) inputRef.current.style.height = 'auto'
-      const pictureUrl = urlInput.trim() || undefined
-      setUrlInput('')
-
-      const match = findExistingItem(items, raw)
-      if (match) {
-        await muUpdateItem(listId, match.id, { quantity: match.quantity + 1, is_checked: false })
-      } else {
-        await muAddItem(buildLocalItem(listId, raw, { pictureUrl }))
-      }
-      setLoading(false)
-      inputRef.current?.focus()
-      return
-    }
-
-    // Multi-item or digit-bearing: requires a server call.
-    const previousInput = raw
-    setLoading(true)
-    setInput('')
-    setFiltered([])
-    if (inputRef.current) inputRef.current.style.height = 'auto'
-
-    try {
-      if (hasSplit && !hasDigit) {
-        // Plain names only — dedupe within the batch first, then route through
-        // local outbox so it works offline too.
-        for (const { name, quantity } of dedupeAddBatch(splitPlainItems(raw))) {
-          const match = findExistingItem(items, name)
-          if (match) {
-            await muUpdateItem(listId, match.id, { quantity: match.quantity + quantity, is_checked: false })
-          } else {
-            await muAddItem(buildLocalItem(listId, name, { quantity }))
-          }
-        }
-      } else {
-        const extracted = await extractAddItems(raw)
-        if (extracted.error || !extracted.items) {
-          setAddError(extracted.error ?? 'Kunde inte tolka listan')
-          setInput(previousInput)
-          return
-        }
-        const itemsToAdd = extracted.items
-        if (itemsToAdd.length > 0) {
-          const result = await addItems(listId, itemsToAdd)
-          if (result.error) {
-            setAddError(result.error)
-            return
-          }
-          if (result.items) {
-            localDB.items.bulkPut((result.items as Item[]).map(itemToLocalItem))
-              .catch(err => console.error('Failed to put items in local db:', err))
-          }
-        }
-      }
-    } catch (e) {
-      setAddError(e instanceof Error ? e.message : 'Kunde inte lägga till')
-      setInput(previousInput)
-    } finally {
-      setLoading(false)
-    }
-    inputRef.current?.focus()
-  }
-
-  function spawnGhost(item: Item, rect: DOMRect) {
-    const ghost: GhostItem = {
-      key: `ghost-${ghostSeq++}`,
-      name: item.name,
-      picture_url: item.picture_url,
-      measurement: item.measurement,
-      rect,
-      itemTextClass,
-      thumbSizeClass,
-    }
-    setGhosts(g => [...g, ghost])
-  }
 
   async function handleToggle(item: Item, sourceRect?: DOMRect) {
     if (!item.is_checked && sourceRect) {
@@ -373,22 +110,12 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     await muDeleteItem(listId, item.id)
   }
 
-  async function handleMergeConfirm() {
-    if (!pendingMerge) return
-    const { source, target } = pendingMerge
-    setPendingMerge(null)
-    const { measurement: mergedMeasurement, quantity: mergedQuantity } = buildMergePatch(source, target)
-    await muMergeItems(listId, source.id, target.id, mergedMeasurement, mergedQuantity)
-  }
-
   async function handleClearShopped() {
-    const ids = items.filter(i => i.is_checked).map(i => i.id)
-    await muBulkDelete(listId, ids)
+    await muBulkDelete(listId, items.filter(i => i.is_checked).map(i => i.id))
   }
 
   async function handleClearAll() {
-    const ids = items.map(i => i.id)
-    await muBulkDelete(listId, ids)
+    await muBulkDelete(listId, items.map(i => i.id))
   }
 
   async function handleMeasurementCombine(item: Item, combined: string) {
@@ -405,41 +132,6 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     }
     if (category !== item.category) patch.category = category
     await muUpdateItem(listId, item.id, patch)
-  }
-
-  async function handlePickTarget(targetListId: string) {
-    const mode = pickerMode
-    if (!mode || selectedIds.size === 0) return
-    const ids = [...selectedIds]
-    const selectedItems = items.filter(i => selectedIds.has(i.id))
-    const payload = selectedItems.map(i => ({
-      name: i.name,
-      picture_url: i.picture_url,
-      quantity: i.quantity,
-      category: i.category,
-      measurement: i.measurement,
-    }))
-
-    setPickerError(null)
-    if (mode === 'move') {
-      // Don't use the outbox for move: it's a cross-list operation and queuing
-      // local deletes before the server call succeeds creates orphan entries
-      // that would re-delete items if the server call fails and we restore them.
-      const res = await moveItemsToList(listId, targetListId, ids, payload)
-      if (res?.error) {
-        setPickerError(res.error)
-        throw new Error(res.error)
-      }
-      await localDB.items.bulkDelete(ids)
-    } else {
-      const res = await copyItemsToList(targetListId, payload)
-      if (res?.error) {
-        setPickerError(res.error)
-        throw new Error(res.error)
-      }
-    }
-    setSelectedIds(new Set())
-    setPickerMode(null)
   }
 
   const isEmpty = toShop.length === 0 && shopped.length === 0

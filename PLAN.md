@@ -40,7 +40,7 @@ Already done in `src/lib/itemListHelpers.ts`: `computeNewSortOrder`, `dedupeAddB
 
 ---
 
-## Phase 2 — Extract custom hooks + renderHook tests
+## Phase 2 — Extract custom hooks + renderHook tests ✓ DONE 2026-05-17
 
 **Goal:** State and effects that orchestrate domain logic move into focused hooks. Each hook has explicit dependencies (mutations injected or imported), so tests can mock them at the module boundary.
 
