@@ -84,6 +84,10 @@ A web app for family members to manage personal and shared grocery lists with re
 - Accept/reject screen before adding to list
 - Same pipeline used by the in-app modal and the Android share target
 
+### Store mode
+- Distraction-free shopping UI toggled from the list page header — hides the page chrome and stretches item rows full-width
+- Holds a screen wake lock while active so the phone doesn't dim or sleep mid-shop (re-acquired automatically when the tab regains visibility; no-op on browsers without the Wake Lock API)
+
 ### Real-time sync
 - Supabase Realtime keeps all open sessions in sync on shared lists
 - Add, toggle, edit, delete, reorder all propagate without page refresh
@@ -101,7 +105,8 @@ A web app for family members to manage personal and shared grocery lists with re
 
 ### Settings
 - **Theme**: Light · Dark · Shoplist
-  - Shoplist: palette from the app icon (pink/teal/orange/yellow/blue), gradient background, frosted-glass header, per-item pastel tints, canvas firework burst when an item is checked off
+  - Shoplist: palette from the app icon (pink/teal/orange/yellow/blue), gradient background, frosted-glass header, per-item pastel tints inside a list, matching pastel tints + a subtle occasional light-flare on the list cards on `/lists`, canvas firework burst when an item is checked off
+  - Themed list-navigation loading overlay: shows the actual app-icon cart (rolling animation) with "Laddar…" in cart-pink; dark theme uses a black-background variant of the icon
 - **High contrast**: stronger borders and text for accessibility
 - **List text size**: Normal · Large (affects item rows only)
 - **Category order**: drag-to-reorder the 11 categories
