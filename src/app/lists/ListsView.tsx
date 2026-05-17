@@ -73,7 +73,15 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
             src="/icon-512.png"
             alt=""
             aria-hidden
-            className="w-64 h-64 sm:w-80 sm:h-80 loading-cart select-none"
+            className="w-64 h-64 sm:w-80 sm:h-80 loading-cart select-none dark:hidden"
+            draggable={false}
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/icon-512-dark.png"
+            alt=""
+            aria-hidden
+            className="w-64 h-64 sm:w-80 sm:h-80 loading-cart select-none hidden dark:block"
             draggable={false}
           />
           <span className="mt-2 text-[#EC4899] text-lg font-semibold tracking-wide">Laddar...</span>
