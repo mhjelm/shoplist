@@ -66,7 +66,7 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
         <div
           role="status"
           aria-live="polite"
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white dark:bg-black"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
