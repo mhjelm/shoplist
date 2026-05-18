@@ -102,11 +102,24 @@ export function useAddItems({
           return
         }
         for (const parsed of extracted.items) {
-          await muAddItem(buildLocalItem(listId, parsed.name, {
-            quantity: parsed.quantity,
-            measurement: parsed.measurement,
-            category: parsed.category,
-          }))
+          const match = findExistingItem(items, parsed.name)
+          if (match) {
+            const incoming = parsed.measurement?.trim() || null
+            const mergedMeasurement = incoming
+              ? (match.measurement ? `${match.measurement} + ${incoming}` : incoming)
+              : match.measurement
+            await muUpdateItem(listId, match.id, {
+              quantity: match.quantity + parsed.quantity,
+              measurement: mergedMeasurement,
+              is_checked: false,
+            })
+          } else {
+            await muAddItem(buildLocalItem(listId, parsed.name, {
+              quantity: parsed.quantity,
+              measurement: parsed.measurement,
+              category: parsed.category,
+            }))
+          }
         }
       }
     } catch (e) {

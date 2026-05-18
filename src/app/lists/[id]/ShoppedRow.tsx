@@ -45,7 +45,7 @@ export function ShoppedRow({
     return (
       <li
         ref={liRef}
-        className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800/50 overflow-hidden relative select-none"
+        className="bg-gray-50 dark:bg-gray-950 rounded-xl border border-gray-100 dark:border-gray-800/50 overflow-hidden relative select-none"
         style={{ touchAction: 'pan-y' }}
         data-sl-color={slColor}
         data-muted="true"

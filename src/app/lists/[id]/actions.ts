@@ -49,7 +49,14 @@ export async function addItem(
     .single()
 
   if (existing) {
-    const patch: Record<string, unknown> = { quantity: existing.quantity + (quantity ?? 1) }
+    const incomingMeasurement = measurement?.trim() || null
+    const mergedMeasurement = incomingMeasurement
+      ? (existing.measurement ? `${existing.measurement} + ${incomingMeasurement}` : incomingMeasurement)
+      : existing.measurement
+    const patch: Record<string, unknown> = {
+      quantity: existing.quantity + (quantity ?? 1),
+      measurement: mergedMeasurement,
+    }
     if (existing.is_checked) patch.is_checked = false
     const { data, error } = await supabase
       .from('items')

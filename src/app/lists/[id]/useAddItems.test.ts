@@ -98,6 +98,17 @@ describe('useAddItems', () => {
     expect(vi.mocked(muUpdateItem)).toHaveBeenCalledWith('list-1', 'x', { quantity: 3, is_checked: false })
   })
 
+  it('plain add keeps existing measurement when bumping quantity', async () => {
+    const { muUpdateItem } = await import('@/lib/sync/mutations')
+    const existing = makeItem('p', { name: 'Potatis', quantity: 1, measurement: '300 g' })
+    const { result } = renderHook(() => useAddItems({ ...defaultProps, items: [existing] }))
+
+    act(() => { result.current.handleInputChange('potatis') })
+    await act(async () => { await result.current.handleAdd() })
+
+    expect(vi.mocked(muUpdateItem)).toHaveBeenCalledWith('list-1', 'p', { quantity: 2, is_checked: false })
+  })
+
   it('plain add revives a shopped item (case-insensitive, bumps quantity)', async () => {
     const { muUpdateItem } = await import('@/lib/sync/mutations')
     const shoppedItem = makeItem('y', { name: 'Mjölk', quantity: 1, is_checked: true })
@@ -167,6 +178,26 @@ describe('useAddItems', () => {
     })
     expect(result.current.loading).toBe(false)
     expect(result.current.input).toBe('')
+  })
+
+  it('digit-bearing add merges measurement into existing item via muUpdateItem', async () => {
+    const { extractAddItems } = await import('./actions')
+    const { muAddItem, muUpdateItem } = await import('@/lib/sync/mutations')
+    vi.mocked(extractAddItems).mockResolvedValue({
+      items: [{ name: 'potatis', quantity: 1, measurement: '500 g', category: 'frukt-gront' }],
+    })
+    const existing = makeItem('p', { name: 'Potatis', quantity: 1, measurement: '300 g' })
+    const { result } = renderHook(() => useAddItems({ ...defaultProps, items: [existing] }))
+
+    act(() => { result.current.handleInputChange('potatis 500g') })
+    await act(async () => { await result.current.handleAdd() })
+
+    expect(vi.mocked(muAddItem)).not.toHaveBeenCalled()
+    expect(vi.mocked(muUpdateItem)).toHaveBeenCalledWith('list-1', 'p', {
+      quantity: 2,
+      measurement: '300 g + 500 g',
+      is_checked: false,
+    })
   })
 
   it('restores input and sets error when extractAddItems returns an error', async () => {
