@@ -6,6 +6,7 @@ import { localDB } from '@/lib/db/local'
 import type { Item, List, ListTextSize, Theme } from '@/lib/types'
 import { type CategorySlug } from '@/lib/categories'
 import { itemToLocalItem, sortItemsByOrder, groupByCategory } from './itemHelpers'
+import { touchListView } from './actions'
 import { muUpdateItem, muDeleteItem, muBulkDelete } from '@/lib/sync/mutations'
 import { useSyncState } from '@/lib/sync/engine'
 import { useEditMode } from './EditModeContext'
@@ -67,6 +68,18 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [lightboxUrl])
+
+  useEffect(() => {
+    touchListView(listId).catch(() => {})
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') touchListView(listId).catch(() => {})
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      touchListView(listId).catch(() => {})
+    }
+  }, [listId])
 
   const { items } = useListItemsSync(list, listId, initialItems)
   const addItems = useAddItems({ listId, items, suggestions, isOffline })

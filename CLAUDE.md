@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Pending manual tasks
 
-- [ ] **Migration naming conflict** — Two migrations share the `0014_` prefix: `0014_fix_bump_item_history_conflict.sql` (trigger fix) and `0014_theme_shoplist.sql` (Shoplist theme). Both have been applied manually. The next migration must use `0015_` to avoid confusion.
+- [ ] **Apply migration `0015_list_views.sql`** — creates the `list_views` table + `list_activity` view powering the "updated since last viewed" dot on `/lists`. Two earlier migrations share the `0014_` prefix (`0014_fix_bump_item_history_conflict.sql`, `0014_theme_shoplist.sql`); `0015_` is the unambiguous next number.
 
 > Signup is now invitation-only (done 2026-05-17). See `docs/how-to-add-new-user.html` for the invite flow and how to re-enable public signup if ever needed.
 
@@ -255,4 +255,4 @@ Realtime publication includes `items`, `lists`, and `list_members`. `items` uses
 
 - **`@/...` imports** resolve to `src/...` (Next.js default).
 - **Tailwind v4** — uses `@tailwindcss/postcss`; no `tailwind.config.js`.
-- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0015_`.
+- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0016_`.

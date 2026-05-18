@@ -14,10 +14,11 @@ import ListEditPanel from './ListEditPanel'
 interface Props {
   initialLists: List[]
   memberCounts: Record<string, boolean>
+  unread: Record<string, boolean>
   currentUserId: string
 }
 
-export default function ListsView({ initialLists, memberCounts, currentUserId }: Props) {
+export default function ListsView({ initialLists, memberCounts, unread, currentUserId }: Props) {
   const { isOffline } = useSyncState()
   const [navigatingToListId, setNavigatingToListId] = useState<string | null>(null)
   const [openEditListId, setOpenEditListId] = useState<string | null>(null)
@@ -99,6 +100,7 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
                 key={list.id}
                 list={list}
                 hasMembers={memberCounts[list.id] ?? false}
+                unread={unread[list.id] ?? false}
                 cached={cachedIds.has(list.id)}
                 isOffline={isOffline}
                 onNavigate={setNavigatingToListId}
@@ -121,6 +123,7 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
                 key={list.id}
                 list={list}
                 hasMembers={false}
+                unread={unread[list.id] ?? false}
                 cached={cachedIds.has(list.id)}
                 isOffline={isOffline}
                 onNavigate={setNavigatingToListId}
@@ -136,9 +139,10 @@ export default function ListsView({ initialLists, memberCounts, currentUserId }:
   )
 }
 
-function ListRow({ list, hasMembers, cached, isOffline, onNavigate, openEditListId, onToggleEdit, onRename, showEdit }: {
+function ListRow({ list, hasMembers, unread, cached, isOffline, onNavigate, openEditListId, onToggleEdit, onRename, showEdit }: {
   list: List
   hasMembers: boolean
+  unread: boolean
   cached: boolean
   isOffline: boolean
   onNavigate: (listId: string) => void
@@ -161,6 +165,13 @@ function ListRow({ list, hasMembers, cached, isOffline, onNavigate, openEditList
           aria-label="Sparad offline"
           title="Sparad offline"
           className="inline-block h-2 w-2 rounded-full bg-emerald-500 shrink-0"
+        />
+      )}
+      {unread && (
+        <span
+          aria-label="Uppdaterad sedan senaste besöket"
+          title="Uppdaterad sedan senaste besöket"
+          className="inline-block h-2 w-2 rounded-full bg-blue-500 shrink-0"
         />
       )}
       <span className="truncate">{list.name}</span>

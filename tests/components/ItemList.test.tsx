@@ -37,6 +37,7 @@ vi.mock('@/app/lists/[id]/actions', () => ({
   addItems: vi.fn().mockResolvedValue({ items: [] }),
   copyItemsToList: vi.fn(),
   moveItemsToList: vi.fn(),
+  touchListView: vi.fn().mockResolvedValue({}),
 }))
 
 vi.mock('@/lib/sync/engine', () => ({

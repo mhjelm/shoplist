@@ -28,6 +28,26 @@ export default async function ListsPage() {
     memberCounts[rest.id] = (list_members?.[0]?.count ?? 0) > 0
   }
 
+  // "Unread" indicator: a list shows a dot when its most recent item activity
+  // is newer than the user's last_viewed_at (or they've never opened it).
+  const [{ data: activityRows }, { data: viewRows }] = await Promise.all([
+    supabase.from('list_activity').select('list_id, last_activity'),
+    supabase.from('list_views').select('list_id, last_viewed_at').eq('user_id', user.id),
+  ])
+  const lastActivity = new Map<string, string>(
+    (activityRows ?? []).map(r => [r.list_id as string, r.last_activity as string]),
+  )
+  const lastViewed = new Map<string, string>(
+    (viewRows ?? []).map(r => [r.list_id as string, r.last_viewed_at as string]),
+  )
+  const unread: Record<string, boolean> = {}
+  for (const list of lists) {
+    const act = lastActivity.get(list.id)
+    if (!act) continue
+    const seen = lastViewed.get(list.id)
+    unread[list.id] = !seen || act > seen
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between">
@@ -43,7 +63,7 @@ export default async function ListsPage() {
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-8">
         <CreateListForm />
-        <ListsView initialLists={lists} memberCounts={memberCounts} currentUserId={user.id} />
+        <ListsView initialLists={lists} memberCounts={memberCounts} unread={unread} currentUserId={user.id} />
       </main>
     </div>
   )
