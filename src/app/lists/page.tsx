@@ -6,6 +6,7 @@ import CreateListForm from './CreateListForm'
 import ListsView from './ListsView'
 import OfflineBadge from '@/components/OfflineBadge'
 import { getUserPreferences } from '@/lib/preferences'
+import { computeUnread } from '@/lib/listsUnread'
 import type { List } from '@/lib/types'
 
 export default async function ListsPage() {
@@ -41,13 +42,13 @@ export default async function ListsPage() {
   const lastViewed = new Map<string, string>(
     (viewRows ?? []).map(r => [r.list_id as string, r.last_viewed_at as string]),
   )
-  const unread: Record<string, boolean> = {}
-  for (const list of lists) {
-    const act = lastActivity.get(list.id)
-    if (!act) continue
-    const seen = lastViewed.get(list.id)
-    unread[list.id] = !seen || act > seen
-  }
+  const unread = computeUnread({
+    lists,
+    memberCounts,
+    lastActivity,
+    lastViewed,
+    currentUserId: user.id,
+  })
 
   const { theme } = await getUserPreferences()
 
