@@ -175,6 +175,7 @@ export async function touchListView(listId: string): Promise<{ error?: string }>
       { onConflict: 'user_id,list_id' },
     )
   if (error) return { error: error.message }
+  revalidatePath('/lists')
   return {}
 }
 

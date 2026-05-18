@@ -11,6 +11,10 @@ import { DEFAULT_CATEGORY_ORDER } from '@/lib/categories'
 // Module mocks
 // ---------------------------------------------------------------------------
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn(), prefetch: vi.fn() }),
+}))
+
 vi.mock('@/lib/sync/mutations', () => ({
   muUpdateItem: vi.fn().mockResolvedValue(undefined),
   muDeleteItem: vi.fn().mockResolvedValue(undefined),

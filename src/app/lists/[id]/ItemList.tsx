@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { localDB } from '@/lib/db/local'
 import type { Item, List, ListTextSize, Theme } from '@/lib/types'
@@ -51,6 +52,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
   const [editMode, setEditMode] = useEditMode()
   const [storeMode, setStoreMode] = useStoreMode()
   const { isOffline } = useSyncState()
+  const router = useRouter()
 
   useEffect(() => {
     if (storeMode) {
@@ -77,9 +79,16 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     document.addEventListener('visibilitychange', onVis)
     return () => {
       document.removeEventListener('visibilitychange', onVis)
-      touchListView(listId).catch(() => {})
+      // Touch then force a re-fetch of whatever page is active now (typically
+      // /lists). Without router.refresh the Next router cache happily serves
+      // the stale RSC that was rendered before our own edits, making our own
+      // changes look "unread" on the list overview.
+      void (async () => {
+        await touchListView(listId).catch(() => {})
+        router.refresh()
+      })()
     }
-  }, [listId])
+  }, [listId, router])
 
   const { items } = useListItemsSync(list, listId, initialItems)
   const addItems = useAddItems({ listId, items, suggestions, isOffline })
