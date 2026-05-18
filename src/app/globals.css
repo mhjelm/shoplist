@@ -126,6 +126,47 @@ body {
   .shoplist .sl-tile::after { animation: none; }
 }
 
+/* "NEW" starburst sticker on /lists (light + dark themes). Subtle wobble
+   plus pulse so it draws the eye without being annoying. The -12° tilt
+   is set via a Tailwind utility on the wrapper. */
+.unread-burst {
+  animation: unread-pulse 2.4s ease-in-out infinite;
+  transform-origin: center;
+}
+@keyframes unread-pulse {
+  0%, 100% { transform: rotate(-12deg) scale(1); }
+  50%      { transform: rotate(-8deg)  scale(1.08); }
+}
+
+/* "NEW" round sticker on /lists in shoplist theme. Slight breathing pulse
+   plus a periodic diagonal shine sweep across the disc. Position-relative
+   so it stacks above the .sl-tile flare overlay. */
+.unread-sticker {
+  animation: unread-pulse-sticker 2.6s ease-in-out infinite;
+  transform-origin: center;
+  position: relative;
+  z-index: 1;
+}
+@keyframes unread-pulse-sticker {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50%      { transform: scale(1.08) rotate(2deg); }
+}
+.us-shine-bar {
+  animation: us-shine-sweep 3.4s ease-in-out infinite;
+}
+@keyframes us-shine-sweep {
+  0%, 55%  { transform: translateX(0);     opacity: 0; }
+  65%      {                               opacity: 1; }
+  92%      { transform: translateX(120px); opacity: 0.7; }
+  100%     { transform: translateX(120px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .unread-burst,
+  .unread-sticker,
+  .us-shine-bar { animation: none; }
+}
+
 /* Loading overlay (list → list navigation): cart rolls back and forth */
 .loading-cart {
   transform-origin: 50% 85%;

@@ -6,7 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { localDB } from '@/lib/db/local'
 import { reconcileLists } from '@/lib/sync/reconcile'
 import { useSyncState } from '@/lib/sync/engine'
-import type { List } from '@/lib/types'
+import type { List, Theme } from '@/lib/types'
 import { slColorFor, slFlareDelay } from '@/lib/sl-theme'
 import DeleteListButton from './DeleteListButton'
 import ListEditPanel from './ListEditPanel'
@@ -15,10 +15,11 @@ interface Props {
   initialLists: List[]
   memberCounts: Record<string, boolean>
   unread: Record<string, boolean>
+  theme: Theme
   currentUserId: string
 }
 
-export default function ListsView({ initialLists, memberCounts, unread, currentUserId }: Props) {
+export default function ListsView({ initialLists, memberCounts, unread, theme, currentUserId }: Props) {
   const { isOffline } = useSyncState()
   const [navigatingToListId, setNavigatingToListId] = useState<string | null>(null)
   const [openEditListId, setOpenEditListId] = useState<string | null>(null)
@@ -101,6 +102,7 @@ export default function ListsView({ initialLists, memberCounts, unread, currentU
                 list={list}
                 hasMembers={memberCounts[list.id] ?? false}
                 unread={unread[list.id] ?? false}
+                theme={theme}
                 cached={cachedIds.has(list.id)}
                 isOffline={isOffline}
                 onNavigate={setNavigatingToListId}
@@ -124,6 +126,7 @@ export default function ListsView({ initialLists, memberCounts, unread, currentU
                 list={list}
                 hasMembers={false}
                 unread={unread[list.id] ?? false}
+                theme={theme}
                 cached={cachedIds.has(list.id)}
                 isOffline={isOffline}
                 onNavigate={setNavigatingToListId}
@@ -139,10 +142,11 @@ export default function ListsView({ initialLists, memberCounts, unread, currentU
   )
 }
 
-function ListRow({ list, hasMembers, unread, cached, isOffline, onNavigate, openEditListId, onToggleEdit, onRename, showEdit }: {
+function ListRow({ list, hasMembers, unread, theme, cached, isOffline, onNavigate, openEditListId, onToggleEdit, onRename, showEdit }: {
   list: List
   hasMembers: boolean
   unread: boolean
+  theme: Theme
   cached: boolean
   isOffline: boolean
   onNavigate: (listId: string) => void
@@ -167,13 +171,7 @@ function ListRow({ list, hasMembers, unread, cached, isOffline, onNavigate, open
           className="inline-block h-2 w-2 rounded-full bg-emerald-500 shrink-0"
         />
       )}
-      {unread && (
-        <span
-          aria-label="Uppdaterad sedan senaste besöket"
-          title="Uppdaterad sedan senaste besöket"
-          className="inline-block h-2 w-2 rounded-full bg-blue-500 shrink-0"
-        />
-      )}
+      {unread && (theme === 'shoplist' ? <UnreadSticker /> : <UnreadBadge />)}
       <span className="truncate">{list.name}</span>
       {hasMembers && <span className="text-xs text-gray-400 dark:text-gray-500">shared</span>}
     </>
@@ -245,5 +243,88 @@ function ListRow({ list, hasMembers, unread, cached, isOffline, onNavigate, open
         />
       )}
     </li>
+  )
+}
+
+const BURST_POINTS =
+  '50,2 59,15 74,8 75,25 92,26 85,41 98,50 85,59 92,74 75,75 74,92 59,85 50,98 41,85 26,92 25,75 8,74 15,59 2,50 15,41 8,26 25,25 26,8 41,15'
+
+function UnreadBadge() {
+  return (
+    <span
+      aria-label="Uppdaterad sedan senaste besöket"
+      title="Uppdaterad sedan senaste besöket"
+      className="unread-burst inline-flex shrink-0 -rotate-12"
+    >
+      <svg viewBox="0 0 100 100" className="w-7 h-7" aria-hidden="true">
+        <polygon points={BURST_POINTS} fill="#EC4899" />
+        <text
+          x="50"
+          y="50"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontFamily="system-ui, -apple-system, sans-serif"
+          fontWeight="900"
+          fontSize="28"
+          letterSpacing="0.5"
+          fill="white"
+        >NEW</text>
+      </svg>
+    </span>
+  )
+}
+
+function UnreadSticker() {
+  return (
+    <span
+      aria-label="Uppdaterad sedan senaste besöket"
+      title="Uppdaterad sedan senaste besöket"
+      className="unread-sticker inline-flex shrink-0"
+    >
+      <svg viewBox="0 0 100 100" className="w-8 h-8 overflow-visible" aria-hidden="true">
+        <defs>
+          <filter id="us-shadow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="1.4" />
+            <feOffset dx="0.6" dy="1.6" />
+            <feComponentTransfer><feFuncA type="linear" slope="0.35" /></feComponentTransfer>
+            <feMerge>
+              <feMergeNode />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <clipPath id="us-clip">
+            <circle cx="50" cy="50" r="42" />
+          </clipPath>
+          <linearGradient id="us-shine" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="white" stopOpacity="0" />
+            <stop offset="50%" stopColor="white" stopOpacity="0.6" />
+            <stop offset="100%" stopColor="white" stopOpacity="0" />
+          </linearGradient>
+          <radialGradient id="us-highlight" cx="35%" cy="32%" r="55%">
+            <stop offset="0%" stopColor="white" stopOpacity="0.45" />
+            <stop offset="60%" stopColor="white" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <g filter="url(#us-shadow)">
+          <circle cx="50" cy="50" r="42" fill="#F97316" />
+          <circle cx="50" cy="50" r="42" fill="url(#us-highlight)" />
+          <g clipPath="url(#us-clip)">
+            <rect className="us-shine-bar" x="-28" y="0" width="18" height="100" fill="url(#us-shine)" />
+          </g>
+          <path d="M 70 10 Q 80 12 88 24 L 72 22 Z" fill="#FFF3DC" stroke="#C76A10" strokeWidth="0.4" />
+          <text
+            x="50"
+            y="50"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontFamily="system-ui, -apple-system, sans-serif"
+            fontWeight="900"
+            fontSize="22"
+            letterSpacing="0.4"
+            fill="white"
+          >NEW</text>
+        </g>
+      </svg>
+    </span>
   )
 }

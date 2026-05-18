@@ -101,7 +101,7 @@ beforeEach(() => {
 describe('ListsView', () => {
   it('renders all lists from initialLists', () => {
     const initial = [mkList('a'), mkList('b')]
-    render(<ListsView initialLists={initial} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={initial} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     expect(screen.getByRole('link', { name: /List a/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /List b/ })).toBeInTheDocument()
   })
@@ -109,13 +109,13 @@ describe('ListsView', () => {
   it('online: every list is a clickable Link regardless of cache status', () => {
     live.lists = []
     live.items = []
-    render(<ListsView initialLists={[mkList('a'), mkList('b')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a'), mkList('b')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     expect(screen.getByRole('link', { name: /List a/ })).toHaveAttribute('href', '/lists/a')
     expect(screen.getByRole('link', { name: /List b/ })).toHaveAttribute('href', '/lists/b')
   })
 
   it('online: clicking a list shows the navigation loading affordance', () => {
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     const link = screen.getByRole('link', { name: /List a/ })
     link.addEventListener('click', event => event.preventDefault())
     fireEvent.click(link)
@@ -123,24 +123,24 @@ describe('ListsView', () => {
   })
 
   it('shows "shared" badge when memberCounts says a list has members', () => {
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={{ a: true }} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={{ a: true }} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     expect(screen.getByText('shared')).toBeInTheDocument()
   })
 
   it('shows an edit pencil for owned lists', () => {
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     expect(screen.getByRole('button', { name: /redigera list a/i })).toBeInTheDocument()
   })
 
   it('does not show an edit pencil for shared-with-me lists', () => {
-    render(<ListsView initialLists={[mkList('theirs', 'someone-else', 'Other List')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('theirs', 'someone-else', 'Other List')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     expect(screen.queryByRole('button', { name: /redigera other list/i })).not.toBeInTheDocument()
   })
 
   it('clicking the edit pencil opens the inline panel and fetches share data', async () => {
     mockFetchMembers.mockResolvedValueOnce([{ user_id: 'u1', email: 'alice@a.com', added_at: '2024-01-01T00:00:00.000Z' }])
     mockFetchInvitees.mockResolvedValueOnce(['bob@b.com'])
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     fireEvent.click(screen.getByRole('button', { name: /redigera list a/i }))
 
     expect(screen.getByLabelText('Listnamn')).toHaveValue('List a')
@@ -152,7 +152,7 @@ describe('ListsView', () => {
   })
 
   it('only keeps one edit panel open at a time', async () => {
-    render(<ListsView initialLists={[mkList('a'), mkList('b')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a'), mkList('b')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     fireEvent.click(screen.getByRole('button', { name: /redigera list a/i }))
     expect(screen.getByLabelText('Listnamn')).toHaveValue('List a')
     fireEvent.click(screen.getByRole('button', { name: /redigera list b/i }))
@@ -161,7 +161,7 @@ describe('ListsView', () => {
   })
 
   it('renames the list and updates the row locally', async () => {
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     fireEvent.click(screen.getByRole('button', { name: /redigera list a/i }))
     fireEvent.change(screen.getByLabelText('Listnamn'), { target: { value: 'Ny lista' } })
     fireEvent.submit(screen.getByRole('button', { name: /spara/i }).closest('form')!)
@@ -171,7 +171,7 @@ describe('ListsView', () => {
   })
 
   it('does not submit an empty rename', () => {
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     fireEvent.click(screen.getByRole('button', { name: /redigera list a/i }))
     fireEvent.change(screen.getByLabelText('Listnamn'), { target: { value: '   ' } })
     expect(screen.getByRole('button', { name: /spara/i })).toBeDisabled()
@@ -183,7 +183,7 @@ describe('ListsView', () => {
     sync.isOffline = true
     live.lists = [mkLocalList('a')]
     live.items = []
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     fireEvent.click(screen.getByRole('button', { name: /redigera list a/i }))
     const save = screen.getByRole('button', { name: /spara/i })
     expect(save).toBeDisabled()
@@ -191,7 +191,7 @@ describe('ListsView', () => {
   })
 
   it('does NOT show "shared" badge when list has no members', () => {
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={{ a: false }} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={{ a: false }} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     expect(screen.queryByText('shared')).not.toBeInTheDocument()
   })
 
@@ -199,7 +199,7 @@ describe('ListsView', () => {
     sync.isOffline = true
     live.lists = [mkLocalList('a')]
     live.items = [mkItem('i1', 'a')]
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     const link = screen.getByRole('link', { name: /List a/ })
     expect(link).toHaveAttribute('href', '/lists/a')
     expect(link).not.toHaveAttribute('aria-disabled')
@@ -210,7 +210,7 @@ describe('ListsView', () => {
     sync.isOffline = true
     live.lists = [mkLocalList('a')]
     live.items = []
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     expect(screen.getByLabelText('Sparad offline')).toBeInTheDocument()
   })
 
@@ -218,7 +218,7 @@ describe('ListsView', () => {
     sync.isOffline = false
     live.lists = [mkLocalList('a')]
     live.items = []
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     expect(screen.queryByLabelText('Sparad offline')).not.toBeInTheDocument()
   })
 
@@ -226,7 +226,7 @@ describe('ListsView', () => {
     sync.isOffline = true
     live.lists = []
     live.items = []
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     expect(screen.queryByLabelText('Sparad offline')).not.toBeInTheDocument()
   })
 
@@ -234,7 +234,7 @@ describe('ListsView', () => {
     sync.isOffline = true
     live.lists = []
     live.items = []
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     expect(screen.queryByRole('link', { name: /List a/ })).not.toBeInTheDocument()
     const disabled = screen.getByText('List a').closest('[aria-disabled]')
     expect(disabled).not.toBeNull()
@@ -245,7 +245,7 @@ describe('ListsView', () => {
     sync.isOffline = true
     live.lists = []
     live.items = []
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     const disabled = screen.getByText('List a').closest('[aria-disabled]')
     expect(disabled).toHaveAttribute('title', 'Inte tillgänglig offline')
   })
@@ -254,7 +254,7 @@ describe('ListsView', () => {
     sync.isOffline = true
     live.lists = []
     live.items = []
-    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     const el = screen.getByText('List a').closest('[aria-disabled]')
     expect(el?.tagName).not.toBe('A')
     if (el) fireEvent.click(el)
@@ -264,7 +264,7 @@ describe('ListsView', () => {
     sync.isOffline = true
     live.lists = []
     live.items = [mkItem('i1', 'orphan')]
-    render(<ListsView initialLists={[mkList('orphan')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('orphan')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     expect(screen.getByRole('link', { name: /List orphan/ })).toHaveAttribute('href', '/lists/orphan')
   })
 
@@ -272,7 +272,7 @@ describe('ListsView', () => {
     sync.isOffline = true
     live.lists = [mkLocalList('empty')]
     live.items = []
-    render(<ListsView initialLists={[mkList('empty')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} currentUserId="me" />)
+    render(<ListsView initialLists={[mkList('empty')]} memberCounts={NO_COUNTS} unread={NO_UNREAD} theme="light" currentUserId="me" />)
     expect(screen.getByRole('link', { name: /List empty/ })).toHaveAttribute('href', '/lists/empty')
   })
 
@@ -284,6 +284,7 @@ describe('ListsView', () => {
         initialLists={[mkList('mine', 'me'), mkList('theirs', 'someone-else', 'Other List')]}
         memberCounts={NO_COUNTS}
         unread={NO_UNREAD}
+        theme="light"
         currentUserId="me"
       />,
     )

@@ -5,6 +5,7 @@ import { logout } from '../auth/actions'
 import CreateListForm from './CreateListForm'
 import ListsView from './ListsView'
 import OfflineBadge from '@/components/OfflineBadge'
+import { getUserPreferences } from '@/lib/preferences'
 import type { List } from '@/lib/types'
 
 export default async function ListsPage() {
@@ -48,6 +49,8 @@ export default async function ListsPage() {
     unread[list.id] = !seen || act > seen
   }
 
+  const { theme } = await getUserPreferences()
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between">
@@ -63,7 +66,7 @@ export default async function ListsPage() {
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-8">
         <CreateListForm />
-        <ListsView initialLists={lists} memberCounts={memberCounts} unread={unread} currentUserId={user.id} />
+        <ListsView initialLists={lists} memberCounts={memberCounts} unread={unread} theme={theme} currentUserId={user.id} />
       </main>
     </div>
   )
