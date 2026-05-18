@@ -152,6 +152,14 @@ export async function setItemCategory(itemId: string, listId: string, category: 
     .eq('user_id', user.id)
     .ilike('name', item.name)
 
+  // Propagate to same-named items in every accessible list (RLS scopes this to
+  // lists the user owns or is a member of). Excludes the row already updated.
+  await supabase
+    .from('items')
+    .update({ category })
+    .ilike('name', item.name)
+    .neq('id', itemId)
+
   revalidatePath(`/lists/${listId}`)
   return {}
 }
