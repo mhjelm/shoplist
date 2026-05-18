@@ -14,8 +14,8 @@ export function MeasurementBadge({ item, muted, onCombine }: {
 
   const combined = item.measurement ? tryCombine(item.measurement) : null
   const textColor = muted
-    ? 'text-gray-300 dark:text-gray-600'
-    : 'text-gray-400 dark:text-gray-500'
+    ? 'text-gray-400 dark:text-gray-500'
+    : 'text-gray-800 dark:text-gray-200'
 
   useEffect(() => {
     if (!open) return
