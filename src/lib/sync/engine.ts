@@ -101,7 +101,7 @@ function check(result: { error?: string } | undefined | void) {
 }
 
 async function dispatch(entry: OutboxEntry) {
-  const { addItem, updateItem, setItemCategory, deleteItem, reorderItem, mergeItems, categorizeItem } =
+  const { addItem, updateItem, setItemCategory, deleteItem, reorderItem, mergeItems, categorizeItem, touchListView } =
     await import('@/app/lists/[id]/actions')
   const p = entry.payload as Record<string, unknown>
   const listId = p.list_id as string
@@ -155,6 +155,12 @@ async function dispatch(entry: OutboxEntry) {
     default:
       throw new Error(`[outbox] unknown type: ${entry.type}`)
   }
+
+  // Bump the caller's last_viewed_at AFTER the item write succeeds, so
+  // last_viewed_at >= items.updated_at on the server. Without this, the
+  // user's own edits briefly show as "NEW" on /lists when navigating back,
+  // because the /lists query can race ahead of the unmount-time touch.
+  await touchListView(listId).catch(() => {})
 }
 
 export async function flushOutbox(): Promise<void> {

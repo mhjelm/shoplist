@@ -84,6 +84,7 @@ describe('flushOutbox', () => {
       reorderItem: vi.fn().mockResolvedValue({ error: null }),
       mergeItems: vi.fn().mockResolvedValue({ error: null }),
       categorizeItem: vi.fn().mockResolvedValue({ category: null }),
+      touchListView: vi.fn().mockResolvedValue({}),
     }))
 
     const mod = await import('@/lib/sync/engine')
@@ -197,6 +198,7 @@ describe('flushOutbox', () => {
       reorderItem: vi.fn().mockResolvedValue({ error: null }),
       mergeItems: vi.fn().mockResolvedValue({ error: null }),
       categorizeItem: vi.fn().mockResolvedValue({ category: null }),
+      touchListView: vi.fn().mockResolvedValue({}),
     }))
     const mod = await import('@/lib/sync/engine')
 
@@ -242,6 +244,7 @@ describe('flushOutbox — Gemini categorize fallback on item.insert', () => {
       reorderItem: vi.fn().mockResolvedValue({ error: null }),
       mergeItems: vi.fn().mockResolvedValue({ error: null }),
       categorizeItem: mockCategorize,
+      touchListView: vi.fn().mockResolvedValue({}),
     }))
 
     const mod = await import('@/lib/sync/engine')

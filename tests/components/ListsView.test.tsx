@@ -48,6 +48,10 @@ vi.mock('@/lib/sync/engine', () => ({
   useSyncState: () => ({ isOffline: sync.isOffline, pendingCount: 0, recentConflicts: [] }),
 }))
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn(), prefetch: vi.fn() }),
+}))
+
 vi.mock('@/app/lists/actions', () => actions)
 
 // DeleteListButton imports server actions; stub it so this test stays focused.

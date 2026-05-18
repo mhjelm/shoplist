@@ -9,6 +9,7 @@ vi.mock('@/app/lists/[id]/actions', () => ({
   reorderItem: vi.fn().mockResolvedValue(undefined),
   mergeItems: vi.fn().mockResolvedValue(undefined),
   categorizeItem: vi.fn().mockResolvedValue({}),
+  touchListView: vi.fn().mockResolvedValue({}),
 }))
 
 vi.mock('@/lib/db/local', () => ({
@@ -85,5 +86,45 @@ describe('outbox dispatcher — item.insert', () => {
     expect(call[4]).toBeUndefined()   // quantity
     expect(call[5]).toBeUndefined()   // measurement
     expect(call[6]).toBeUndefined()   // category
+  })
+
+  it('bumps touchListView AFTER the item write so own edits are pre-seen', async () => {
+    const { _dispatchEntry } = await import('./engine')
+    const { addItem, touchListView } = await import('@/app/lists/[id]/actions')
+
+    const callOrder: string[] = []
+    vi.mocked(addItem).mockImplementationOnce(async () => {
+      callOrder.push('addItem')
+      return { item: { id: 'x', category: null }, merged: false }
+    })
+    vi.mocked(touchListView).mockImplementationOnce(async () => {
+      callOrder.push('touchListView')
+      return {}
+    })
+
+    await _dispatchEntry(makeEntry({
+      payload: { id: 'x', list_id: 'list-1', name: 'Item', picture_url: null },
+    }))
+
+    expect(callOrder).toEqual(['addItem', 'touchListView'])
+    expect(vi.mocked(touchListView)).toHaveBeenCalledWith('list-1')
+  })
+})
+
+describe('outbox dispatcher — list_views bump on every mutation type', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it.each([
+    ['item.update', { id: 'i', list_id: 'l', patch: { name: 'x' } }],
+    ['item.delete', { id: 'i', list_id: 'l' }],
+    ['item.reorder', { id: 'i', list_id: 'l', sort_order: 1 }],
+    ['item.merge', { source_id: 's', target_id: 't', list_id: 'l' }],
+  ] as const)('bumps touchListView after a %s', async (type, payload) => {
+    const { _dispatchEntry } = await import('./engine')
+    const { touchListView } = await import('@/app/lists/[id]/actions')
+
+    await _dispatchEntry(makeEntry({ type, payload }))
+
+    expect(vi.mocked(touchListView)).toHaveBeenCalledWith('l')
   })
 })

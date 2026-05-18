@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { localDB } from '@/lib/db/local'
 import { reconcileLists } from '@/lib/sync/reconcile'
@@ -21,6 +22,7 @@ interface Props {
 
 export default function ListsView({ initialLists, memberCounts, unread, theme, currentUserId }: Props) {
   const { isOffline } = useSyncState()
+  const router = useRouter()
   const [navigatingToListId, setNavigatingToListId] = useState<string | null>(null)
   const [openEditListId, setOpenEditListId] = useState<string | null>(null)
   const [renamedLists, setRenamedLists] = useState<Record<string, string>>({})
@@ -33,6 +35,18 @@ export default function ListsView({ initialLists, memberCounts, unread, theme, c
   useEffect(() => {
     reconcileLists().catch(err => console.error('reconcileLists failed:', err))
   }, [])
+
+  // Refresh the server-rendered unread/membership data whenever the tab
+  // becomes visible again (e.g. phone screen wakes with the app sitting
+  // on /lists). Without this, stale unread markers linger until the user
+  // manually pulls-to-refresh.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible') router.refresh()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [router])
 
   // Cached set: a list counts as cached if Dexie has its row OR any of its
   // items. Two queries, unioned. `useLiveQuery` returns undefined while hydrating.
