@@ -335,11 +335,41 @@ body {
 .polar    .empty-state-glyph    { color: var(--pl-mid); }
 .polar    .empty-state-headline { color: var(--pl-blue); font-style: italic; }
 .polar    .empty-state-subline  { color: var(--pl-mid); font-style: italic; }
-.polar    .loading-label        { color: var(--pl-blue) !important; font-style: italic; }
+.polar    .loading-label        { color: var(--pl-blue) !important; font-style: italic; font-family: "Cormorant Garamond", "Times New Roman", serif; font-weight: 500; letter-spacing: 0.02em; }
 .dusk     .empty-state-glyph    { color: var(--dk-clay); }
 .dusk     .empty-state-headline { color: var(--dk-brown); font-style: italic; }
 .dusk     .empty-state-subline  { color: var(--dk-clay); font-style: italic; }
-.dusk     .loading-label        { color: var(--dk-brown) !important; font-style: italic; }
+.dusk     .loading-label        { color: var(--dk-brown) !important; font-style: italic; font-family: "Fraunces", "Georgia", serif; font-weight: 500; letter-spacing: 0.05em; text-transform: none; }
+.loading-bg-polar {
+  background:
+    radial-gradient(ellipse at 30% 20%, #F3F9FC 0%, transparent 60%),
+    radial-gradient(ellipse at 70% 80%, #D8E7F0 0%, transparent 60%),
+    linear-gradient(170deg, #F3F9FC 0%, #D8E7F0 100%);
+}
+.loading-bg-dusk {
+  background:
+    radial-gradient(ellipse at 20% 30%, #F7E3D4 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 70%, #E8D2C2 0%, transparent 55%),
+    linear-gradient(170deg, #FDF6EE 0%, #F0DCCC 100%);
+}
+.loading-plate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.loading-plate-polar {
+  background: rgba(255,255,255,0.85);
+  color: var(--pl-blue);
+  box-shadow: 0 8px 28px rgba(50,100,140,0.22), inset 0 0 0 1px rgba(155,193,215,0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.loading-plate-dusk {
+  background: #FFF8ED;
+  color: var(--dk-clay);
+  box-shadow: 0 10px 32px rgba(196,123,94,0.32), inset 0 0 0 1px rgba(214,168,136,0.45);
+}
 .shoplist .empty-state-glyph    { animation: empty-bob 3.5s ease-in-out infinite; }
 @keyframes empty-bob {
   0%, 100% { transform: translateY(0); }

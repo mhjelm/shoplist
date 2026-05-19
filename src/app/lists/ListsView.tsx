@@ -68,24 +68,32 @@ export default function ListsView({ initialLists, memberCounts, unread, theme, c
         <div
           role="status"
           aria-live="polite"
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white dark:bg-black"
+          className={`fixed inset-0 z-50 flex flex-col items-center justify-center ${theme === 'polar' ? 'loading-bg-polar' : theme === 'dusk' ? 'loading-bg-dusk' : 'bg-white dark:bg-black'}`}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/icon-512.png"
-            alt=""
-            aria-hidden
-            className="w-64 h-64 sm:w-80 sm:h-80 loading-cart select-none dark:hidden"
-            draggable={false}
-          />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/icon-512-dark.png"
-            alt=""
-            aria-hidden
-            className="w-64 h-64 sm:w-80 sm:h-80 loading-cart select-none hidden dark:block"
-            draggable={false}
-          />
+          {theme === 'polar' || theme === 'dusk' ? (
+            <div className={`loading-plate ${theme === 'polar' ? 'loading-plate-polar' : 'loading-plate-dusk'} w-64 h-64 sm:w-80 sm:h-80 loading-cart`} aria-hidden>
+              <span className="text-[7rem] sm:text-[9rem] leading-none select-none">🛒</span>
+            </div>
+          ) : (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/icon-512.png"
+                alt=""
+                aria-hidden
+                className="w-64 h-64 sm:w-80 sm:h-80 loading-cart select-none dark:hidden"
+                draggable={false}
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/icon-512-dark.png"
+                alt=""
+                aria-hidden
+                className="w-64 h-64 sm:w-80 sm:h-80 loading-cart select-none hidden dark:block"
+                draggable={false}
+              />
+            </>
+          )}
           <span className="loading-label mt-2 text-[#EC4899] text-lg font-semibold tracking-wide">Laddar...</span>
         </div>
       )}
