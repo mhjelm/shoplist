@@ -19,12 +19,12 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
   // node, avoiding stale content:// permission state on Android Chrome.
   const [pickerNonce, setPickerNonce] = useState(0)
 
-  async function handleFile(file: File) {
+  async function handleFile(file: File, resizePromise?: Promise<Blob>) {
     console.log('[picture] handleFile start, file:', file.name, file.size, 'bytes, onSuggestName:', !!onSuggestName)
     setError(null)
     setUploading(true)
     try {
-      const blob = await resizeImage(file)
+      const blob = await (resizePromise ?? resizeImage(file))
       const buildFd = () => {
         const fd = new FormData()
         fd.append('image', new File([blob], 'image.jpg', { type: 'image/jpeg' }))
@@ -116,7 +116,12 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
         className="sr-only"
         onChange={e => {
           const f = e.target.files?.[0]
-          if (f) handleFile(f)
+          if (f) {
+            // Start the read synchronously to race Android's picker permission revocation.
+            const p = resizeImage(f)
+            p.catch(() => {})
+            handleFile(f, p)
+          }
           setPickerNonce(n => n + 1)
         }}
       />

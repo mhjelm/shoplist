@@ -25,12 +25,12 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
   // the same element makes subsequent reads fail with NotReadableError.
   const [pickerNonce, setPickerNonce] = useState(0)
 
-  async function handleImageFile(file: File) {
+  async function handleImageFile(file: File, resizePromise?: Promise<Blob>) {
     setError(null)
     setLoadingLabel('Bearbetar bild…')
     setLoading(true)
     try {
-      const blob = await resizeImage(file)
+      const blob = await (resizePromise ?? resizeImage(file))
       const fd = new FormData()
       fd.append('image', new File([blob], 'image.jpg', { type: 'image/jpeg' }))
       const result = await extractListItemsFromImage(fd)
@@ -167,10 +167,20 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
               className="sr-only"
               onChange={e => {
                 const f = e.target.files?.[0]
-                if (f) handleImageFile(f)
+                if (f) {
+                  // Android 13's photo picker grants a short-lived read URI;
+                  // start the read synchronously here to win the race before
+                  // any state update or React render delays it.
+                  const p = resizeImage(f)
+                  p.catch(() => {})
+                  handleImageFile(f, p)
+                }
                 setPickerNonce(n => n + 1)
               }}
             />
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 -mt-1">
+              Tips: om bilden inte läses, dela från Galleri istället.
+            </p>
             <div className="relative my-1">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-200 dark:border-gray-800" />
