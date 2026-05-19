@@ -163,7 +163,7 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
               key={pickerNonce}
               id={fileInputId}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
               className="sr-only"
               onChange={e => {
                 const f = e.target.files?.[0]

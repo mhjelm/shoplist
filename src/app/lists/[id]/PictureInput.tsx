@@ -112,7 +112,7 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
         key={pickerNonce}
         id={inputId}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
         className="sr-only"
         onChange={e => {
           const f = e.target.files?.[0]
