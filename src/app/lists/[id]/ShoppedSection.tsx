@@ -2,7 +2,7 @@
 
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { Item, Theme } from '@/lib/types'
-import { slColorFor } from '@/lib/sl-theme'
+import { slColorFor, hasDecorativeTheme } from '@/lib/sl-theme'
 import { SortableRow } from './SortableRow'
 import { ShoppedRow } from './ShoppedRow'
 
@@ -57,7 +57,7 @@ export function ShoppedSection({
                 muted
                 selected={selectedIds.has(item.id)}
                 onToggleSelect={() => onToggleSelect(item.id)}
-                slColor={theme === 'shoplist' ? slColorFor(item.id) : undefined}
+                slColor={hasDecorativeTheme(theme) ? slColorFor(item.id) : undefined}
               />
             ))}
           </ul>

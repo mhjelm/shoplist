@@ -8,7 +8,7 @@ import { MeasurementBadge } from './MeasurementBadge'
 import { useStoreModeSwipe } from './useStoreModeSwipe'
 
 export function SortableRow({
-  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onPicture, onCombine, editMode, storeMode, onDelete, muted, selected, onToggleSelect, slColor,
+  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onPicture, onCombine, editMode, storeMode, onDelete, muted, selected, onToggleSelect, slColor, rowAnim,
 }: {
   item: Item
   itemTextClass: string
@@ -24,6 +24,7 @@ export function SortableRow({
   selected?: boolean
   onToggleSelect?: () => void
   slColor?: 0 | 1 | 2 | 3
+  rowAnim?: 'new' | 'uncheck'
 }) {
   const [showHint, setShowHint] = useState(false)
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -79,6 +80,7 @@ export function SortableRow({
         className={`${bgClass} rounded-xl border overflow-hidden relative select-none`}
         data-sl-color={slColor}
         data-muted={muted ? 'true' : undefined}
+        data-row-anim={!transform ? rowAnim : undefined}
         {...swipeHandlers}
       >
         {/* Green reveal layer, exposed as the content slides right */}
@@ -121,6 +123,7 @@ export function SortableRow({
       className={`flex items-center gap-3 ${bgClass} rounded-xl border px-4 py-3 transition-colors select-none cursor-pointer`}
       data-sl-color={slColor}
       data-muted={muted ? 'true' : undefined}
+      data-row-anim={!transform ? rowAnim : undefined}
     >
       <button
         {...attributes}

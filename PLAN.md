@@ -1,186 +1,273 @@
-# ItemList refactor — testability & structural cleanup
+# Plan — Add Polar &amp; Dusk themes (with full animation parity)
 
 ## Context
 
-`src/app/lists/[id]/ItemList.tsx` is the core surface of the app and is currently 1,463 lines. The CLAUDE.md "What is deliberately not tested" policy exempts it from direct tests because it's too entangled with dnd-kit, Dexie, realtime, and server actions to render cleanly in jsdom. That exemption is no longer acceptable: this is the main view in the app, regressions are easy, and recent fixes from the external review highlighted real correctness bugs that better-extracted logic would have caught.
+We want to ship two new themes from `theme-explorations.html` as real, selectable themes in Shoplist:
 
-This plan delivers the external reviewer's structural suggestions in phased, independently-shippable commits. Each phase increases the testable surface and shrinks the inscrutable file. By the end:
+- **Polar** — cool blues / arctic whites / frosted-glass, sharp & crystalline.
+- **Dusk &amp; Ember** — warm terracotta / cream / amber-glow, soft & soothing.
 
-- All domain helpers are pure functions with unit tests.
-- All non-trivial behaviour (add, drag/merge/reorder, selection, sync) lives in custom hooks with `renderHook` tests.
-- UI pieces are split into focused components with RTL tests.
-- One mutation path per operation; the divergence is intentional and documented.
-- ItemList.tsx itself is small enough (and decoupled enough) to test as a component without the CLAUDE.md exemption.
+Existing themes (`light`, `dark`, `shoplist`) stay unchanged. The exploration also demos six core interactions; they should all work on every theme (some don't exist in the app today — see Phase 3).
 
----
-
-## Phase 1 — Extract pure helpers + unit tests ✓ DONE 2026-05-17
-
-**Goal:** All domain logic that doesn't need React, Dexie, or dnd-kit moves out of `ItemList.tsx` and gets unit tests.
-
-**New file:** `src/app/lists/[id]/itemHelpers.ts`
-
-Helpers to extract (most live inline in `ItemList.tsx` today; line numbers refer to the *current* file after the recent correctness fixes):
-
-| Helper | Source | Notes |
-|---|---|---|
-| `itemToLocalItem(item)` | `ItemList.tsx:77` | Already a top-level function; move as-is. |
-| `localItemToItem(li)` | `ItemList.tsx:94` | Same. |
-| `findExistingItem(items, name)` | `ItemList.tsx:335-337, 376-378` | Returns `{ match, isShopped }` for a case-insensitive name match, preferring active over shopped. Removes the duplicated lookup pattern. |
-| `buildLocalItem(args)` | `ItemList.tsx:342-355, 373-377` | Factory for a fresh `LocalItem` with sensible defaults. Accepts `{ listId, name, quantity?, measurement?, category?, picture_url? }`. |
-| `buildMergePatch(source, target)` | `ItemList.tsx:454-457` (inside `handleMergeConfirm`) | Returns `{ measurement, quantity }`. Already small but worth isolating for tests. |
-| `groupByCategory(items, categoryOrder)` | `ItemList.tsx:234-243` (the `groupedToShop` useMemo body) | Pure transformation. |
-| `sortItemsByOrder(items)` | `ItemList.tsx:230-232` | Already trivial but reused; keeps the null→Infinity rule in one place. |
-
-Already done in `src/lib/itemListHelpers.ts`: `computeNewSortOrder`, `dedupeAddBatch`. These stay where they are (or get moved alongside the new helpers — decide during execution to avoid churn).
-
-**Test file:** `src/app/lists/[id]/itemHelpers.test.ts` — covers each helper with happy-path + edge cases (no match, shopped-only match, empty list, single-item merge, category-order with unknown slug falling back to `ovrigt`, etc.).
-
-**Deliverable:** ~6 helpers extracted, ~25 new unit tests, `ItemList.tsx` shrinks by ~80 lines.
+**Findings from exploration:**
+- Theme is **already a pure visual switch** in the codebase. Every `theme === 'shoplist'` call site gates only CSS classes, the firework canvas, the sticker variant, or the pastel tint index. No business logic, mutations, sync, outbox, or data fetching is coupled to theme.
+- **No refactor of logic out of UI is required.** The codebase is already in the shape the user's "if it impacts logic then first refactor" precondition was protecting against.
+- The only mechanical refactor worth doing is a tiny helper to consolidate the scattered `theme === 'shoplist'` checks, and a `palette` prop on `FireworkCanvas` so the firework can take icy or warm colors.
 
 ---
 
-## Phase 2 — Extract custom hooks + renderHook tests ✓ DONE 2026-05-17
+## Phase 1 — Tiny refactor (decouple firework palette, consolidate theme checks)
 
-**Goal:** State and effects that orchestrate domain logic move into focused hooks. Each hook has explicit dependencies (mutations injected or imported), so tests can mock them at the module boundary.
+These are small and stand alone — easy to merge first.
 
-**New files (co-located in `src/app/lists/[id]/`):**
+### 1a. Make `FireworkCanvas` palette-driven
 
-### `useListItemsSync.ts`
-Owns: Dexie seed-from-SSR, realtime subscription, reconcile-on-mount, `setActiveList`, the `useLiveQuery` read of items. Returns `{ items }`.
-- Source: `ItemList.tsx:147-188` plus `181-188`.
-- Test: mock `localDB`, `subscribeToList`, `reconcileList`. Verify it seeds when Dexie is empty, skips seed when non-empty, registers/unregisters active list, subscribes/unsubscribes.
+**File**: `src/app/lists/[id]/FireworkCanvas.tsx`
 
-### `useItemSelection.ts`
-Owns: `selectedIds`, `pickerMode`, `pickerError`, `toggleSelect`, edit-mode-leave reset (currently the render-time `if (prevEditMode !== editMode)` block at `ItemList.tsx:197-205`).
-- Returns: `{ selectedIds, toggleSelect, clearSelection, pickerMode, setPickerMode, pickerError, setPickerError }`.
-- Test: pure React state — `renderHook` and assert state transitions on selection toggle, on edit-mode-off reset, on picker open/close.
+Today (line 11): `const SL_COLORS = ['#EC4899', '#14B8A6', '#F97316', '#FACC15', '#3B82F6']` is hardcoded inside the component.
 
-### `useAddItems.ts`
-Owns: `input`, `filtered`, `highlightIdx`, `loading`, `addError`, `urlInput`, `handleInputChange`, `selectSuggestion`, `handleDeleteSuggestion`, `handleAdd`.
-- Source: `ItemList.tsx:289-471` (the `handleAdd` body and friends).
-- Uses helpers from Phase 1 (`findExistingItem`, `buildLocalItem`, `dedupeAddBatch`).
-- Test: mock `@/lib/sync/mutations` and `@/app/lists/[id]/actions`. Cover plain single-name add, plain multi-add with dedup, digit-bearing happy path, digit-bearing extract-error path (input restored, error set), digit-bearing throw path (try/catch/finally), shopped-match revival, active-match quantity bump.
+Change:
+- Add `palette?: string[]` prop on the forwardRef'd component.
+- Default to the current `SL_COLORS` (no behaviour change for shoplist).
+- `fwPick()` reads from the prop's palette via `useRef` (so the imperative `explode()` always sees the latest).
 
-### `useDragMergeReorder.ts`
-Owns: dnd-kit sensors, `handleDragEnd`, `pendingMerge`, `handleMergeConfirm`, the escape-to-cancel keyboard listener, the `editModeRef`/`itemsRef` staleness mitigation.
-- Source: `ItemList.tsx:245-288`, `223-228`, `442-450`, plus the merge confirmation logic.
-- Uses helpers `computeNewSortOrder`, `buildMergePatch`.
-- Test: mock mutations. Call the returned `handleDragEnd` with synthetic events; verify reorder vs. merge routing on edit-mode toggle, no-op on same-category-different-cat moves, midpoint sort_order, null-neighbour fallback (covered indirectly via the already-tested helper).
+### 1b. New helper: `hasDecorativeTheme(theme)`
 
-### `useItemCelebrations.ts`
-Owns: `ghosts`, `fwCanvasRef`, `spawnGhost`. Returns `{ ghosts, spawnGhost, fireworkCanvas }` where the last is the React node or ref.
-- Source: `ItemList.tsx:126-127, 413-435, 872-885`.
-- Test: minimal — verify `spawnGhost` appends; verify cleanup callback removes from state. Animation/firework physics stays untested (deliberately — pure animation).
+**File**: `src/lib/sl-theme.ts` (add to the existing helpers `slColorFor`, `slFlareDelay`).
 
-**Deliverable:** 5 hooks extracted, ~40 new tests, `ItemList.tsx` shrinks by ~400 more lines. The component becomes mostly JSX wiring.
+```ts
+export function hasDecorativeTheme(theme: Theme): boolean {
+  return theme === 'shoplist' || theme === 'polar' || theme === 'dusk'
+}
+```
 
----
+Why: today four call sites check `theme === 'shoplist'` just to decide "is this a decorative theme that should get pastel tints / fireworks / per-item color". Centralising this means future themes are one line.
 
-## Phase 3 — Split UI components + RTL tests ✓ DONE 2026-05-17
+**Replace call sites:**
+- `src/app/lists/[id]/ItemList.tsx:106` — firework trigger guard.
+- `src/app/lists/[id]/CategoryGroup.tsx:55` — `data-sl-color` prop gate.
+- `src/app/lists/[id]/ShoppedRow.tsx:40` — same.
+- `src/app/lists/[id]/ShoppedSection.tsx:60` — same.
 
-**Goal:** The remaining JSX in `ItemList.tsx` decomposes into focused, separately-testable components.
+`ListsView.tsx:182` already calls `slColorFor()` unconditionally — no change needed there.
 
-**New files (co-located in `src/app/lists/[id]/`):**
+### 1c. Per-theme firework palette wiring
 
-| Component | Wraps | Source lines |
-|---|---|---|
-| `AddItemForm.tsx` | Textarea, suggestion list, URL/recipe buttons, error display, clear-input X | `ItemList.tsx:527-628` |
-| `CategoryGroup.tsx` | One category header + its `SortableContext` + row list | `ItemList.tsx:638-668` |
-| `ShoppedSection.tsx` | Shopped header, clear-shopped button, sortable-vs-plain row toggle | `ItemList.tsx:673-726` |
-| `SelectionBar.tsx` | Bottom toolbar shown in edit mode with copy/move/clear buttons | `ItemList.tsx:761-791` |
-| `MergeConfirmModal.tsx` | The "Slå ihop X och Y?" modal | `ItemList.tsx:817-845` |
-| `Lightbox.tsx` | Full-screen image overlay | `ItemList.tsx:858-870` |
-| `ClearListControl.tsx` | The "Clear list" / confirm-split control + Handla toggle | `ItemList.tsx:729-759` |
-| `ItemRowBody.tsx` | Shared visual body for `SortableRow` and `ShoppedRow` (thumbnail, name, measurement, quantity) | `ItemList.tsx:1118-1369` |
+**File**: `src/app/lists/[id]/ItemList.tsx`
 
-`SortableRow` and `ShoppedRow` stay as separate top-level components (they own different gesture/dnd behaviour) but render `<ItemRowBody />` inside.
-
-**Tests:** one test file per component in `tests/components/` (matches existing convention with `MeasurementBadge.test.tsx`, `RecipeImportModal.test.tsx`). Each verifies render output, key interactions (button click → callback fired, input change → handler called with right args), conditional rendering (loading vs. idle, error shown, etc.). Mocks are scoped: `useAddItems` mocked for `AddItemForm`, etc.
-
-**Deliverable:** 8 new components, ~50 new tests, `ItemList.tsx` becomes a ~150-line orchestrator that imports hooks + sub-components.
+- Define a small `FIREWORK_PALETTES` map (in the file or in `sl-theme.ts`):
+  - `shoplist`: `['#EC4899', '#14B8A6', '#F97316', '#FACC15', '#3B82F6', '#ffffff']` (current).
+  - `polar`: `['#4A8EB8', '#9BC1D7', '#D8E7F0', '#F3F9FC', '#ffffff']` (icy).
+  - `dusk`: `['#C47B5E', '#D6A888', '#F0B89A', '#FDF6EE', '#8A4A30']` (warm ember).
+- Pass `<FireworkCanvas palette={FIREWORK_PALETTES[theme]} />` at line 280.
+- Gate render on `hasDecorativeTheme(theme)`.
 
 ---
 
-## Phase 4 — Mutation path consistency ✓ DONE 2026-05-17
+## Phase 2 — Add the two themes
 
-**Goal:** Each operation has one mutation path. Divergences are deliberate and documented.
+### 2a. Type union
 
-**Current state after the recent fixes:**
+**File**: `src/lib/types.ts:31`
 
-| Operation | Path |
-|---|---|
-| Toggle / edit / delete / reorder / merge / set-category | Outbox (consistent) |
-| Plain add (no digits) | Outbox |
-| Digit-bearing add | Direct server action (`extractAddItems` → `addItems`) with `bulkPut` post-success |
-| Copy | Direct server action |
-| Move | Direct server action with rollback (post-fix-1) |
-| Recipe import / Web Share Target | Direct server action |
+```ts
+export type Theme = 'light' | 'dark' | 'shoplist' | 'polar' | 'dusk'
+```
 
-**Target state:**
+### 2b. Server-side allowlist
 
-| Operation | Path | Rationale |
-|---|---|---|
-| Toggle / edit / delete / reorder / merge | Outbox | Offline-capable, no AI/cross-list need |
-| Add (both paths) | Outbox | After AI extraction (which requires server anyway), inserts go through `muAddItem` rather than the batch `addItems` action |
-| Copy / Move | Direct with rollback | Cross-list operations; outbox is per-list |
-| Recipe import / Web Share Target | Direct with rollback | Inherently bulk + server-AI dependent; keep `addItems` for these entry points |
+**File**: `src/app/settings/actions.ts:8`
 
-**Changes:**
+```ts
+const THEMES: readonly Theme[] = ['light', 'dark', 'shoplist', 'polar', 'dusk']
+```
 
-1. Extend `muAddItem` payload (`src/lib/sync/mutations.ts`) and the server-side `addItem` action (`src/app/lists/[id]/actions.ts`) to carry optional `quantity`, `measurement`, `category`. Outbox dispatcher in `src/lib/sync/engine.ts:110-125` already forwards `p.id`, `p.name`, `p.picture_url`; widen to include the new fields.
-2. Rewrite the digit-bearing branch in `useAddItems.handleAdd` (post-phase-2): on extract success, loop `muAddItem` per parsed item instead of calling the batch `addItems`. Remove the `result.items.bulkPut` step (the outbox path already updates Dexie).
-3. Keep the batch `addItems` server action — it's still used by `RecipeImportModal` and the share-target route. Document its narrowed scope in a top-of-file comment in `actions.ts`.
-4. Add a CLAUDE.md section under "Architecture" documenting the rule: *outbox for everything offline-capable; direct server actions only for cross-list ops and pre-AI batch flows; rollback is explicit, not via outbox compensation*.
+### 2c. Database CHECK constraint
 
-**Tests:** the outbox `item.insert` dispatcher gets a test for the extended payload (verify the new fields reach `addItem`). The `useAddItems` digit-bearing test is updated to assert `muAddItem` calls instead of `addItems`.
+**New file**: `supabase/migrations/0016_polar_dusk_themes.sql`
 
-**Deliverable:** ~3-file change, removes the bulk-insert post-extract path, eliminates the mutation-path inconsistency in add.
+```sql
+alter table public.user_preferences drop constraint if exists user_preferences_theme_check;
+alter table public.user_preferences add constraint user_preferences_theme_check
+  check (theme in ('light','dark','shoplist','polar','dusk'));
+```
+
+Note: per CLAUDE.md, next migration number is `0016_`. Add to the "Pending manual tasks" section of CLAUDE.md as the previous theme migration did.
+
+### 2d. `<html>` class binding
+
+**File**: `src/app/layout.tsx:45`
+
+Add `polar` and `dusk` class branches alongside the existing `dark` / `shoplist`:
+
+```tsx
+className={`... ${theme === 'dark' ? 'dark' : ''} ${theme === 'shoplist' ? 'shoplist' : ''} ${theme === 'polar' ? 'polar' : ''} ${theme === 'dusk' ? 'dusk' : ''} ${high_contrast ? 'hc' : ''}`}
+```
+
+### 2e. `SettingsForm` picker
+
+**File**: `src/app/settings/SettingsForm.tsx`
+
+- `pickTheme()` (lines 50–56): add `html.classList.toggle('polar', next === 'polar')` and same for `dusk`.
+- Theme `<section>` (lines 92–115): add two more `OptionRow`s after the Shoplist one:
+  - `"Polar"` — sublabel `"Iskall"`
+  - `"Dusk"` — sublabel `"Mjuk &amp; varm"`
+
+### 2f. CSS — new theme blocks in `globals.css`
+
+**File**: `src/app/globals.css`
+
+Add after the existing `.shoplist` block (line 168). Mirror its structure exactly so all the same hooks work.
+
+For each new theme: register the `@custom-variant`, define the palette CSS vars, override `body` background, frost the `header`, define `[data-sl-color="0..3"]` tints, the `.sl-tile::after` flare (or theme-appropriate equivalent), and the unread-sticker variant if needed.
+
+**Polar palette** (CSS vars):
+```css
+--pl-deep:   #1F3349;
+--pl-blue:   #2D5B7D;
+--pl-mid:    #4A8EB8;
+--pl-soft:   #9BC1D7;
+--pl-frost:  #D8E7F0;
+--pl-ice:    #F3F9FC;
+```
+
+**Dusk palette**:
+```css
+--dk-deep:   #4A3A31;
+--dk-brown:  #8A4A30;
+--dk-clay:   #C47B5E;
+--dk-sand:   #D6A888;
+--dk-cream:  #F0DCCC;
+--dk-pearl:  #FDF6EE;
+```
+
+Per-row tints, sl-tile flare, and the loading-cart label colour all key off these vars.
 
 ---
 
-## Phase 5 — Enable ItemList integration tests + retire the exemption ✓ DONE 2026-05-18
+## Phase 3 — Missing animations (universal improvements)
 
-**Goal:** With the bulk of logic in hooks/helpers/sub-components, `ItemList.tsx` becomes thin enough to render in jsdom with a focused mock surface.
+Per the user's scope answer ("all themes, all six animations"), three animations the exploration demoed don't exist in the live app today. We add them as universal CSS-only enhancements, with theme-specific styling overrides.
 
-**Changes:**
+### 3a. Themed empty state
 
-1. Add `tests/components/ItemList.test.tsx` with:
-   - Mocks: `@/lib/sync/mutations`, `@/lib/db/local`, `@/lib/sync/realtime`, `@/lib/sync/reconcile`, `@/app/lists/[id]/actions`. dnd-kit is *not* mocked — let it render; drag gestures are not exercised (they're covered in the `useDragMergeReorder` hook test).
-   - Coverage: renders with initial items, shows category groups, shows shopped section, fires the right hook entry points on UI interaction. Smoke-test scope, not exhaustive.
-2. Remove the "What is deliberately not tested → `ItemList` itself" bullet from CLAUDE.md. Keep "Server Actions directly" (still valid).
-3. Update CLAUDE.md "Optimistic UI + Realtime" section to reference the new hooks file by name.
+**File**: `src/app/lists/[id]/ItemList.tsx:156–159`
 
-**Deliverable:** ItemList becomes a tested component; CLAUDE.md no longer carries the exemption.
+Today: a single `<p>` saying `"No items yet."` or `"Everything shopped"`.
+
+Replace with a new tiny `<EmptyState />` component (new file: `src/app/lists/[id]/EmptyState.tsx`) that renders a glyph + headline + subline, then style it per-theme in `globals.css`:
+
+| Theme    | Glyph | Headline                | Subline           |
+| -------- | ----- | ----------------------- | ----------------- |
+| light    | —     | "No items yet."         | (none)            |
+| dark     | —     | "No items yet."         | (none)            |
+| shoplist | 🎉    | "Allt klart!"           | (none)            |
+| polar    | ❄     | "Allt klart."           | "Listan vilar."   |
+| dusk     | ☾     | "Klart för i kväll."    | "Andas ut."       |
+
+Theme-specific font / colour overrides in `globals.css` (Cormorant italic for polar, Fraunces italic for dusk — but only if those fonts are loaded; otherwise reuse the system font and lean on size + italic style).
+
+### 3b. Undo animation (uncheck cue)
+
+**File**: `src/app/lists/[id]/ItemList.tsx` (`handleToggle`, line 103)
+
+Today: re-checking a shopped item does nothing visually except the row re-renders. Exploration shows a small upward float + checkbox un-fill.
+
+Approach: add a one-shot CSS class (`is-uncheck-anim`) to the row for ~400 ms after the toggle. Pure CSS keyframe that does a subtle scale 0.97 → 1 + opacity pulse. Keep it small and universal — no theme branching needed beyond colour inheritance.
+
+Trade-off note: we currently don't have row-level mutable refs in `handleToggle` for the "from shopped → active" direction. Simplest path: add a `recentlyUnchecked: Set<string>` state, add `is-uncheck-anim` className for 400 ms, then clear. Confirm with first prototype — if it requires deeper plumbing, drop to "no animation on uncheck" and revise the plan.
+
+### 3c. Add-item entrance animation
+
+**Files**: `src/app/lists/[id]/CategoryGroup.tsx`, `src/app/lists/[id]/ShoppedRow.tsx` (or the row components rendered by `<SortableContext>`).
+
+Today: new optimistic rows just appear.
+
+Approach: detect first-render of a row whose `created_at` is within the last ~1.5 s of the current client time. Add an `is-new-anim` class for 600 ms. CSS keyframe: translateY(-8px) opacity(0) → translateY(0) opacity(1) with a small scale-pop at the end.
+
+Care: must not fire on the initial mount of a list (every row would animate). Easiest gate: compare against `Date.now() - mountedAt > 500 ms` and `Date.now() - new Date(item.created_at).getTime() < 1500 ms`.
+
+This is the most fragile of the three new animations. If first prototype shows flicker on realtime echo, scope down to only fire when the row is added via the local outbox path (we can mark those at insertion time).
 
 ---
 
-## Critical files
+## Phase 4 — Per-interaction theming summary
 
-- `src/app/lists/[id]/ItemList.tsx` — shrinks dramatically across all phases.
-- `src/app/lists/[id]/actions.ts` — Phase 4 (extend `addItem` signature).
-- `src/lib/sync/mutations.ts` — Phase 4 (extend `muAddItem` payload).
-- `src/lib/sync/engine.ts` — Phase 4 (forward new payload fields in `item.insert` dispatch).
-- `CLAUDE.md` — updated in Phase 4 (mutation-path doc) and Phase 5 (retire exemption).
-- New files: `itemHelpers.ts` (P1), `useListItemsSync.ts` / `useItemSelection.ts` / `useAddItems.ts` / `useDragMergeReorder.ts` / `useItemCelebrations.ts` (P2), 8 sub-component files (P3), 1 ItemList integration test (P5).
+A reference table showing how each interaction is delivered for each theme after Phases 1–3.
 
-## Existing utilities to reuse (don't re-create)
+| # | Interaction        | Mechanism                         | Polar styling                     | Dusk styling                       |
+|---|--------------------|-----------------------------------|-----------------------------------|------------------------------------|
+| 1 | Tap to check       | Ghost overlay + `FireworkCanvas`  | Icy white/blue particles          | Warm amber/clay particles          |
+| 2 | Undo / uncheck     | New `is-uncheck-anim` CSS class   | Inherits theme colours            | Inherits theme colours             |
+| 3 | Add an item        | New `is-new-anim` CSS class       | Inherits theme colours            | Inherits theme colours             |
+| 4 | Empty state        | New `<EmptyState />` component    | ❄ Cormorant italic                | ☾ Fraunces italic                  |
+| 5 | "NEW" marker       | Existing `<UnreadSticker />` swap | New polar-frosted chip variant    | New handwritten "nytt" chip        |
+| 6 | Loading list       | Existing `.loading-cart` CSS      | Polar palette via CSS override    | Dusk palette via CSS override      |
 
-- `src/lib/itemListHelpers.ts` — `computeNewSortOrder`, `dedupeAddBatch` (just added).
-- `src/lib/measurement.ts` — `parseMeasurement`, `tryCombine`.
-- `src/lib/categories.ts` — `CategorySlug`, `categoryLabel`, `isValidCategorySlug`, `DEFAULT_CATEGORY_ORDER`.
-- `src/lib/parseAddInput.ts` — `splitPlainItems`.
-- `src/lib/sl-theme.ts` — `slColorFor`, `slFlareDelay`.
-- `src/lib/sync/mutations.ts` — all `mu*` helpers.
+**Note on #5**: `ListsView.tsx:174` becomes a small map instead of a ternary:
+
+```tsx
+{unread && (
+  theme === 'polar'    ? <UnreadPolarChip />    :
+  theme === 'dusk'     ? <UnreadDuskChip />     :
+  theme === 'shoplist' ? <UnreadSticker />      :
+                         <UnreadBadge />
+)}
+```
+
+The chip components are tiny presentational SVG/divs styled in `globals.css` with the existing `unread-pulse` keyframe family.
+
+**Note on #6**: the `.loading-cart` keyframe is universal. Add `.polar .loading-label { color: #2D5B7D; }` and `.dusk .loading-label { color: #8A4A30; font-style: italic; }` to globals.css for theme-appropriate label colour.
+
+---
+
+## Critical files (paths reference)
+
+**Modified:**
+- `src/lib/types.ts` — Theme union
+- `src/lib/sl-theme.ts` — new `hasDecorativeTheme()` helper
+- `src/app/lists/[id]/FireworkCanvas.tsx` — accept `palette` prop
+- `src/app/lists/[id]/ItemList.tsx` — palette wiring, uncheck animation, empty state swap-in
+- `src/app/lists/[id]/CategoryGroup.tsx` — use `hasDecorativeTheme`, new-row animation
+- `src/app/lists/[id]/ShoppedRow.tsx` — use `hasDecorativeTheme`
+- `src/app/lists/[id]/ShoppedSection.tsx` — use `hasDecorativeTheme`
+- `src/app/lists/ListsView.tsx` — branch to polar/dusk unread chips
+- `src/app/layout.tsx` — html class for new themes
+- `src/app/settings/SettingsForm.tsx` — picker rows + classList toggle
+- `src/app/settings/actions.ts` — extend `THEMES` allowlist
+- `src/app/globals.css` — `.polar` and `.dusk` blocks (palette, body, header, per-item tints, sl-tile flare, unread chip variants, loading-cart label colour, empty-state typography)
+- `CLAUDE.md` — note migration in "Pending manual tasks", next migration becomes `0017_`
+
+**New:**
+- `src/app/lists/[id]/EmptyState.tsx`
+- `supabase/migrations/0016_polar_dusk_themes.sql`
+- (probably) `src/app/lists/UnreadPolarChip.tsx`, `src/app/lists/UnreadDuskChip.tsx` (or inline as small components inside `ListsView.tsx` — decide at implementation time)
+
+---
 
 ## Verification
 
-Per phase, before opening each PR:
+1. **Type-check**: `npm run lint` and ensure `Theme` union is correctly extended everywhere (TypeScript will catch any missed switch branch).
+2. **Migration**: apply `0016_polar_dusk_themes.sql` via Supabase. Add to CLAUDE.md "Pending manual tasks".
+3. **Settings flow**:
+   - Open `/settings` → confirm 5 theme options visible.
+   - Pick Polar → page background turns icy blue, header frosts, item rows on `/lists` get cool pastel tints.
+   - Pick Dusk → page turns warm cream, item rows get terracotta tints.
+   - Reload — preference persists (server round-trip works, RLS happy).
+4. **Six interactions per new theme** (open a list with a few items in each new theme):
+   - Tap an unchecked item → ghost flies + firework with theme-appropriate colour palette.
+   - Tap a shopped item → row pulses gently and moves back.
+   - Add a new item → row slides/pops in.
+   - Empty list → themed glyph and headline appear.
+   - On `/lists`, ensure an unread list shows the themed NEW chip.
+   - Navigate from `/lists` into a list → loading overlay shows themed cart label colour.
+5. **Reduced motion**: `prefers-reduced-motion: reduce` must still kill all the animations (extend the existing `@media (prefers-reduced-motion: reduce)` block in `globals.css` with the new keyframes).
+6. **Existing themes unaffected**: spot-check light, dark, and shoplist — visual diff should be zero on the chrome, and only the new animations (3a/3b/3c) added as universal improvements.
+7. **Tests**: existing `tests/components/*.test.tsx` should keep passing. Add a small smoke test for `hasDecorativeTheme()` next to `sl-theme.ts` if the file pattern exists (it doesn't yet — skip unless adjacent unit tests appear).
 
-1. `npm run lint` — no new warnings/errors.
-2. `npm test` — full suite passes (count goes up each phase).
-3. `npm run build` — production build still compiles.
-4. Manual smoke test in `npm run dev` of the affected surface — for Phase 1 nothing changes user-visibly so just exercise add/edit/delete/reorder. For Phase 2 the behaviour should be identical; bias toward checking each flow once. For Phase 3 click through every modal/panel that was extracted. For Phase 4 specifically verify a digit-bearing add works online and the parsed quantities/measurements show up on the rows (the change from `addItems`-batch to `muAddItem`-loop changes the realtime/Dexie ordering slightly).
-5. At Phase 5: `npm test` includes the new `ItemList.test.tsx`; the CLAUDE.md exemption is gone.
+---
 
-Each phase commits independently and can be reverted without unwinding the others.
+## Risks &amp; open questions
+
+- **Realtime first-mount detection for the add-item animation (3c)** is the weakest link. If it flickers, fall back to only animating outbox-originated inserts (mark them at the `muAddItem` call site with a transient flag the row reads on first render).
+- **Font availability** for theme-specific typography (Cormorant Garamond italic on polar, Fraunces italic on dusk). The repo today uses Geist; the exploration HTML pulls Google Fonts. Decide at implementation time: either add the fonts via `next/font` (one new import per theme), or stay with Geist and lean on size/weight/italic alone. Recommendation: add Cormorant Garamond + Fraunces via `next/font/google` in `layout.tsx` — they're small, and the themes lose a lot of personality without them.

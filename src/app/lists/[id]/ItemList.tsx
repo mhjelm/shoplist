@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { localDB } from '@/lib/db/local'
@@ -9,6 +9,7 @@ import { type CategorySlug } from '@/lib/categories'
 import { itemToLocalItem, sortItemsByOrder, groupByCategory } from './itemHelpers'
 import { touchListView } from './actions'
 import { muUpdateItem, muDeleteItem, muBulkDelete } from '@/lib/sync/mutations'
+import { hasDecorativeTheme, FIREWORK_PALETTES } from '@/lib/sl-theme'
 import { useSyncState } from '@/lib/sync/engine'
 import { useEditMode } from './EditModeContext'
 import { useStoreMode } from './StoreModeContext'
@@ -19,6 +20,7 @@ import { useDragMergeReorder } from './useDragMergeReorder'
 import { useItemCelebrations } from './useItemCelebrations'
 import { AddItemForm } from './AddItemForm'
 import { CategoryGroup } from './CategoryGroup'
+import { EmptyState } from './EmptyState'
 import { ShoppedSection } from './ShoppedSection'
 import { ClearListControl } from './ClearListControl'
 import { SelectionBar } from './SelectionBar'
@@ -100,14 +102,61 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
   const shopped = useMemo(() => items.filter(i => i.is_checked).sort(sortItemsByOrder), [items])
   const groupedToShop = useMemo(() => groupByCategory(toShop, categoryOrder), [toShop, categoryOrder])
 
+  // Entrance + undo animations: track row ids that should briefly carry a
+  // data-row-anim attribute. The set self-clears after the animation duration.
+  const [recentlyAdded, setRecentlyAdded] = useState<Set<string>>(() => new Set())
+  const [recentlyUnchecked, setRecentlyUnchecked] = useState<Set<string>>(() => new Set())
+  const prevIdsRef = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    const currentIds = new Set(items.map(i => i.id))
+    // First effect run: seed prev so initial render doesn't animate every row.
+    if (prevIdsRef.current === null) {
+      prevIdsRef.current = currentIds
+      return
+    }
+    const prev = prevIdsRef.current
+    const now = Date.now()
+    const fresh: string[] = []
+    for (const item of items) {
+      if (!prev.has(item.id) && !item.is_checked) {
+        const age = now - new Date(item.created_at).getTime()
+        if (age < 5_000 || Number.isNaN(age)) fresh.push(item.id)
+      }
+    }
+    prevIdsRef.current = currentIds
+    if (fresh.length === 0) return
+    // Defer state writes to the next tick so we're not calling setState
+    // synchronously inside the effect body (react-hooks/set-state-in-effect).
+    const tAdd = setTimeout(() => {
+      setRecentlyAdded(s => {
+        const next = new Set(s); for (const id of fresh) next.add(id); return next
+      })
+    }, 0)
+    const tClear = setTimeout(() => {
+      setRecentlyAdded(s => {
+        const next = new Set(s); for (const id of fresh) next.delete(id); return next
+      })
+    }, 700)
+    return () => { clearTimeout(tAdd); clearTimeout(tClear) }
+  }, [items])
+
+  function flagRecentlyUnchecked(id: string) {
+    setRecentlyUnchecked(s => { const n = new Set(s); n.add(id); return n })
+    setTimeout(() => {
+      setRecentlyUnchecked(s => { const n = new Set(s); n.delete(id); return n })
+    }, 500)
+  }
+
   async function handleToggle(item: Item, sourceRect?: DOMRect) {
     if (!item.is_checked && sourceRect) {
       spawnGhost(item, sourceRect)
-      if (theme === 'shoplist') {
+      if (hasDecorativeTheme(theme)) {
         const cx = sourceRect.left + sourceRect.width / 2
         const cy = sourceRect.top + sourceRect.height / 2
         fwCanvasRef.current?.explode(cx, cy)
       }
+    } else if (item.is_checked) {
+      flagRecentlyUnchecked(item.id)
     }
     await muUpdateItem(listId, item.id, { is_checked: !item.is_checked })
   }
@@ -154,9 +203,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
 
       <DndContext id="items-dnd" sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         {groupedToShop.length === 0 ? (
-          <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">
-            {isEmpty ? 'No items yet.' : 'Everything shopped'}
-          </p>
+          <EmptyState theme={theme} variant={isEmpty ? 'no-items' : 'all-shopped'} />
         ) : (
           <div className="space-y-3">
             {groupedToShop.map(([cat, catItems]) => (
@@ -170,6 +217,8 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
                 storeMode={storeMode}
                 theme={theme}
                 selectedIds={selectedIds}
+                recentlyAdded={recentlyAdded}
+                recentlyUnchecked={recentlyUnchecked}
                 onToggle={(item, rect) => handleToggle(item, rect)}
                 onEdit={item => setEditingItem(item)}
                 onDelete={item => handleDelete(item)}
@@ -277,7 +326,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
         document.body
       )}
 
-      {theme === 'shoplist' && <FireworkCanvas ref={fwCanvasRef} />}
+      {hasDecorativeTheme(theme) && <FireworkCanvas ref={fwCanvasRef} palette={FIREWORK_PALETTES[theme]} />}
     </div>
   )
 }

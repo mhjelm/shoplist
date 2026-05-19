@@ -8,16 +8,25 @@ interface FWParticle {
   color: string; drag: number; gravity: number; sparkle: boolean
 }
 
-const SL_COLORS = ['#EC4899', '#14B8A6', '#F97316', '#FACC15', '#3B82F6']
-const FW_PALETTE = [...SL_COLORS, '#ffffff']
+const DEFAULT_PALETTE = ['#EC4899', '#14B8A6', '#F97316', '#FACC15', '#3B82F6', '#ffffff']
 
 function fwRand(min: number, max: number) { return min + Math.random() * (max - min) }
-function fwPick() { return FW_PALETTE[Math.floor(Math.random() * FW_PALETTE.length)] }
 
-export const FireworkCanvas = forwardRef<{ explode: (x: number, y: number) => void }, object>(
-  function FireworkCanvas(_, ref) {
+interface FireworkCanvasProps { palette?: string[] }
+
+export const FireworkCanvas = forwardRef<{ explode: (x: number, y: number) => void }, FireworkCanvasProps>(
+  function FireworkCanvas({ palette }, ref) {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const stateRef = useRef({ particles: [] as FWParticle[], rafId: 0, dpr: 1, w: 0, h: 0 })
+    const paletteRef = useRef<string[]>(palette && palette.length > 0 ? palette : DEFAULT_PALETTE)
+    useEffect(() => {
+      paletteRef.current = palette && palette.length > 0 ? palette : DEFAULT_PALETTE
+    }, [palette])
+
+    function fwPick() {
+      const p = paletteRef.current
+      return p[Math.floor(Math.random() * p.length)]
+    }
 
     useEffect(() => {
       const canvas = canvasRef.current!

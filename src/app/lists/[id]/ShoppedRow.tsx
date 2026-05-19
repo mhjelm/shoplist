@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { Item, Theme } from '@/lib/types'
-import { slColorFor } from '@/lib/sl-theme'
+import { slColorFor, hasDecorativeTheme } from '@/lib/sl-theme'
 import { MeasurementBadge } from './MeasurementBadge'
 import { useStoreModeSwipe } from './useStoreModeSwipe'
 
@@ -37,7 +37,7 @@ export function ShoppedRow({
     },
   })
 
-  const slColor = theme === 'shoplist' ? slColorFor(item.id) : undefined
+  const slColor = hasDecorativeTheme(theme) ? slColorFor(item.id) : undefined
   const thumbClass = storeMode ? 'w-16 h-16' : thumbSizeClass
   const textClass = storeMode ? 'text-lg' : itemTextClass
 

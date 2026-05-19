@@ -42,7 +42,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased ${theme === 'dark' ? 'dark' : ''} ${theme === 'shoplist' ? 'shoplist' : ''} ${high_contrast ? 'hc' : ''}`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased ${theme === 'dark' ? 'dark' : ''} ${theme === 'shoplist' ? 'shoplist' : ''} ${theme === 'polar' ? 'polar' : ''} ${theme === 'dusk' ? 'dusk' : ''} ${high_contrast ? 'hc' : ''}`}
     >
       <body className="min-h-full flex flex-col bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100">
         <ConflictBanner />

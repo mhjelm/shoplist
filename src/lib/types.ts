@@ -28,7 +28,7 @@ export interface Item {
   measurement: string | null
 }
 
-export type Theme = 'light' | 'dark' | 'shoplist'
+export type Theme = 'light' | 'dark' | 'shoplist' | 'polar' | 'dusk'
 export type ListTextSize = 'normal' | 'large'
 
 export interface UserPreferences {

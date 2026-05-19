@@ -3,7 +3,7 @@
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { Item, Theme } from '@/lib/types'
 import { type CategorySlug, categoryLabel } from '@/lib/categories'
-import { slColorFor } from '@/lib/sl-theme'
+import { slColorFor, hasDecorativeTheme } from '@/lib/sl-theme'
 import { SortableRow } from './SortableRow'
 
 interface Props {
@@ -15,6 +15,8 @@ interface Props {
   storeMode: boolean
   theme: Theme
   selectedIds: Set<string>
+  recentlyAdded?: Set<string>
+  recentlyUnchecked?: Set<string>
   onToggle: (item: Item, rect: DOMRect) => void
   onEdit: (item: Item) => void
   onDelete: (item: Item) => void
@@ -23,9 +25,12 @@ interface Props {
   onCombine: (item: Item, combined: string) => void
 }
 
+const EMPTY_SET: Set<string> = new Set()
+
 export function CategoryGroup({
   category, items, itemTextClass, thumbSizeClass,
   editMode, storeMode, theme, selectedIds,
+  recentlyAdded = EMPTY_SET, recentlyUnchecked = EMPTY_SET,
   onToggle, onEdit, onDelete, onToggleSelect, onPicture, onCombine,
 }: Props) {
   return (
@@ -52,7 +57,8 @@ export function CategoryGroup({
               onDelete={() => onDelete(item)}
               selected={selectedIds.has(item.id)}
               onToggleSelect={() => onToggleSelect(item.id)}
-              slColor={theme === 'shoplist' ? slColorFor(item.id) : undefined}
+              slColor={hasDecorativeTheme(theme) ? slColorFor(item.id) : undefined}
+              rowAnim={recentlyUnchecked.has(item.id) ? 'uncheck' : recentlyAdded.has(item.id) ? 'new' : undefined}
             />
           ))}
         </ul>

@@ -180,6 +180,175 @@ body {
   .loading-cart { animation: none; }
 }
 
+/* Per-theme breathing pulse on the unread chips (shares unread-pulse keyframe
+   family). Mirrors the .unread-burst / .unread-sticker treatment. */
+.unread-polar {
+  animation: unread-pulse-sticker 2.6s ease-in-out infinite;
+  transform-origin: center;
+}
+.unread-dusk {
+  animation: unread-dusk-pulse 3s ease-in-out infinite;
+  transform-origin: center;
+}
+@keyframes unread-dusk-pulse {
+  0%, 100% { transform: rotate(-3deg) scale(1); }
+  50%      { transform: rotate(2deg)  scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .unread-polar, .unread-dusk { animation: none; }
+}
+
+/* ── Polar theme ────────────────────────────────────────────────────────── */
+
+@custom-variant polar (&:where(.polar, .polar *));
+
+.polar {
+  --pl-ice:    #F3F9FC;
+  --pl-frost:  #D8E7F0;
+  --pl-soft:   #9BC1D7;
+  --pl-mid:    #4A8EB8;
+  --pl-blue:   #2D5B7D;
+  --pl-deep:   #1F3349;
+  --background: #F3F9FC;
+  --foreground: #1F3349;
+}
+
+.polar body {
+  background:
+    radial-gradient(80% 60% at 0% 0%,    color-mix(in oklab, var(--pl-mid)   22%, transparent), transparent 70%),
+    radial-gradient(80% 60% at 100% 0%,  color-mix(in oklab, var(--pl-soft)  30%, transparent), transparent 70%),
+    radial-gradient(90% 70% at 50% 100%, color-mix(in oklab, var(--pl-frost) 55%, transparent), transparent 70%),
+    var(--background);
+  background-attachment: fixed;
+}
+
+.polar .min-h-screen { background: transparent !important; }
+
+/* Frosted glass header — slightly cooler tint than shoplist */
+.polar header {
+  background-color: rgb(243 249 252 / 0.7) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Per-item icy tints — selected via data-sl-color="0..3" on the <li>. */
+.polar [data-sl-color="0"] { background-color: color-mix(in oklab, var(--pl-mid)   16%, white) !important; border-color: color-mix(in oklab, var(--pl-mid)   50%, transparent) !important; }
+.polar [data-sl-color="1"] { background-color: color-mix(in oklab, var(--pl-soft)  28%, white) !important; border-color: color-mix(in oklab, var(--pl-soft)  60%, transparent) !important; }
+.polar [data-sl-color="2"] { background-color: color-mix(in oklab, var(--pl-frost) 55%, white) !important; border-color: color-mix(in oklab, var(--pl-soft)  45%, transparent) !important; }
+.polar [data-sl-color="3"] { background-color: color-mix(in oklab, var(--pl-blue)  14%, white) !important; border-color: color-mix(in oklab, var(--pl-blue)  45%, transparent) !important; }
+
+.polar [data-sl-color][data-muted="true"] { opacity: 0.5; }
+
+/* Light-flare sweep on list cards (shared keyframe). White sheen reads as
+   light catching ice — same effect as shoplist but on the polar backdrop. */
+.polar .sl-tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.65) 50%, transparent 65%);
+  transform: translateX(-130%);
+  animation: sl-flare 9s ease-in-out infinite;
+  animation-delay: var(--sl-flare-delay, 0s);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .polar .sl-tile::after { animation: none; }
+}
+
+/* ── Dusk theme ─────────────────────────────────────────────────────────── */
+
+@custom-variant dusk (&:where(.dusk, .dusk *));
+
+.dusk {
+  --dk-pearl:  #FDF6EE;
+  --dk-cream:  #F0DCCC;
+  --dk-sand:   #D6A888;
+  --dk-clay:   #C47B5E;
+  --dk-brown:  #8A4A30;
+  --dk-deep:   #4A3A31;
+  --background: #FDF6EE;
+  --foreground: #4A3A31;
+}
+
+.dusk body {
+  background:
+    radial-gradient(80% 60% at 20% 25%, color-mix(in oklab, var(--dk-sand) 38%, transparent), transparent 70%),
+    radial-gradient(70% 55% at 80% 70%, color-mix(in oklab, var(--dk-clay) 26%, transparent), transparent 70%),
+    radial-gradient(90% 70% at 50% 0%,  color-mix(in oklab, var(--dk-cream) 60%, transparent), transparent 70%),
+    var(--background);
+  background-attachment: fixed;
+}
+
+.dusk .min-h-screen { background: transparent !important; }
+
+/* Warmer frosted header — amber-tinted */
+.dusk header {
+  background-color: rgb(253 246 238 / 0.75) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Per-item warm pastels */
+.dusk [data-sl-color="0"] { background-color: color-mix(in oklab, var(--dk-clay)  18%, white) !important; border-color: color-mix(in oklab, var(--dk-clay)  50%, transparent) !important; }
+.dusk [data-sl-color="1"] { background-color: color-mix(in oklab, var(--dk-sand)  28%, white) !important; border-color: color-mix(in oklab, var(--dk-sand)  60%, transparent) !important; }
+.dusk [data-sl-color="2"] { background-color: color-mix(in oklab, var(--dk-cream) 65%, white) !important; border-color: color-mix(in oklab, var(--dk-sand)  40%, transparent) !important; }
+.dusk [data-sl-color="3"] { background-color: color-mix(in oklab, var(--dk-brown) 14%, white) !important; border-color: color-mix(in oklab, var(--dk-brown) 38%, transparent) !important; }
+
+.dusk [data-sl-color][data-muted="true"] { opacity: 0.5; }
+
+/* Warm light sweep on list cards — same keyframe as shoplist/polar. */
+.dusk .sl-tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 240, 215, 0.6) 50%, transparent 65%);
+  transform: translateX(-130%);
+  animation: sl-flare 9s ease-in-out infinite;
+  animation-delay: var(--sl-flare-delay, 0s);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dusk .sl-tile::after { animation: none; }
+}
+
+/* ── Row entrance / undo animations ──────────────────────────────────────────
+   Applied via data-row-anim="new" | "uncheck" on the row <li>. The parent
+   sets the attribute for ~500-600 ms then clears it. Animation is one-shot. */
+@keyframes row-anim-uncheck {
+  0%   { transform: scale(0.96); opacity: 0.65; }
+  55%  { transform: scale(1.025); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes row-anim-new {
+  0%   { transform: translateY(-10px) scale(0.94); opacity: 0; }
+  60%  { transform: translateY(0)     scale(1.03); opacity: 1; }
+  100% { transform: translateY(0)     scale(1);    opacity: 1; }
+}
+[data-row-anim="uncheck"] { animation: row-anim-uncheck 0.42s ease-out; }
+[data-row-anim="new"]     { animation: row-anim-new     0.55s cubic-bezier(0.2, 0.7, 0.3, 1.2); }
+@media (prefers-reduced-motion: reduce) {
+  [data-row-anim] { animation: none; }
+}
+
+/* ── Empty state: per-theme glyph + headline + subline ──────────────────── */
+.empty-state-glyph { transition: transform 0.3s ease-out; }
+.polar    .empty-state-glyph    { color: var(--pl-mid); }
+.polar    .empty-state-headline { color: var(--pl-blue); font-style: italic; }
+.polar    .empty-state-subline  { color: var(--pl-mid); font-style: italic; }
+.polar    .loading-label        { color: var(--pl-blue) !important; font-style: italic; }
+.dusk     .empty-state-glyph    { color: var(--dk-clay); }
+.dusk     .empty-state-headline { color: var(--dk-brown); font-style: italic; }
+.dusk     .empty-state-subline  { color: var(--dk-clay); font-style: italic; }
+.dusk     .loading-label        { color: var(--dk-brown) !important; font-style: italic; }
+.shoplist .empty-state-glyph    { animation: empty-bob 3.5s ease-in-out infinite; }
+@keyframes empty-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shoplist .empty-state-glyph { animation: none; }
+}
+
 /* ── Store mode: collapse page chrome and stretch items full-width ─────────── */
 body.store-mode header { display: none; }
 body.store-mode main {

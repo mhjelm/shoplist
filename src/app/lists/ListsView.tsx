@@ -86,7 +86,7 @@ export default function ListsView({ initialLists, memberCounts, unread, theme, c
             className="w-64 h-64 sm:w-80 sm:h-80 loading-cart select-none hidden dark:block"
             draggable={false}
           />
-          <span className="mt-2 text-[#EC4899] text-lg font-semibold tracking-wide">Laddar...</span>
+          <span className="loading-label mt-2 text-[#EC4899] text-lg font-semibold tracking-wide">Laddar...</span>
         </div>
       )}
 
@@ -171,7 +171,12 @@ function ListRow({ list, hasMembers, unread, theme, cached, isOffline, onNavigat
           className="inline-block h-2 w-2 rounded-full bg-emerald-500 shrink-0"
         />
       )}
-      {unread && (theme === 'shoplist' ? <UnreadSticker /> : <UnreadBadge />)}
+      {unread && (
+        theme === 'shoplist' ? <UnreadSticker /> :
+        theme === 'polar'    ? <UnreadPolarChip /> :
+        theme === 'dusk'     ? <UnreadDuskChip />  :
+                               <UnreadBadge />
+      )}
       <span className="truncate">{list.name}</span>
       {hasMembers && <span className="text-xs text-gray-400 dark:text-gray-500">shared</span>}
     </>
@@ -269,6 +274,83 @@ function UnreadBadge() {
           letterSpacing="0.5"
           fill="white"
         >NEW</text>
+      </svg>
+    </span>
+  )
+}
+
+function UnreadPolarChip() {
+  return (
+    <span
+      aria-label="Uppdaterad sedan senaste besöket"
+      title="Uppdaterad sedan senaste besöket"
+      className="unread-polar inline-flex shrink-0"
+    >
+      <svg viewBox="0 0 100 50" className="h-6 w-auto overflow-visible" aria-hidden="true">
+        <defs>
+          <linearGradient id="up-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"  stopColor="#9BC1D7" />
+            <stop offset="100%" stopColor="#2D5B7D" />
+          </linearGradient>
+          <filter id="up-shadow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" />
+            <feOffset dx="0.4" dy="1.2" />
+            <feComponentTransfer><feFuncA type="linear" slope="0.35" /></feComponentTransfer>
+            <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+        <g filter="url(#up-shadow)">
+          <rect x="2" y="6" width="96" height="38" rx="19" fill="url(#up-fill)" stroke="#F3F9FC" strokeWidth="1.5" />
+          <text
+            x="50" y="25"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontFamily="system-ui, -apple-system, sans-serif"
+            fontWeight="900"
+            fontSize="20"
+            letterSpacing="3"
+            fill="#F3F9FC"
+          >NEW</text>
+        </g>
+      </svg>
+    </span>
+  )
+}
+
+function UnreadDuskChip() {
+  return (
+    <span
+      aria-label="Uppdaterad sedan senaste besöket"
+      title="Uppdaterad sedan senaste besöket"
+      className="unread-dusk inline-flex shrink-0 -rotate-3"
+    >
+      <svg viewBox="0 0 110 50" className="h-7 w-auto overflow-visible" aria-hidden="true">
+        <defs>
+          <filter id="ud-shadow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="1.4" />
+            <feOffset dx="0.5" dy="1.6" />
+            <feComponentTransfer><feFuncA type="linear" slope="0.3" /></feComponentTransfer>
+            <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+        <g filter="url(#ud-shadow)">
+          <path
+            d="M 8 28 Q 8 8 30 8 L 88 8 Q 102 8 102 22 Q 102 38 86 40 L 28 42 Q 8 42 8 28 Z"
+            fill="#C47B5E"
+            stroke="#FDF6EE"
+            strokeWidth="1.5"
+          />
+          <text
+            x="55" y="24"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontFamily="ui-serif, Georgia, 'Times New Roman', serif"
+            fontStyle="italic"
+            fontWeight="700"
+            fontSize="20"
+            fill="#FDF6EE"
+          >nytt</text>
+        </g>
       </svg>
     </span>
   )

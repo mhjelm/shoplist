@@ -52,6 +52,8 @@ export default function SettingsForm({ initialTheme, initialListTextSize, initia
     const html = document.documentElement
     html.classList.toggle('dark',     next === 'dark')
     html.classList.toggle('shoplist', next === 'shoplist')
+    html.classList.toggle('polar',    next === 'polar')
+    html.classList.toggle('dusk',     next === 'dusk')
     save(next, size, highContrast)
   }
 
@@ -110,6 +112,20 @@ export default function SettingsForm({ initialTheme, initialListTextSize, initia
             sublabel="Colorful"
             selected={theme === 'shoplist'}
             onSelect={() => pickTheme('shoplist')}
+          />
+          <div className="border-t border-gray-100 dark:border-gray-800" />
+          <OptionRow
+            label="Polar"
+            sublabel="Iskall"
+            selected={theme === 'polar'}
+            onSelect={() => pickTheme('polar')}
+          />
+          <div className="border-t border-gray-100 dark:border-gray-800" />
+          <OptionRow
+            label="Dusk"
+            sublabel="Mjuk &amp; varm"
+            selected={theme === 'dusk'}
+            onSelect={() => pickTheme('dusk')}
           />
         </div>
       </section>
