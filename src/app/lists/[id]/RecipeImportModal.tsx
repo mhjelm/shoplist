@@ -20,6 +20,10 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
   const [loading, setLoading] = useState(false)
   const [loadingLabel, setLoadingLabel] = useState('Bearbetar…')
   const [error, setError] = useState<string | null>(null)
+  // Force a fresh <input type="file"> DOM node after each pick. On Android,
+  // the content:// permission Chrome grants to the input is one-shot — reusing
+  // the same element makes subsequent reads fail with NotReadableError.
+  const [pickerNonce, setPickerNonce] = useState(0)
 
   async function handleImageFile(file: File) {
     setError(null)
@@ -156,6 +160,7 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
               <span>Hämta lista från bild</span>
             </label>
             <input
+              key={pickerNonce}
               id={fileInputId}
               type="file"
               accept="image/*"
@@ -163,7 +168,7 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
               onChange={e => {
                 const f = e.target.files?.[0]
                 if (f) handleImageFile(f)
-                e.target.value = ''
+                setPickerNonce(n => n + 1)
               }}
             />
             <div className="relative my-1">

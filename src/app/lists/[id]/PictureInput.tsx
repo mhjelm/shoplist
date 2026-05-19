@@ -15,6 +15,9 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
   const inputId = useId()
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // See RecipeImportModal: bumping a key on the file input forces a fresh DOM
+  // node, avoiding stale content:// permission state on Android Chrome.
+  const [pickerNonce, setPickerNonce] = useState(0)
 
   async function handleFile(file: File) {
     console.log('[picture] handleFile start, file:', file.name, file.size, 'bytes, onSuggestName:', !!onSuggestName)
@@ -106,6 +109,7 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
         </label>
       </div>
       <input
+        key={pickerNonce}
         id={inputId}
         type="file"
         accept="image/*"
@@ -113,7 +117,7 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
         onChange={e => {
           const f = e.target.files?.[0]
           if (f) handleFile(f)
-          e.target.value = ''
+          setPickerNonce(n => n + 1)
         }}
       />
       {error && <p className="text-xs text-red-500">{error}</p>}
