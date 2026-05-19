@@ -35,6 +35,7 @@ export function EditModal({ item, onSave, onClose }: Props) {
       >
         <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Edit item</h2>
         <input
+          type="search"
           name="sl-item-name"
           value={name}
           onChange={e => setName(e.target.value)}
@@ -47,9 +48,10 @@ export function EditModal({ item, onSave, onClose }: Props) {
           data-form-type="other"
           data-lpignore="true"
           data-1p-ignore
-          className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-search-cancel-button]:hidden"
         />
         <input
+          type="search"
           name="sl-item-measurement"
           value={measurement}
           onChange={e => setMeasurement(e.target.value)}
@@ -61,7 +63,7 @@ export function EditModal({ item, onSave, onClose }: Props) {
           data-form-type="other"
           data-lpignore="true"
           data-1p-ignore
-          className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-search-cancel-button]:hidden"
         />
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-600 dark:text-gray-400">Quantity</span>
