@@ -2,14 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 const sync = vi.hoisted(() => ({ isOffline: false }))
-const router = vi.hoisted(() => ({ push: vi.fn() }))
 
 vi.mock('@/app/lists/actions', () => ({
-  createList: vi.fn().mockResolvedValue({ list: { id: 'new', name: 'Ny', owner_id: 'me', created_at: '' } }),
-}))
-
-vi.mock('next/navigation', () => ({
-  useRouter: () => router,
+  createListAndOpen: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/lib/sync/engine', () => ({
@@ -17,13 +12,13 @@ vi.mock('@/lib/sync/engine', () => ({
 }))
 
 import CreateListForm from '@/app/lists/CreateListForm'
-const { createList } = await import('@/app/lists/actions')
-const mockCreateList = vi.mocked(createList)
+const { createListAndOpen } = await import('@/app/lists/actions')
+const mockCreateListAndOpen = vi.mocked(createListAndOpen)
 
 beforeEach(() => {
   vi.clearAllMocks()
   sync.isOffline = false
-  mockCreateList.mockResolvedValue({ list: { id: 'new', name: 'Ny', owner_id: 'me', created_at: '' } })
+  mockCreateListAndOpen.mockResolvedValue(undefined)
 })
 
 describe('CreateListForm', () => {
@@ -65,7 +60,7 @@ describe('CreateListForm', () => {
     expect(screen.getByText('Kräver anslutning')).toBeInTheDocument()
   })
 
-  it('online: successful create navigates to the new list', async () => {
+  it('online: successful create invokes createListAndOpen (server handles navigation)', async () => {
     render(<CreateListForm />)
     fireEvent.click(screen.getByRole('button', { name: /\+ new list/i }))
     fireEvent.change(screen.getByPlaceholderText(/list name/i), { target: { value: 'Ny' } })
@@ -73,12 +68,13 @@ describe('CreateListForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
-      expect(router.push).toHaveBeenCalledWith('/lists/new')
+      expect(mockCreateListAndOpen).toHaveBeenCalled()
     })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('online: create errors are shown without navigating', async () => {
-    mockCreateList.mockResolvedValueOnce({ error: 'Nope' })
+    mockCreateListAndOpen.mockResolvedValueOnce({ error: 'Nope' })
     render(<CreateListForm />)
     fireEvent.click(screen.getByRole('button', { name: /\+ new list/i }))
     fireEvent.change(screen.getByPlaceholderText(/list name/i), { target: { value: 'Ny' } })
@@ -86,11 +82,9 @@ describe('CreateListForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     expect(await screen.findByText('Nope')).toBeInTheDocument()
-    expect(router.push).not.toHaveBeenCalled()
   })
 
-  it('offline: createList action is never invoked even if the form is somehow submitted', async () => {
-    // Render online, open the form, then go offline and submit programmatically.
+  it('offline: createListAndOpen action is never invoked even if the form is somehow submitted', async () => {
     const { rerender } = render(<CreateListForm />)
     fireEvent.click(screen.getByRole('button', { name: /\+ new list/i }))
     fireEvent.change(screen.getByPlaceholderText(/list name/i), { target: { value: 'Ny' } })
@@ -98,8 +92,7 @@ describe('CreateListForm', () => {
     sync.isOffline = true
     rerender(<CreateListForm />)
 
-    // Submit by clicking — the disabled state should swallow it.
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }))
-    expect(mockCreateList).not.toHaveBeenCalled()
+    expect(mockCreateListAndOpen).not.toHaveBeenCalled()
   })
 })

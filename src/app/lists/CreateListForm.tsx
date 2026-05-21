@@ -1,12 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { createList } from './actions'
+import { createListAndOpen } from './actions'
 import { useSyncState } from '@/lib/sync/engine'
 
 export default function CreateListForm() {
-  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -16,15 +14,10 @@ export default function CreateListForm() {
     if (isOffline) return
     setError(null)
     setLoading(true)
-    const result = await createList(formData)
+    const result = await createListAndOpen(formData)
+    // Reached only on error — redirect() throws and navigates on success.
     setLoading(false)
-    if (result?.error) {
-      setError(result.error)
-    } else if (result?.list?.id) {
-      router.push(`/lists/${result.list.id}`)
-    } else {
-      setError('Listan skapades, men kunde inte öppnas automatiskt.')
-    }
+    if (result?.error) setError(result.error)
   }
 
   if (!open) {
