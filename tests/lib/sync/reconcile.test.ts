@@ -13,6 +13,12 @@ const db = vi.hoisted(() => ({
 
 const serverData = vi.hoisted(() => ({
   rows: [] as Record<string, unknown>[],
+  activity: null as { last_activity: string } | null,
+  itemsQueryCalls: 0,
+}))
+
+const localData = vi.hoisted(() => ({
+  syncMeta: undefined as { list_id: string; last_sync_at: string } | undefined,
 }))
 
 const mockAddConflicts = vi.hoisted(() => vi.fn())
@@ -23,9 +29,21 @@ const mockAddConflicts = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
-    from: () => ({
+    from: (table: string) => ({
       select: () => ({
-        eq: () => Promise.resolve({ data: serverData.rows, error: null }),
+        eq: () => {
+          if (table === 'list_activity') {
+            // Chainable that supports both .maybeSingle() and direct awaiting.
+            // Tests set serverData.activity to drive the precheck branch.
+            const activityResult = { data: serverData.activity, error: null }
+            return {
+              maybeSingle: () => Promise.resolve(activityResult),
+              then: (resolve: (v: typeof activityResult) => unknown) => Promise.resolve(activityResult).then(resolve),
+            }
+          }
+          serverData.itemsQueryCalls++
+          return Promise.resolve({ data: serverData.rows, error: null })
+        },
       }),
     }),
   }),
@@ -71,6 +89,9 @@ vi.mock('@/lib/db/local', () => ({
       },
     },
     sync_meta: {
+      get: vi.fn(async (listId: string) =>
+        localData.syncMeta?.list_id === listId ? localData.syncMeta : undefined,
+      ),
       put: vi.fn().mockResolvedValue(undefined),
     },
     transaction: async (_mode: string, _tables: unknown[], fn: () => Promise<void>) => fn(),
@@ -149,6 +170,9 @@ beforeEach(() => {
   db.outboxEntries = []
   db.localItems = []
   serverData.rows = []
+  serverData.activity = null
+  serverData.itemsQueryCalls = 0
+  localData.syncMeta = undefined
   mockAddConflicts.mockReset()
 })
 
@@ -274,6 +298,48 @@ describe('reconcileList', () => {
 
     expect(db.localItems).toHaveLength(1)
     expect(db.outboxEntries).toHaveLength(1)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Cheap-precheck branch: list_activity vs. local sync_meta watermark
+  // ---------------------------------------------------------------------------
+
+  it('precheck: skips the items refetch when local sync_meta is at or newer than list_activity', async () => {
+    const now = Date.now()
+    serverData.activity = { last_activity: new Date(now - 5_000).toISOString() }
+    localData.syncMeta = { list_id: 'list-1', last_sync_at: new Date(now - 1_000).toISOString() }
+    // Items the server would return if we asked — but we shouldn't ask.
+    serverData.rows = [makeServerRow('item-x', 'Should-not-appear', new Date(now - 5_000).toISOString())]
+
+    await reconcileList('list-1')
+
+    expect(serverData.itemsQueryCalls).toBe(0)
+    expect(db.localItems).toHaveLength(0)
+    expect(mockAddConflicts).not.toHaveBeenCalled()
+  })
+
+  it('precheck: refetches items when list_activity is newer than local sync_meta', async () => {
+    const now = Date.now()
+    serverData.activity = { last_activity: new Date(now - 1_000).toISOString() }
+    localData.syncMeta = { list_id: 'list-1', last_sync_at: new Date(now - 5_000).toISOString() }
+    serverData.rows = [makeServerRow('item-1', 'Mjölk', new Date(now - 1_000).toISOString())]
+
+    await reconcileList('list-1')
+
+    expect(serverData.itemsQueryCalls).toBe(1)
+    expect(db.localItems).toHaveLength(1)
+    expect(db.localItems[0].name).toBe('Mjölk')
+  })
+
+  it('precheck: refetches items when there is no local sync watermark yet (first reconcile)', async () => {
+    serverData.activity = { last_activity: '2024-06-01T10:00:00.000Z' }
+    // localData.syncMeta intentionally left undefined
+    serverData.rows = [makeServerRow('item-1', 'Mjölk', '2024-06-01T10:00:00.000Z')]
+
+    await reconcileList('list-1')
+
+    expect(serverData.itemsQueryCalls).toBe(1)
+    expect(db.localItems).toHaveLength(1)
   })
 
   it('handles multiple items with mixed conflict and clean scenarios', async () => {

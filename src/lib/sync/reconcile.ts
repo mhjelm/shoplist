@@ -5,6 +5,28 @@ import { addConflicts } from './engine'
 
 export async function reconcileList(listId: string): Promise<void> {
   const supabase = createClient()
+
+  // Cheap precheck: list_activity tracks the most recent item write per list.
+  // If the server's last_activity isn't newer than our local sync watermark,
+  // Dexie is already up-to-date and we can skip the full items refetch.
+  // Caveat: list-row edits (e.g. renames) don't bump last_activity, and the
+  // per-list Realtime channel doesn't watch the `lists` table either — so a
+  // rename only surfaces on the next navigation, when page.tsx re-fetches
+  // the list row. Acceptable because renames are rare.
+  const { data: activity } = await supabase
+    .from('list_activity')
+    .select('last_activity')
+    .eq('list_id', listId)
+    .maybeSingle()
+  const localMeta = await localDB.sync_meta.get(listId)
+  if (
+    activity?.last_activity &&
+    localMeta?.last_sync_at &&
+    activity.last_activity <= localMeta.last_sync_at
+  ) {
+    return
+  }
+
   const { data: rows, error } = await supabase
     .from('items')
     .select('*')

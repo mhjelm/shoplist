@@ -8,9 +8,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > Signup is now invitation-only (done 2026-05-17). See `docs/how-to-add-new-user.html` for the invite flow and how to re-enable public signup if ever needed.
 
+## Known issues
+
+### Back-nav from `/lists/[id]` still visibly scrolls to top before `/lists` appears
+
+**Symptom**: user is mid-scroll on the item page, taps the back arrow, and the item page itself snaps to the top for a frame or two before `/lists` is shown. `/lists` itself renders at its correct scroll position — the jump is on the leaving page.
+
+**Do not attempt another fix without first proving which hypothesis below is actually true.** Every attempt so far has either failed or fixed the symptom while introducing a worse one.
+
+**Failed attempts (chronological)**:
+
+1. **`router.back()` from `next/navigation`** — Next.js's App Router unconditionally manages scroll during route transition; no documented way to opt out on back-nav.
+2. **`Link` with `scroll={false}` / `router.push('/lists', { scroll: false })`** — destination `/lists` lost its own restored scroll position.
+3. **`router.refresh()` after `router.back()`** — added latency, didn't fix the jump.
+4. **Native `<a href="/lists">` + `window.history.back()` (current baseline)** — bypasses the Next router; leaving page still visibly snaps to top during the unmount.
+5. **`loading.tsx` for `/lists/[id]` painting cached items from Dexie** — introduced a NEW bug: page scrolled to top a few seconds after entering a list, because the `loading.tsx → page.tsx` tree swap collapsed document height. Reverted.
+6. **`position: fixed; top: -scrollY; width: 100%` on `[data-route-root]` wrapper before `history.back()`** — the popstate handler unmounts the React tree before the browser repaints the freeze; CSS never visually applies.
+7. **`requestAnimationFrame` before `history.back()` to force a paint of the position-fixed style** — not yet tried in isolation; expected to add a frame of latency at best.
+8. **Snapshot-clone via `cloneNode(true)`, appended as `position: fixed` overlay with `visibility: hidden` on the original, removed after 250 ms** — the current implementation in `BackLink.tsx`. Best attempt structurally (a detached DOM clone can't be unmounted by React) but the user still observes the jump.
+
+**Untested hypotheses for next time**:
+
+- An ancestor of `[data-route-root]` (e.g. `<body>` with `min-h-full flex flex-col`, or some theme CSS) has a `transform`, `filter`, `perspective`, `will-change`, or `contain` value that creates a containing block and breaks `position: fixed` resolution. If so, the clone overlay is positioned relative to that ancestor instead of the viewport, and `top: -y` does the wrong thing.
+- The visible jump is not Next.js scroll-restoration but the browser clamping `window.scrollY` to 0 when document height collapses during unmount. The snapshot clone should counter this, unless the clone itself is somehow short.
+- `<html>` / `<body>` may need `overflow: hidden` + the snapshot pinned to `<html>` (not `<body>`) for the duration of the transition.
+- `document.startViewTransition` would let the browser take a native snapshot before the route transition and cross-fade — supported in Chrome/Edge, partial in Safari. Worth a focused spike.
+- Service worker / production-only behaviour: dev mode may not reproduce reliably. Always test the prod build.
+
+**What's confirmed working** (don't regress these): `/lists` renders fast on back-nav (cache-first via Dexie + `useLiveQuery`); `/lists/[id]` items paint instantly from Dexie via `useLiveQuery` (no SSR items fetch); reconcile uses a cheap `list_activity` precheck.
+
 ## Active plan
 
-- _(none)_
+- **Local-first `/lists/[id]` + snapshot-clone back-nav** — 2026-05-21. See `PLAN.md`. Root-cause fix after the prior `loading.tsx` + `position:fixed` attempt failed (and introduced a NEW bug: page scrolled to top a few seconds after entry, caused by the loading.tsx → page.tsx tree swap collapsing document height). (1) `page.tsx` no longer fetches `items` server-side; `ItemList` is the single source, reading from Dexie via `useLiveQuery` (`useListItemsSync` now has no SSR-seed dependency and exposes `hasLoaded`). (2) `reconcileList` got a cheap `list_activity.last_activity` precheck — skips the items refetch when the local `sync_meta.last_sync_at` is fresher (this IS the "version counter" the user previously proposed; their intuition was right). (3) `loading.tsx` deleted — no tree-swap, no scroll reset. (4) `BackLink` now clones `[data-route-root]` into a fixed-position DOM snapshot before `history.back()` so Next.js's React-tree teardown can't cause a visible jump; the clone is removed after 250 ms. 409 tests pass.
 
   Last completed plan: **Instant back-nav + cache-first `/lists`** — 2026-05-21. Dexie v2 with `list_catalog` + `list_views` tables; `ListsView` renders local-first from Dexie via `useLiveQuery`, seeded from SSR on mount, kept fresh by a new `subscribeToListsOverview` Realtime subscription (lists/list_members/items) + `reconcileListsOverview` reconcile. `BackLink` is now a native `<a>` using `window.history.back()` — no Next router on back-press, item page does nothing. 409 tests pass.
 
@@ -109,7 +138,7 @@ The `addItems` batch action (`src/app/lists/[id]/actions.ts`) is used exclusivel
 
 Logic is split across focused hooks in `src/app/lists/[id]/`:
 
-- **`useListItemsSync`** — Dexie seed, realtime subscription, reconcile-on-mount
+- **`useListItemsSync`** — realtime subscription + background reconcile-on-mount. **Does not seed from SSR** (items are not fetched server-side any more — see "Local-first item list" below). Returns `{ items, hasLoaded }`; `hasLoaded` is false until the Dexie `useLiveQuery` returns at least once, so `ItemList` can avoid flashing the empty-state copy during hydration.
 - **`useItemSelection`** — selection state, copy/move picker
 - **`useAddItems`** — add-item input, suggestions, multi-add, digit-bearing AI extraction
 - **`useDragMergeReorder`** — dnd-kit sensors, reorder vs. merge routing, merge confirmation
@@ -117,11 +146,23 @@ Logic is split across focused hooks in `src/app/lists/[id]/`:
 
 The item list Client Component (`ItemList.tsx`):
 
-1. Receives `initialItems` from the server.
+1. Reads items from Dexie via `useLiveQuery` inside `useListItemsSync` — no `initialItems` prop.
 2. Routes mutations through the outbox (see mutation-path rule above) for instant local feedback. Cross-list ops (copy/move) use direct server actions with explicit rollback.
 3. Subscribes to a Supabase Realtime channel filtered by `list_id` and merges INSERT/UPDATE/DELETE events into local state. Optimistic INSERTs are matched by `(added_by === '' && name === incoming.name)` and reconciled when the real row arrives.
 
 Realtime subscribes unconditionally for every list — there is no `is_shared` gate. When changing mutation logic, update both the optimistic path *and* ensure the eventual server response/realtime echo doesn't double-apply.
+
+### Local-first item list (`/lists/[id]`)
+
+`src/app/lists/[id]/page.tsx` does **not** fetch items server-side. It only does auth, fetches the list row, the user's history (for autocomplete), other lists (for the copy/move picker), and prefs — all cheap one-shot reads. Items are entirely a client concern, served from Dexie via `useLiveQuery` in `ItemList`. This makes navigation feel instant on cached lists and removes the loading.tsx/page.tsx tree-swap that used to cause a scroll reset a few seconds after entering a list.
+
+How freshness is kept:
+
+1. **`reconcileList(listId)`** runs on mount (from `useListItemsSync`) and on Realtime reconnect. It pulls server items and merges them into Dexie, respecting any pending outbox entries.
+2. **Cheap precheck** at the top of `reconcileList`: query `list_activity.last_activity` (one row), compare to local `sync_meta.last_sync_at`. If the local watermark is ≥ server activity, **skip the full items refetch entirely**. This is the "version counter" — we didn't add a new column; the existing `list_activity` view is the version, and `sync_meta.last_sync_at` is the client's last-known value. Caveat: `last_activity` only bumps on item writes, not on `lists`-table edits (e.g. renames). The per-list Realtime channel (`subscribeToList`) also only watches `items`, not `lists`. So a rename made while you're sitting on `/lists/[id]` won't update the header live — it propagates only when you next navigate to the list, since `page.tsx` re-fetches the list row fresh on every visit. Renames are rare enough that we accept this; if it becomes a problem, add `lists` to the per-list subscription.
+3. **Realtime** keeps Dexie reactive while the user is on the page; reconnect triggers a reconcile so missed events get healed.
+
+The back-link uses a **DOM snapshot overlay** to prevent Next.js's React-tree teardown from causing a visible scroll jump: `BackLink.tsx` clones the `[data-route-root]` wrapper into a `position: fixed; top: -scrollY` overlay on `<body>`, hides the original via `visibility: hidden`, calls `window.history.back()`, and removes the clone after 250 ms. The clone is detached DOM (not React-managed), so it survives the popstate-driven unmount until cleanup. `page.tsx`'s outer wrapper carries the `data-route-root` attribute so the snapshot has a target — keep it there. There is no `loading.tsx` for this route: an earlier attempt at one introduced a scroll-reset bug when Next.js swapped the loading tree for the page tree, and removing it (combined with the local-first model above) was the fix.
 
 ### User preferences are server-side, read in layout
 

@@ -1,13 +1,38 @@
 'use client'
 
+// KNOWN ISSUE: this snapshot-clone approach was the 8th attempt at preventing
+// the leaving page from visibly scrolling to top during back-nav, and it still
+// doesn't fully fix the jump. See "Back-nav from /lists/[id] still visibly
+// scrolls to top" under "Known issues" in CLAUDE.md for the full list of
+// failed attempts and untested hypotheses BEFORE trying another fix here.
+
 export function BackLink() {
   const onClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     // Let browser handle modifier-key clicks (open in new tab etc.)
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
     e.preventDefault()
+
     if (typeof window !== 'undefined' && window.history.length > 1) {
-      // Native history.back() — no Next router involvement, no RSC fetch,
-      // no React reconciliation on the leaving page. Item page does nothing.
+      // Clone the route-root into a fixed-position overlay so Next.js's
+      // teardown of the React tree can't cause a visible scroll jump.
+      // The clone is a detached DOM snapshot — not React-managed — so it
+      // survives the popstate-driven unmount until we remove it ourselves.
+      const root = document.querySelector<HTMLElement>('[data-route-root]')
+      if (root) {
+        const y = window.scrollY
+        const clone = root.cloneNode(true) as HTMLElement
+        clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'))
+        clone.style.position = 'fixed'
+        clone.style.top = `-${y}px`
+        clone.style.left = '0'
+        clone.style.right = '0'
+        clone.style.width = '100%'
+        clone.style.zIndex = '9999'
+        clone.style.pointerEvents = 'none'
+        document.body.appendChild(clone)
+        root.style.visibility = 'hidden'
+        setTimeout(() => clone.remove(), 250)
+      }
       window.history.back()
     } else {
       // Deep-link with no in-app history: fall back to full navigation.

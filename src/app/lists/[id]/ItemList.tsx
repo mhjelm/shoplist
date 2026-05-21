@@ -35,7 +35,6 @@ import { DndContext, closestCenter } from '@dnd-kit/core'
 
 interface Props {
   list: List
-  initialItems: Item[]
   listId: string
   suggestions: string[]
   textSize: ListTextSize
@@ -45,7 +44,7 @@ interface Props {
   currentUserId: string
 }
 
-export default function ItemList({ list, initialItems, listId, suggestions, textSize, theme, categoryOrder, availableLists, currentUserId }: Props) {
+export default function ItemList({ list, listId, suggestions, textSize, theme, categoryOrder, availableLists, currentUserId }: Props) {
   const itemTextClass = textSize === 'large' ? 'text-base' : 'text-sm'
   const thumbSizeClass = textSize === 'large' ? 'w-16 h-16' : 'w-12 h-12'
   const [editingItem, setEditingItem] = useState<Item | null>(null)
@@ -92,7 +91,7 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
     }
   }, [listId, router])
 
-  const { items } = useListItemsSync(list, listId, initialItems)
+  const { items, hasLoaded } = useListItemsSync(list, listId)
   const addItems = useAddItems({ listId, items, suggestions, isOffline })
   const { selectedIds, setSelectedIds, pickerMode, setPickerMode, pickerError, setPickerError, toggleSelect, handlePickTarget } = useItemSelection({ editMode, items, listId })
   const { sensors, handleDragEnd, pendingMerge, setPendingMerge, handleMergeConfirm } = useDragMergeReorder({ listId, items, editMode })
@@ -203,7 +202,9 @@ export default function ItemList({ list, initialItems, listId, suggestions, text
 
       <DndContext id="items-dnd" sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         {groupedToShop.length === 0 ? (
-          <EmptyState theme={theme} variant={isEmpty ? 'no-items' : 'all-shopped'} />
+          // Don't flash the "empty" copy while Dexie is still hydrating on
+          // first mount — only show EmptyState once we know the cache is empty.
+          hasLoaded ? <EmptyState theme={theme} variant={isEmpty ? 'no-items' : 'all-shopped'} /> : null
         ) : (
           <div className="space-y-3">
             {groupedToShop.map(([cat, catItems]) => (

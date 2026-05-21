@@ -51,9 +51,11 @@ vi.mock('@/lib/sync/engine', () => ({
   _dispatchEntry: vi.fn(),
 }))
 
-// Return initialItems directly — skips Dexie/realtime wiring
+// Inject items via a module-level variable that renderItemList sets.
+// ItemList no longer takes items as a prop — it gets them from the hook.
+let mockItems: Item[] = []
 vi.mock('@/app/lists/[id]/useListItemsSync', () => ({
-  useListItemsSync: (_list: unknown, _listId: unknown, initialItems: Item[]) => ({ items: initialItems }),
+  useListItemsSync: () => ({ items: mockItems, hasLoaded: true }),
 }))
 
 // Stub drag/merge/reorder hook — avoids dnd-kit sensor setup in jsdom
@@ -137,12 +139,12 @@ function makeList(): List {
 }
 
 function renderItemList(items: Item[] = []) {
+  mockItems = items
   return render(
     <EditModeProvider>
       <StoreModeProvider>
         <ItemList
           list={makeList()}
-          initialItems={items}
           listId="list-1"
           suggestions={[]}
           textSize="normal"

@@ -21,13 +21,9 @@ export default async function ListPage({ params }: Props) {
   const { data: list } = await supabase.from('lists').select('*').eq('id', id).single()
   if (!list) notFound()
 
-  const { data: items } = await supabase
-    .from('items')
-    .select('*')
-    .eq('list_id', id)
-    .order('sort_order', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: true })
-
+  // Items are NOT fetched server-side any more — ItemList reads them from
+  // Dexie via useLiveQuery for instant paint on cached lists. Reconcile in
+  // the background brings in any server changes (see useListItemsSync).
   const { data: history } = await supabase
     .from('user_item_history')
     .select('name')
@@ -49,7 +45,7 @@ export default async function ListPage({ params }: Props) {
   return (
     <StoreModeProvider>
     <EditModeProvider>
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div data-route-root className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center gap-3">
         <BackLink />
         <h1 className="font-semibold text-gray-900 dark:text-gray-100 flex-1 min-w-0 truncate">{list.name}</h1>
@@ -61,7 +57,6 @@ export default async function ListPage({ params }: Props) {
       <main className="w-full max-w-lg mx-auto px-4 py-6 space-y-6">
         <ItemList
           list={list}
-          initialItems={items ?? []}
           listId={id}
           suggestions={suggestions}
           textSize={list_text_size}
