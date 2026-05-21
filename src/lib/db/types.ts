@@ -69,3 +69,17 @@ export interface SyncMeta {
   list_id: string
   last_sync_at: string
 }
+
+export interface LocalListCatalog {
+  id: string
+  name: string
+  owner_id: string
+  created_at: string
+  has_members: boolean
+  last_activity: string | null
+}
+
+export interface LocalListView {
+  list_id: string
+  last_viewed_at: string
+}

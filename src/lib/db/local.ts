@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { LocalList, LocalItem, LocalListMember, LocalHistory, LocalPrefs, OutboxEntry, SyncMeta } from './types'
+import type { LocalList, LocalItem, LocalListMember, LocalHistory, LocalPrefs, OutboxEntry, SyncMeta, LocalListCatalog, LocalListView } from './types'
 
 class LocalDB extends Dexie {
   lists!: Table<LocalList>
@@ -9,6 +9,8 @@ class LocalDB extends Dexie {
   user_preferences!: Table<LocalPrefs>
   outbox!: Table<OutboxEntry>
   sync_meta!: Table<SyncMeta>
+  list_catalog!: Table<LocalListCatalog>
+  list_views!: Table<LocalListView>
 
   constructor() {
     super('shoplist')
@@ -20,6 +22,10 @@ class LocalDB extends Dexie {
       user_preferences: 'user_id',
       outbox: '++seq, status, list_id, created_at',
       sync_meta: 'list_id',
+    })
+    this.version(2).stores({
+      list_catalog: 'id, owner_id',
+      list_views: 'list_id',
     })
   }
 }

@@ -1,10 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState, type CSSProperties } from 'react'
 import Link from 'next/link'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { localDB } from '@/lib/db/local'
-import { reconcileLists } from '@/lib/sync/reconcile'
+import type { LocalListCatalog, LocalListView } from '@/lib/db/types'
+import { subscribeToListsOverview } from '@/lib/sync/realtime'
+import { reconcileListsOverview } from '@/lib/sync/reconcile'
+import { computeUnread } from '@/lib/listsUnread'
 import { useSyncState } from '@/lib/sync/engine'
 import type { List, Theme } from '@/lib/types'
 import { slColorFor, slFlareDelay } from '@/lib/sl-theme'
@@ -14,28 +17,49 @@ import ListEditPanel from './ListEditPanel'
 interface Props {
   initialLists: List[]
   memberCounts: Record<string, boolean>
-  unread: Record<string, boolean>
+  lastActivity: Record<string, string>
+  lastViewed: Record<string, string>
   theme: Theme
   currentUserId: string
 }
 
-export default function ListsView({ initialLists, memberCounts, unread, theme, currentUserId }: Props) {
+export default function ListsView({ initialLists, memberCounts, lastActivity, lastViewed, theme, currentUserId }: Props) {
   const { isOffline } = useSyncState()
   const [navigatingToListId, setNavigatingToListId] = useState<string | null>(null)
   const [openEditListId, setOpenEditListId] = useState<string | null>(null)
   const [renamedLists, setRenamedLists] = useState<Record<string, string>>({})
 
-  // Reconcile on mount so existing Dexie `lists` rows get refreshed against
-  // the server. We do NOT seed Dexie from initialLists here - Dexie's `lists`
-  // table tracks "what the user has actually opened on this device" and is
-  // populated only by ItemList mount. Seeding from SSR would make every
-  // visible list look cached and defeat the offline gating.
-  useEffect(() => {
-    reconcileLists().catch(err => console.error('reconcileLists failed:', err))
-  }, [])
+  // Seed list_catalog and list_views from SSR data before the first paint so
+  // useLiveQuery has data on the very first frame after hydration.
+  useLayoutEffect(() => {
+    const catalogRows: LocalListCatalog[] = initialLists.map(list => ({
+      id: list.id,
+      name: list.name,
+      owner_id: list.owner_id,
+      created_at: list.created_at,
+      has_members: memberCounts[list.id] ?? false,
+      last_activity: lastActivity[list.id] ?? null,
+    }))
+    const viewRows: LocalListView[] = Object.entries(lastViewed).map(([list_id, last_viewed_at]) => ({
+      list_id,
+      last_viewed_at,
+    }))
+    localDB.list_catalog.bulkPut(catalogRows).catch(console.error)
+    if (viewRows.length > 0) localDB.list_views.bulkPut(viewRows).catch(console.error)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally only seeds from first-mount SSR values; realtime keeps Dexie fresh after
 
-  // Cached set: a list counts as cached if Dexie has its row OR any of its
-  // items. Two queries, unioned. `useLiveQuery` returns undefined while hydrating.
+  // Subscribe to realtime changes on lists/list_members/items.
+  // Reconcile on subscribe (heals SSR drift) and on reconnect (heals missed events).
+  // Item events are handled optimistically inside the subscription (bump last_activity).
+  useEffect(() => {
+    return subscribeToListsOverview(currentUserId, () => {
+      reconcileListsOverview().catch(console.error)
+    })
+  }, [currentUserId])
+
+  // Cached set for offline gating (unchanged):
+  // a list counts as cached if Dexie has its row OR any of its items.
   const liveLists = useLiveQuery(() => localDB.lists.toArray(), [])
   const liveItems = useLiveQuery(() => localDB.items.toArray(), [])
   const cachedIds = useMemo(() => {
@@ -45,15 +69,56 @@ export default function ListsView({ initialLists, memberCounts, unread, theme, c
     return ids
   }, [liveLists, liveItems])
 
-  // Render from SSR seed. Online: SSR is current. Offline: the SW served
-  // cached /lists HTML, whose SSR data is from the last online visit - fine
-  // as a shell, and offline gating below hides anything the user can't open.
-  const displayLists = initialLists.map(list => ({
-    ...list,
-    name: renamedLists[list.id] ?? list.name,
-  }))
-  const myLists = displayLists.filter(l => l.owner_id === currentUserId)
-  const sharedLists = displayLists.filter(l => l.owner_id !== currentUserId)
+  // Primary render source: Dexie list_catalog + list_views.
+  // Falls back to the SSR seed when undefined (first frame before IndexedDB hydrates).
+  const liveCatalog = useLiveQuery(() => localDB.list_catalog.toArray(), [])
+  const liveViews = useLiveQuery(() => localDB.list_views.toArray(), [])
+
+  const { myLists, sharedLists, computedMemberCounts, computedUnread } = useMemo(() => {
+    const catalog: LocalListCatalog[] = liveCatalog ?? initialLists.map(l => ({
+      id: l.id,
+      name: l.name,
+      owner_id: l.owner_id,
+      created_at: l.created_at,
+      has_members: memberCounts[l.id] ?? false,
+      last_activity: lastActivity[l.id] ?? null,
+    }))
+    const views: LocalListView[] = liveViews ?? Object.entries(lastViewed).map(([list_id, last_viewed_at]) => ({ list_id, last_viewed_at }))
+
+    const activityMap = new Map<string, string>()
+    for (const c of catalog) {
+      if (c.last_activity) activityMap.set(c.id, c.last_activity)
+    }
+    const viewMap = new Map<string, string>()
+    for (const v of views) viewMap.set(v.list_id, v.last_viewed_at)
+
+    const mc: Record<string, boolean> = {}
+    for (const c of catalog) mc[c.id] = c.has_members
+
+    const sorted = [...catalog].sort((a, b) => b.created_at.localeCompare(a.created_at))
+
+    const lists: List[] = sorted.map(c => ({
+      id: c.id,
+      name: renamedLists[c.id] ?? c.name,
+      owner_id: c.owner_id,
+      created_at: c.created_at,
+    }))
+
+    const unread = computeUnread({
+      lists: sorted,
+      memberCounts: mc,
+      lastActivity: activityMap,
+      lastViewed: viewMap,
+      currentUserId,
+    })
+
+    return {
+      myLists: lists.filter(l => l.owner_id === currentUserId),
+      sharedLists: lists.filter(l => l.owner_id !== currentUserId),
+      computedMemberCounts: mc,
+      computedUnread: unread,
+    }
+  }, [liveCatalog, liveViews, initialLists, memberCounts, lastActivity, lastViewed, renamedLists, currentUserId])
 
   const toggleEdit = (listId: string) => {
     setOpenEditListId(current => current === listId ? null : listId)
@@ -108,8 +173,8 @@ export default function ListsView({ initialLists, memberCounts, unread, theme, c
               <ListRow
                 key={list.id}
                 list={list}
-                hasMembers={memberCounts[list.id] ?? false}
-                unread={unread[list.id] ?? false}
+                hasMembers={computedMemberCounts[list.id] ?? false}
+                unread={computedUnread[list.id] ?? false}
                 theme={theme}
                 cached={cachedIds.has(list.id)}
                 isOffline={isOffline}
@@ -133,7 +198,7 @@ export default function ListsView({ initialLists, memberCounts, unread, theme, c
                 key={list.id}
                 list={list}
                 hasMembers={false}
-                unread={unread[list.id] ?? false}
+                unread={computedUnread[list.id] ?? false}
                 theme={theme}
                 cached={cachedIds.has(list.id)}
                 isOffline={isOffline}

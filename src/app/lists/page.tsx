@@ -6,7 +6,6 @@ import CreateListForm from './CreateListForm'
 import ListsView from './ListsView'
 import OfflineBadge from '@/components/OfflineBadge'
 import { getUserPreferences } from '@/lib/preferences'
-import { computeUnread } from '@/lib/listsUnread'
 import type { List } from '@/lib/types'
 
 export default async function ListsPage() {
@@ -36,19 +35,11 @@ export default async function ListsPage() {
     supabase.from('list_activity').select('list_id, last_activity'),
     supabase.from('list_views').select('list_id, last_viewed_at').eq('user_id', user.id),
   ])
-  const lastActivity = new Map<string, string>(
-    (activityRows ?? []).map(r => [r.list_id as string, r.last_activity as string]),
-  )
-  const lastViewed = new Map<string, string>(
-    (viewRows ?? []).map(r => [r.list_id as string, r.last_viewed_at as string]),
-  )
-  const unread = computeUnread({
-    lists,
-    memberCounts,
-    lastActivity,
-    lastViewed,
-    currentUserId: user.id,
-  })
+  // Convert to plain Records for RSC serialization (Map can't cross the boundary)
+  const lastActivity: Record<string, string> = {}
+  for (const r of activityRows ?? []) lastActivity[r.list_id as string] = r.last_activity as string
+  const lastViewed: Record<string, string> = {}
+  for (const r of viewRows ?? []) lastViewed[r.list_id as string] = r.last_viewed_at as string
 
   const { theme } = await getUserPreferences()
 
@@ -67,7 +58,7 @@ export default async function ListsPage() {
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-8">
         <CreateListForm />
-        <ListsView initialLists={lists} memberCounts={memberCounts} unread={unread} theme={theme} currentUserId={user.id} />
+        <ListsView initialLists={lists} memberCounts={memberCounts} lastActivity={lastActivity} lastViewed={lastViewed} theme={theme} currentUserId={user.id} />
       </main>
     </div>
   )

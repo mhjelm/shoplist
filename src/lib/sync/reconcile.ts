@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/client'
 import { localDB } from '@/lib/db/local'
-import type { LocalItem, LocalList, OutboxEntry } from '@/lib/db/types'
+import type { LocalItem, LocalList, LocalListCatalog, LocalListView, OutboxEntry } from '@/lib/db/types'
 import { addConflicts } from './engine'
 
 export async function reconcileList(listId: string): Promise<void> {
@@ -107,4 +107,63 @@ export async function reconcileLists(): Promise<void> {
       }
     }
   })
+}
+
+// Mirrors the /lists page SSR queries into Dexie's list_catalog + list_views
+// tables so ListsView can render instantly from IndexedDB on back-nav.
+// Safe to call repeatedly; all writes are idempotent bulkPut / delete.
+export async function reconcileListsOverview(): Promise<void> {
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const [listsResult, activityResult, viewsResult] = await Promise.all([
+      supabase.from('lists').select('id, name, owner_id, created_at, list_members(count)'),
+      supabase.from('list_activity').select('list_id, last_activity'),
+      supabase.from('list_views').select('list_id, last_viewed_at').eq('user_id', user.id),
+    ])
+
+    if (listsResult.error || !listsResult.data) return
+
+    const activityMap = new Map<string, string>(
+      (activityResult.data ?? []).map(r => [r.list_id as string, r.last_activity as string]),
+    )
+    const viewsMap = new Map<string, string>(
+      (viewsResult.data ?? []).map(r => [r.list_id as string, r.last_viewed_at as string]),
+    )
+
+    const catalogRows: LocalListCatalog[] = listsResult.data.map(row => {
+      const { list_members, ...rest } = row as typeof row & { list_members: Array<{ count: number }> }
+      return {
+        id: rest.id,
+        name: rest.name,
+        owner_id: rest.owner_id,
+        created_at: rest.created_at,
+        has_members: (list_members?.[0]?.count ?? 0) > 0,
+        last_activity: activityMap.get(rest.id) ?? null,
+      }
+    })
+
+    const viewRows: LocalListView[] = Array.from(viewsMap.entries()).map(([list_id, last_viewed_at]) => ({
+      list_id,
+      last_viewed_at,
+    }))
+
+    const serverIds = new Set(catalogRows.map(r => r.id))
+
+    await localDB.transaction('rw', [localDB.list_catalog, localDB.list_views], async () => {
+      const existing = await localDB.list_catalog.toArray()
+      for (const row of existing) {
+        if (!serverIds.has(row.id)) {
+          await localDB.list_catalog.delete(row.id)
+          await localDB.list_views.delete(row.id)
+        }
+      }
+      await localDB.list_catalog.bulkPut(catalogRows)
+      if (viewRows.length > 0) await localDB.list_views.bulkPut(viewRows)
+    })
+  } catch {
+    // Network errors expected when offline; leave Dexie untouched.
+  }
 }
