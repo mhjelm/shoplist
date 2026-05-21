@@ -21,6 +21,7 @@ export const metadata: Metadata = {
   description: "Family shopping lists",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "default", title: "Shoplist" },
+  icons: { icon: '/icon-192.png' },
 };
 
 export const viewport: Viewport = {
