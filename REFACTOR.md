@@ -11,23 +11,20 @@ Pending refactors for Shoplist. Architectural smells worth fixing, ordered rough
 - New smells go in **Pending**, newest near the top of the section unless ordering by dependency.
 - **Architecture analyses** (the kind that produced this list) also live here, appended as a dated section, so future analyses have a prior baseline to compare against.
 
+## Verification checklist for any refactor
+
+A refactor is not "verified" or "behaviour-neutral" until **all** of these pass:
+
+1. `npm run lint` — 0 new errors.
+2. `npm test` — 100% passing.
+3. `npm run build` — **mandatory**, not optional. Next.js enforces things (e.g. the `'use server'` directive's "async functions only" rule) that lint, vitest, and `tsc --noEmit` all silently miss. The `actions.ts` split (refactor #2) was declared "verified" without `npm run build` and shipped a broken barrel that crashed the dev server on the next page load. **Don't repeat this.**
+4. For UI-touching changes, a manual smoke test of the golden path in a browser.
+
 ## Up next
 
-**→ 2. Split `src/app/lists/[id]/actions.ts` into a directory.** Highest leverage / lowest risk of the pending items.
+**→ 3. ESLint rule: enforce the mutation-path rule.** Cheap and codifies an existing invariant.
 
 ## Pending
-
-### 2. Split `src/app/lists/[id]/actions.ts` (currently 801 LOC, 20 exports)
-- **Smell**: mixes item CRUD, batch add, Gemini AI extraction (URL/text/image), cross-list copy/move, history mgmt, `list_views`, image upload.
-- **Scope**: split into `src/app/lists/[id]/actions/` with:
-  - `items.ts` (CRUD + reorder + merge + clear)
-  - `import.ts` (`extractRecipeItems`, `extractListItemsFromImage`, `extractAddItems`, `addItems`)
-  - `cross-list.ts` (`copyItemsToList`, `moveItemsToList`)
-  - `views.ts` (`touchListView`)
-  - `upload.ts` (`uploadImage`, `suggestItemName`)
-  - Optional `index.ts` re-export barrel so existing import paths keep working.
-- Each file ≤ ~200 LOC. No behaviour change. Update tests' `vi.mock` paths.
-- **Status**: pending. **← do this next.**
 
 ### 3. ESLint rule: enforce the mutation-path rule
 - **Smell**: nothing mechanically prevents a client component from calling `addItem` / `updateItem` / etc. directly, bypassing the outbox.
@@ -65,6 +62,18 @@ Pending refactors for Shoplist. Architectural smells worth fixing, ordered rough
 - **Status**: deferred.
 
 ## Completed
+
+### 2. Split `src/app/lists/[id]/actions.ts` — done 2026-05-23
+- **Smell**: 801 LOC / 20 exports in one file mixing item CRUD, batch add, Gemini AI extraction, cross-list copy/move, history mgmt, `list_views`, image upload.
+- **Resolution**: split into `src/app/lists/[id]/actions/`:
+  - `items.ts` (255 LOC) — addItem, updateItem, toggleItem, reorderItem, deleteItem, mergeItems, clearShoppedItems, clearAllItems, setItemCategory, categorizeItem, deleteHistoryItem
+  - `import.ts` (329 LOC) — addItems, extractAddItems, extractRecipeItems, extractListItemsFromImage + helpers (findRecipeNodes, extractRecipeIngredients, fetchRecipeText)
+  - `cross-list.ts` (151 LOC) — copyItemsToList, moveItemsToList + CopyItem type
+  - `views.ts` (19 LOC) — touchListView
+  - `upload.ts` (63 LOC) — uploadImage, suggestItemName
+  - `index.ts` (36 LOC) — barrel re-export so external imports of `@/app/lists/[id]/actions` keep working
+- Pure file movement; identical function bodies. No callers updated (barrel preserves every import). 413/413 tests pass; lint clean; `tsc --noEmit` error count unchanged (208 pre-existing, 0 new); `npm run build` succeeds.
+- **Gotcha**: the `index.ts` barrel must **NOT** carry the `'use server'` directive — Next.js only allows `export async function` declarations in `'use server'` files, never `export { ... } from ...`. The barrel is a plain ES module; the underlying `items.ts` / `import.ts` / `cross-list.ts` / `views.ts` / `upload.ts` carry `'use server'` and that's what makes the re-exported functions server actions. Initial attempt added `'use server'` to the barrel and `npm run build` failed with "Only async functions are allowed to be exported in a 'use server' file".
 
 ### 1. Renumber duplicate `0014` migration — done 2026-05-23
 - **Smell**: `supabase/migrations/0014_fix_bump_item_history_conflict.sql` and `0014_theme_shoplist.sql` shared a number. Tooling ordering between same-numbered files was undefined.
