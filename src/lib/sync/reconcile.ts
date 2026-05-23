@@ -9,6 +9,13 @@ export async function reconcileList(listId: string): Promise<void> {
   // Cheap precheck: list_activity tracks the most recent item write per list.
   // If the server's last_activity isn't newer than our local sync watermark,
   // Dexie is already up-to-date and we can skip the full items refetch.
+  //
+  // Correctness depends on last_activity being MONOTONIC — bumped to now() on
+  // every items INSERT/UPDATE/DELETE by the bump_list_activity_on_items
+  // trigger (migration 0017). The earlier view-based definition
+  // (max(updated_at) from items) regressed under deletes and silently kept
+  // other users' Dexie stuck on rows that had been cleared on the server.
+  //
   // Caveat: list-row edits (e.g. renames) don't bump last_activity, and the
   // per-list Realtime channel doesn't watch the `lists` table either — so a
   // rename only surfaces on the next navigation, when page.tsx re-fetches

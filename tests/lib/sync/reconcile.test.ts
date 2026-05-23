@@ -331,6 +331,34 @@ describe('reconcileList', () => {
     expect(db.localItems[0].name).toBe('Mjölk')
   })
 
+  it('precheck: refetches and prunes local items when server activity is bumped AFTER all items were deleted (regression: shared-list clear-shopped)', async () => {
+    // Regression for the bug fixed in migration 0017: another user cleared
+    // shopped items on a shared list. With the old `list_activity` view
+    // (max(updated_at) from items), that DELETE made last_activity regress
+    // (or go NULL), so the precheck below short-circuited and User 2's
+    // Dexie kept stale rows forever — refresh and app restart didn't help.
+    //
+    // Migration 0017 made last_activity monotonic via a trigger on items
+    // INSERT/UPDATE/DELETE that sets it to now(). This test simulates the
+    // expected post-trigger state: server activity > local sync watermark
+    // even though server has NO items. Reconcile must refetch and prune.
+    const now = Date.now()
+    // User 2 last synced 5 minutes ago; server was cleared 10 s ago.
+    serverData.activity = { last_activity: new Date(now - 10_000).toISOString() }
+    localData.syncMeta = { list_id: 'list-1', last_sync_at: new Date(now - 300_000).toISOString() }
+    db.localItems = [
+      makeLocalItem('item-1', 'Mjölk'),
+      makeLocalItem('item-2', 'Bröd'),
+    ]
+    serverData.rows = []
+
+    await reconcileList('list-1')
+
+    // Precheck must NOT short-circuit — items must be refetched and pruned.
+    expect(serverData.itemsQueryCalls).toBe(1)
+    expect(db.localItems).toHaveLength(0)
+  })
+
   it('precheck: refetches items when there is no local sync watermark yet (first reconcile)', async () => {
     serverData.activity = { last_activity: '2024-06-01T10:00:00.000Z' }
     // localData.syncMeta intentionally left undefined
