@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Pending manual tasks
 
-- [ ] **Apply migration `0015_list_views.sql`** — creates the `list_views` table + `list_activity` view powering the "updated since last viewed" dot on `/lists`. Two earlier migrations share the `0014_` prefix (`0014_fix_bump_item_history_conflict.sql`, `0014_theme_shoplist.sql`); `0015_` is the unambiguous next number.
+_(none)_
 
 > Signup is now invitation-only (done 2026-05-17). See `docs/how-to-add-new-user.html` for the invite flow and how to re-enable public signup if ever needed.
 
@@ -38,6 +38,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **What's confirmed working** (don't regress these): `/lists` renders fast on back-nav (cache-first via Dexie + `useLiveQuery`); `/lists/[id]` items paint instantly from Dexie via `useLiveQuery` (no SSR items fetch); reconcile uses a cheap `list_activity` precheck.
 
 ## Active plan
+
+- **Fix shared-list deletes leaving stale items on other users' devices** — 2026-05-23. See `PLAN.md`. Root cause: `list_activity` is a view over `max(updated_at) from items group by list_id` — non-monotonic under deletes. When User 1 clears shopped items, the max regresses (or goes NULL), so User 2's reconcile precheck short-circuits and Dexie never updates; same regression skips the NEW marker in `computeUnread`. Fix: persist `last_activity` as a column on `lists`, bump via trigger on items INSERT/UPDATE/DELETE, replace the view to read the column (clients unchanged). Migration `0017_monotonic_list_activity.sql`. Also quiet `subscribeToListsOverview` so trigger-only lists UPDATEs don't trigger a full reconcile.
 
 - **Fix create-list → back lands on wrong page via server-side `redirect()`** — 2026-05-21. See `PLAN.md`. Diagnostic logs (in `HistoryDebug.tsx`, `CreateListForm.tsx`, `BackLink.tsx`) confirmed `router.push` from CreateListForm gets demoted to `replaceState` after a `/lists/[id]` RSC payload is in the router cache (kept 30 s by `staleTimes.dynamic`). Plan: add `createListAndOpen` server-action wrapper that calls `redirect()` on success; CreateListForm switches to it and drops `router.push`. Existing `createList` left alone (TargetListModal still uses it for copy/move). Diagnostic instrumentation stays until verified, then ripped out in a follow-up commit.
 
@@ -161,7 +163,7 @@ Realtime subscribes unconditionally for every list — there is no `is_shared` g
 How freshness is kept:
 
 1. **`reconcileList(listId)`** runs on mount (from `useListItemsSync`) and on Realtime reconnect. It pulls server items and merges them into Dexie, respecting any pending outbox entries.
-2. **Cheap precheck** at the top of `reconcileList`: query `list_activity.last_activity` (one row), compare to local `sync_meta.last_sync_at`. If the local watermark is ≥ server activity, **skip the full items refetch entirely**. This is the "version counter" — we didn't add a new column; the existing `list_activity` view is the version, and `sync_meta.last_sync_at` is the client's last-known value. Caveat: `last_activity` only bumps on item writes, not on `lists`-table edits (e.g. renames). The per-list Realtime channel (`subscribeToList`) also only watches `items`, not `lists`. So a rename made while you're sitting on `/lists/[id]` won't update the header live — it propagates only when you next navigate to the list, since `page.tsx` re-fetches the list row fresh on every visit. Renames are rare enough that we accept this; if it becomes a problem, add `lists` to the per-list subscription.
+2. **Cheap precheck** at the top of `reconcileList`: query `list_activity.last_activity` (one row), compare to local `sync_meta.last_sync_at`. If the local watermark is ≥ server activity, **skip the full items refetch entirely**. `last_activity` is a **monotonic** `timestamptz` column on `lists`, bumped by the `bump_list_activity_on_items` trigger (migration `0017`) on every items INSERT/UPDATE/**DELETE**. The `list_activity` view is now a thin wrapper that just exposes that column. Earlier the view was `max(updated_at) from items group by list_id`, which was non-monotonic under deletes and caused a sync bug where clearing shopped items on a shared list left stale rows in other users' Dexie cache. Caveat: `last_activity` is only bumped by items writes, not by edits to the `lists` row itself (e.g. renames). The per-list Realtime channel (`subscribeToList`) also only watches `items`, not `lists`. So a rename made while you're sitting on `/lists/[id]` won't update the header live — it propagates only when you next navigate to the list, since `page.tsx` re-fetches the list row fresh on every visit. Renames are rare enough that we accept this; if it becomes a problem, add `lists` to the per-list subscription.
 3. **Realtime** keeps Dexie reactive while the user is on the page; reconnect triggers a reconcile so missed events get healed.
 
 The back-link uses a **DOM snapshot overlay** to prevent Next.js's React-tree teardown from causing a visible scroll jump: `BackLink.tsx` clones the `[data-route-root]` wrapper into a `position: fixed; top: -scrollY` overlay on `<body>`, hides the original via `visibility: hidden`, calls `window.history.back()`, and removes the clone after 250 ms. The clone is detached DOM (not React-managed), so it survives the popstate-driven unmount until cleanup. `page.tsx`'s outer wrapper carries the `data-route-root` attribute so the snapshot has a target — keep it there. There is no `loading.tsx` for this route: an earlier attempt at one introduced a scroll-reset bug when Next.js swapped the loading tree for the page tree, and removing it (combined with the local-first model above) was the fix.
@@ -271,7 +273,7 @@ A separate UI mode toggled from the page header that swaps the per-row pencil fo
 
 Six tables. Initial schema in `supabase/migrations/0001_init.sql`; subsequent migrations add columns and tables:
 
-- `lists` (id, name, owner_id, created_at) — `is_shared` was dropped in migration 0012; shared status is now derived from `list_members` having rows
+- `lists` (id, name, owner_id, created_at, last_activity) — `is_shared` was dropped in migration 0012; shared status is now derived from `list_members` having rows. `last_activity` (added in 0017) is a monotonic timestamp bumped by a trigger on every items INSERT/UPDATE/DELETE; powers the `list_activity` view used by sync precheck and the NEW marker.
 - `list_members` (list_id, user_id, added_at) — join table for sharing
 - `items` (id, list_id, added_by, name, is_checked, created_at, picture_url, sort_order, quantity, category, measurement)
 - `user_item_history` (user_id, name, last_used_at, use_count, category) — autocomplete source
@@ -304,4 +306,4 @@ Realtime publication includes `items`, `lists`, and `list_members`. `items` uses
 
 - **`@/...` imports** resolve to `src/...` (Next.js default).
 - **Tailwind v4** — uses `@tailwindcss/postcss`; no `tailwind.config.js`.
-- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0017_`.
+- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0018_`.

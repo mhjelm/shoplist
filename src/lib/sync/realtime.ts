@@ -78,10 +78,22 @@ export function subscribeToListsOverview(
             const id = (payload.old as { id: string }).id
             await localDB.list_catalog.delete(id)
             await localDB.list_views.delete(id)
-          } else {
-            // INSERT or UPDATE: reconcile to get fresh has_members + activity
-            onReconcile()
+            return
           }
+          if (payload.eventType === 'UPDATE') {
+            // last_activity-only updates are produced by the items trigger
+            // (migration 0017). The items handler below already bumps Dexie's
+            // catalog optimistically, so no need to fire a full overview
+            // reconcile — that would mean 3 server queries per item write.
+            const newRow = payload.new as Record<string, unknown>
+            const oldRow = payload.old as Record<string, unknown>
+            const changedKeys = Object.keys(newRow).filter(
+              k => newRow[k] !== oldRow[k],
+            )
+            if (changedKeys.length === 1 && changedKeys[0] === 'last_activity') return
+          }
+          // INSERT or structural UPDATE: reconcile for fresh has_members + activity
+          onReconcile()
         },
       )
       .on(
