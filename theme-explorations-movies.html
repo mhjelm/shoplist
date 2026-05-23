@@ -1,0 +1,1107 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Shoplist — Filmtema-utforskningar</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300;1,500&family=Bangers&family=Bowlby+One&family=Inter+Tight:wght@500;700;800&family=Yeseva+One&family=Marcellus&family=Caveat:wght@500;700&family=Nunito+Sans:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+  *,*::before,*::after { box-sizing: border-box; }
+  html,body { margin:0; padding:0; }
+  body {
+    background: #0a0a0a;
+    color: #ddd;
+    font-family: "Nunito Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* ============ INTRO ============ */
+  .intro {
+    min-height: 60vh;
+    display: grid; place-items: center;
+    text-align: center;
+    padding: 4rem 1.5rem;
+    background:
+      radial-gradient(ellipse at 25% 25%, #1f1a2e 0%, transparent 55%),
+      radial-gradient(ellipse at 75% 75%, #2e1a1a 0%, transparent 55%),
+      #0a0a0a;
+    position: relative;
+  }
+  .intro::after {
+    content:"";
+    position: absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 80px 80px;
+    pointer-events: none;
+  }
+  .intro h1 {
+    font-family: "Cinzel", serif;
+    font-weight: 500;
+    font-size: clamp(2.2rem, 7vw, 4.5rem);
+    margin: 0 0 1.2rem;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    color: #f0f0f0;
+  }
+  .intro h1 em {
+    font-family: "Caveat", cursive;
+    font-style: normal;
+    font-weight: 700;
+    color: #ff6b9d;
+    letter-spacing: -0.01em;
+  }
+  .intro p {
+    max-width: 42rem;
+    margin: 0 auto;
+    color: #8a8a8a;
+    font-size: 1.05rem;
+    line-height: 1.6;
+  }
+  .intro .meta {
+    margin-top: 2.5rem;
+    display: inline-flex;
+    gap: 2rem;
+    font-family: "Space Mono", monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: #555;
+  }
+  .intro .meta span::before {
+    content:""; display:inline-block;
+    width: 6px; height: 6px;
+    background: currentColor; margin-right: 0.5rem;
+    transform: translateY(-2px);
+  }
+
+  /* ============ SECTION SHARED ============ */
+  .theme {
+    min-height: 100vh;
+    padding: 6rem 2rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  @media (max-width: 980px) {
+    .theme { grid-template-columns: 1fr; padding: 4rem 1.5rem; gap: 3rem; }
+  }
+  .theme .info { position: relative; z-index: 3; }
+  .theme .stage { position: relative; z-index: 3; display:grid; place-items:center; }
+
+  .label {
+    font-family: "Space Mono", monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    margin-bottom: 1.5rem;
+    opacity: 0.8;
+  }
+  .label::before {
+    content:""; display:inline-block;
+    width: 28px; height: 1px;
+    background: currentColor;
+    margin-right: 0.8rem;
+    transform: translateY(-4px);
+  }
+
+  .theme h2 {
+    font-size: clamp(2.5rem, 5vw, 4.5rem);
+    line-height: 0.95;
+    margin: 0 0 1.5rem;
+    letter-spacing: -0.02em;
+  }
+  .theme .lede {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    max-width: 30rem;
+    margin: 0 0 2.5rem;
+    opacity: 0.9;
+  }
+  .palette {
+    display: flex; gap: 0;
+    margin-bottom: 2rem;
+    border-radius: 4px;
+    overflow: hidden;
+    width: fit-content;
+  }
+  .palette span {
+    width: 56px; height: 56px;
+    display: block;
+    position: relative;
+  }
+  .palette span::after {
+    content: attr(data-hex);
+    position: absolute;
+    bottom: -1.5rem; left: 0;
+    font-family: "Space Mono", monospace;
+    font-size: 0.62rem;
+    opacity: 0.6;
+    letter-spacing: 0.05em;
+  }
+  .typespec {
+    margin-top: 3rem;
+    display: grid; gap: 0.4rem;
+    font-size: 0.85rem;
+  }
+  .typespec dt {
+    font-family: "Space Mono", monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    opacity: 0.5;
+  }
+  .typespec dd { margin: 0 0 0.8rem; }
+
+  /* ============ PHONE MOCKUP SHARED ============ */
+  .phone {
+    width: 360px; max-width: 100%;
+    aspect-ratio: 9 / 19;
+    border-radius: 44px;
+    padding: 14px;
+    position: relative;
+    background: #0c0c0c;
+    box-shadow:
+      0 60px 90px -30px rgba(0,0,0,0.7),
+      0 0 0 2px rgba(255,255,255,0.04),
+      inset 0 0 0 2px rgba(255,255,255,0.04);
+  }
+  .phone::before {
+    content:"";
+    position: absolute; top: 16px; left: 50%;
+    transform: translateX(-50%);
+    width: 110px; height: 28px;
+    background: #050505;
+    border-radius: 14px;
+    z-index: 20;
+  }
+  .screen {
+    width: 100%; height: 100%;
+    border-radius: 32px;
+    overflow: hidden;
+    position: relative;
+    display: flex; flex-direction: column;
+  }
+  .screen .topbar {
+    padding: 50px 20px 14px;
+    display: flex; align-items: center; gap: 12px;
+    position: relative; z-index: 4;
+  }
+  .screen .topbar .back {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 16px;
+  }
+  .screen .listname {
+    flex: 1;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .screen .editbtn {
+    font-size: 0.65rem;
+    padding: 6px 10px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+  }
+  .screen .addbox {
+    margin: 0 16px 14px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    font-size: 0.88rem;
+    display: flex; align-items: center; gap: 10px;
+    position: relative; z-index: 4;
+  }
+  .screen .addbox .plus {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-weight: 700;
+  }
+  .screen .secheader {
+    margin: 6px 18px 8px;
+    font-family: "Space Mono", monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    opacity: 0.7;
+    position: relative; z-index: 4;
+  }
+  .screen .items {
+    padding: 0 12px 80px;
+    position: relative; z-index: 4;
+  }
+  .row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 12px;
+    border-radius: 12px;
+    margin-bottom: 4px;
+    font-size: 0.92rem;
+    position: relative;
+  }
+  .row .box {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    flex: none;
+    display: grid; place-items: center;
+    font-size: 13px;
+  }
+  .row .nm { flex: 1; }
+  .row .meta {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+  .row.shopped .nm { text-decoration: line-through; opacity: 0.5; }
+
+  /* ================================================================
+     ★ TITANIC — 1912 OCEAN LINER
+     ================================================================ */
+  .titanic {
+    background:
+      radial-gradient(ellipse at 50% 0%, #4a6b8c 0%, transparent 40%),
+      linear-gradient(180deg, #0d1a2e 0%, #051120 50%, #020812 100%);
+    color: #e8d9a8;
+    font-family: "Cormorant Garamond", serif;
+  }
+  /* slow ocean light */
+  .titanic::before {
+    content:"";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 600px 200px at 30% 25%, rgba(232,217,168,0.1), transparent),
+      repeating-linear-gradient(
+        180deg,
+        transparent 0,
+        transparent 90px,
+        rgba(255,255,255,0.012) 90px,
+        rgba(255,255,255,0.012) 92px,
+        transparent 92px,
+        transparent 180px
+      );
+    pointer-events: none;
+  }
+  /* sepia grain */
+  .titanic::after {
+    content:"";
+    position: absolute; inset:0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.06'/></svg>");
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+  .titanic h2 {
+    font-family: "Cinzel", serif;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #e8d9a8;
+  }
+  .titanic h2 .ornament {
+    display: block;
+    text-align: left;
+    font-family: "Cormorant Garamond", serif;
+    font-style: italic;
+    font-weight: 300;
+    font-size: 0.5em;
+    color: #c4a865;
+    letter-spacing: 0;
+    text-transform: none;
+    margin-top: 0.4em;
+  }
+  .titanic h2::after {
+    content:"❖";
+    display: block;
+    color: #c4a865;
+    font-size: 0.4em;
+    margin-top: 0.7em;
+    letter-spacing: 0.4em;
+  }
+  .titanic .label { color: #c4a865; }
+
+  /* floating sapphire — heart of the ocean */
+  .heart-ocean {
+    position: absolute;
+    top: 18%; right: 6%;
+    width: 110px; height: 140px;
+    pointer-events: none;
+    z-index: 1;
+    animation: heart-sway 8s ease-in-out infinite;
+  }
+  @keyframes heart-sway {
+    0%,100% { transform: translateY(0) rotate(-2deg); }
+    50%     { transform: translateY(-12px) rotate(2deg); }
+  }
+  .heart-ocean::before {
+    /* gold chain */
+    content:"";
+    position: absolute;
+    top: 0; left: 50%;
+    width: 1px; height: 30px;
+    background: linear-gradient(to bottom, transparent, #c4a865);
+    transform: translateX(-50%);
+    box-shadow: 0 0 8px rgba(196,168,101,0.6);
+  }
+  .heart-ocean::after {
+    content:"";
+    position: absolute;
+    top: 30px; left: 5px;
+    width: 100px; height: 110px;
+    background:
+      radial-gradient(ellipse at 35% 30%, #8ec5e8 0%, #3a6fa0 30%, #1a3a6b 65%, #0a1f3d 100%);
+    clip-path: polygon(50% 0%, 92% 25%, 100% 55%, 75% 90%, 50% 100%, 25% 90%, 0% 55%, 8% 25%);
+    box-shadow:
+      0 0 30px rgba(74,142,232,0.5),
+      inset 0 0 30px rgba(255,255,255,0.2);
+  }
+
+  /* rivets in corner */
+  .rivets {
+    position: absolute;
+    bottom: 5%; left: 3%;
+    display: grid;
+    grid-template-columns: repeat(4, 14px);
+    grid-template-rows: repeat(8, 14px);
+    gap: 18px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.4;
+  }
+  .rivets span {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #c4a865, #6b5530 60%, #2a1f10);
+    box-shadow: inset 0 -2px 3px rgba(0,0,0,0.5);
+  }
+
+  /* Titanic phone */
+  .titanic .phone {
+    background: #0a0a0a;
+    box-shadow:
+      0 60px 90px -30px rgba(0,0,0,0.9),
+      0 0 0 2px #c4a865,
+      0 0 0 4px #0a0a0a,
+      0 0 0 5px rgba(196,168,101,0.3);
+  }
+  .titanic .screen {
+    background:
+      radial-gradient(ellipse at 50% 0%, #2a3e5e 0%, transparent 55%),
+      linear-gradient(180deg, #0d1a2e 0%, #061128 100%);
+    color: #e8d9a8;
+  }
+  .titanic .screen::before {
+    /* art-deco frame */
+    content:"";
+    position: absolute;
+    top: 16px; left: 16px; right: 16px; bottom: 16px;
+    border: 1px solid rgba(196,168,101,0.4);
+    border-radius: 26px;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .titanic .topbar { color: #e8d9a8; }
+  .titanic .topbar .back {
+    background: transparent;
+    border: 1px solid rgba(196,168,101,0.5);
+    color: #c4a865;
+  }
+  .titanic .listname {
+    font-family: "Cinzel", serif;
+    font-weight: 500;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: #e8d9a8;
+    text-align: center;
+  }
+  .titanic .editbtn {
+    background: transparent;
+    border: 1px solid rgba(196,168,101,0.5);
+    color: #c4a865;
+    font-family: "Cinzel", serif;
+  }
+  .titanic .addbox {
+    background: rgba(196,168,101,0.06);
+    border: 1px solid rgba(196,168,101,0.3);
+    color: #c4a865;
+    font-style: italic;
+  }
+  .titanic .addbox .plus {
+    background: #c4a865;
+    color: #0d1a2e;
+  }
+  .titanic .secheader {
+    color: #c4a865;
+    text-align: center;
+    padding: 4px 0;
+    border-top: 1px solid rgba(196,168,101,0.2);
+    border-bottom: 1px solid rgba(196,168,101,0.2);
+    margin: 8px 18px;
+  }
+  .titanic .secheader::before { content:"※ "; }
+  .titanic .secheader::after { content:" ※"; }
+  .titanic .row {
+    background: rgba(196,168,101,0.05);
+    border: 1px solid rgba(196,168,101,0.15);
+    font-family: "Cormorant Garamond", serif;
+    font-size: 1.05rem;
+    color: #e8d9a8;
+  }
+  .titanic .row .box {
+    background: transparent;
+    border: 1px solid #c4a865;
+    border-radius: 0;
+  }
+  .titanic .row.shopped .box {
+    background: #c4a865;
+    color: #0d1a2e;
+  }
+  .titanic .row .meta {
+    background: transparent;
+    border: 1px solid rgba(196,168,101,0.4);
+    color: #c4a865;
+    font-style: italic;
+  }
+
+  /* ================================================================
+     ★ SPIDER-MAN — COMIC BOOK
+     ================================================================ */
+  .spidey {
+    background:
+      radial-gradient(circle at 30% 20%, #0072ce 0%, transparent 45%),
+      radial-gradient(circle at 70% 80%, #e62429 0%, transparent 50%),
+      #1a1a2e;
+    color: #fff;
+    font-family: "Inter Tight", sans-serif;
+  }
+  /* halftone dots */
+  .spidey::before {
+    content:"";
+    position: absolute; inset: 0;
+    background-image: radial-gradient(circle, rgba(0,0,0,0.45) 1.5px, transparent 1.8px);
+    background-size: 14px 14px;
+    pointer-events: none;
+    mix-blend-mode: multiply;
+  }
+  /* web in corners */
+  .spidey::after {
+    content:"";
+    position: absolute;
+    top: -200px; right: -200px;
+    width: 600px; height: 600px;
+    background-image:
+      radial-gradient(circle at center, transparent 38%, rgba(255,255,255,0.18) 38.5%, transparent 39%),
+      radial-gradient(circle at center, transparent 28%, rgba(255,255,255,0.15) 28.5%, transparent 29%),
+      radial-gradient(circle at center, transparent 18%, rgba(255,255,255,0.12) 18.5%, transparent 19%),
+      conic-gradient(from 0deg at center,
+        transparent 0deg, transparent 25deg,
+        rgba(255,255,255,0.15) 25.5deg, rgba(255,255,255,0.15) 26deg,
+        transparent 26.5deg, transparent 55deg,
+        rgba(255,255,255,0.15) 55.5deg, rgba(255,255,255,0.15) 56deg,
+        transparent 56.5deg, transparent 85deg,
+        rgba(255,255,255,0.15) 85.5deg, rgba(255,255,255,0.15) 86deg,
+        transparent 86.5deg, transparent 115deg,
+        rgba(255,255,255,0.15) 115.5deg, rgba(255,255,255,0.15) 116deg,
+        transparent 116.5deg);
+    pointer-events: none;
+    opacity: 0.8;
+  }
+
+  .spidey h2 {
+    font-family: "Bangers", cursive;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: #fff;
+    text-shadow:
+      4px 4px 0 #e62429,
+      8px 8px 0 #0d0d0d;
+    transform: rotate(-3deg);
+  }
+  .spidey h2 .alt { color: #ffe600; text-shadow: 4px 4px 0 #0072ce, 8px 8px 0 #0d0d0d; }
+  .spidey .label {
+    color: #1a1a2e;
+    background: #ffe600;
+    padding: 4px 10px;
+    display: inline-block;
+    box-shadow: 3px 3px 0 #0d0d0d;
+    font-weight: 700;
+  }
+  .spidey .lede {
+    background: #fff;
+    color: #1a1a2e;
+    padding: 1rem 1.2rem;
+    border: 2px solid #0d0d0d;
+    box-shadow: 5px 5px 0 #0d0d0d;
+    font-weight: 500;
+    transform: rotate(-0.5deg);
+  }
+  .spidey .palette span { box-shadow: inset 0 0 0 2px #0d0d0d; }
+  .spidey .palette span::after { color: #fff; font-weight: 700; }
+  .spidey .typespec dt { color: #ffe600; }
+  .spidey .typespec dd { color: #fff; }
+
+  /* THWIP sound effect */
+  .thwip {
+    position: absolute;
+    top: 22%; right: 8%;
+    z-index: 2;
+    pointer-events: none;
+    animation: thwip-pop 3s ease-in-out infinite;
+  }
+  @keyframes thwip-pop {
+    0%, 100% { transform: scale(1) rotate(15deg); }
+    50%      { transform: scale(1.08) rotate(15deg); }
+  }
+  .thwip-burst {
+    width: 180px;
+    background: #ffe600;
+    color: #0d0d0d;
+    font-family: "Bangers", cursive;
+    font-size: 2.5rem;
+    text-align: center;
+    padding: 1.5rem 1rem;
+    clip-path: polygon(
+      0% 30%, 12% 25%, 18% 0%, 30% 25%, 45% 5%, 55% 30%,
+      70% 10%, 78% 35%, 95% 25%, 100% 50%, 92% 65%, 100% 80%,
+      82% 85%, 78% 100%, 65% 80%, 55% 95%, 42% 75%, 30% 100%,
+      22% 75%, 5% 90%, 12% 65%, 0% 60%
+    );
+    box-shadow: 0 0 0 0 transparent;
+    letter-spacing: 0.05em;
+  }
+  .thwip-burst::after {
+    content:"!";
+    font-size: 1.5rem;
+    color: #e62429;
+  }
+
+  /* POW corner */
+  .pow {
+    position: absolute;
+    bottom: 12%; left: 3%;
+    width: 130px; height: 130px;
+    background: #e62429;
+    color: #fff;
+    font-family: "Bangers", cursive;
+    font-size: 2.2rem;
+    display: grid; place-items: center;
+    clip-path: polygon(
+      50% 0%, 60% 18%, 78% 8%, 75% 28%, 95% 25%, 82% 45%,
+      100% 55%, 80% 65%, 95% 82%, 72% 78%, 75% 100%, 55% 82%,
+      45% 100%, 35% 80%, 18% 95%, 22% 75%, 0% 70%, 18% 55%,
+      0% 42%, 22% 38%, 12% 18%, 32% 22%, 30% 0%, 42% 18%
+    );
+    transform: rotate(-12deg);
+    z-index: 2;
+    box-shadow: 8px 8px 0 #0d0d0d;
+    pointer-events: none;
+  }
+
+  /* Spidey phone */
+  .spidey .phone {
+    background: #0d0d0d;
+    box-shadow:
+      0 60px 90px -30px rgba(0,0,0,0.7),
+      0 0 0 4px #0d0d0d,
+      0 0 0 6px #ffe600,
+      0 0 0 10px #0d0d0d;
+  }
+  .spidey .screen {
+    background:
+      radial-gradient(circle at 30% 20%, #e62429 0%, #b81b20 40%, #800f13 100%);
+    color: #fff;
+  }
+  .spidey .screen::before {
+    /* halftone overlay on screen */
+    content:"";
+    position: absolute; inset: 0;
+    background-image: radial-gradient(circle, rgba(0,0,0,0.25) 1px, transparent 1.5px);
+    background-size: 8px 8px;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .spidey .screen::after {
+    /* spider web overlay */
+    content:"";
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 240px; height: 240px;
+    background-image:
+      radial-gradient(circle at center, transparent 28%, rgba(255,255,255,0.2) 28.5%, transparent 29%),
+      radial-gradient(circle at center, transparent 18%, rgba(255,255,255,0.18) 18.5%, transparent 19%),
+      conic-gradient(from 0deg at center,
+        transparent 0deg, transparent 30deg,
+        rgba(255,255,255,0.2) 30.5deg, rgba(255,255,255,0.2) 31deg,
+        transparent 31.5deg, transparent 60deg,
+        rgba(255,255,255,0.2) 60.5deg, rgba(255,255,255,0.2) 61deg,
+        transparent 61.5deg, transparent 90deg,
+        rgba(255,255,255,0.2) 90.5deg, rgba(255,255,255,0.2) 91deg,
+        transparent 91.5deg, transparent 120deg,
+        rgba(255,255,255,0.2) 120.5deg, rgba(255,255,255,0.2) 121deg,
+        transparent 121.5deg);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .spidey .topbar .back {
+    background: #0072ce;
+    color: #fff;
+    border: 2px solid #0d0d0d;
+    box-shadow: 2px 2px 0 #0d0d0d;
+  }
+  .spidey .listname {
+    font-family: "Bangers", cursive;
+    font-size: 1.6rem;
+    letter-spacing: 0.05em;
+    text-shadow: 2px 2px 0 #0d0d0d;
+    transform: rotate(-1deg);
+  }
+  .spidey .editbtn {
+    background: #ffe600;
+    color: #0d0d0d;
+    font-family: "Bangers", cursive;
+    font-size: 0.8rem;
+    border: 2px solid #0d0d0d;
+    box-shadow: 2px 2px 0 #0d0d0d;
+  }
+  .spidey .addbox {
+    background: #fff;
+    color: #0d0d0d;
+    border: 2px solid #0d0d0d;
+    box-shadow: 3px 3px 0 #0d0d0d;
+    font-weight: 600;
+  }
+  .spidey .addbox .plus { background: #e62429; color: #fff; }
+  .spidey .secheader {
+    color: #ffe600;
+    text-shadow: 1px 1px 0 #0d0d0d;
+    font-weight: 700;
+  }
+  .spidey .row {
+    background: #fff;
+    color: #0d0d0d;
+    border: 2px solid #0d0d0d;
+    box-shadow: 3px 3px 0 #0d0d0d;
+    font-weight: 600;
+  }
+  .spidey .row:nth-child(odd)  { transform: rotate(-0.6deg); }
+  .spidey .row:nth-child(even) { transform: rotate(0.5deg); }
+  .spidey .row .box {
+    background: transparent;
+    border: 2px solid #0d0d0d;
+    border-radius: 4px;
+  }
+  .spidey .row.shopped .box {
+    background: #e62429;
+    color: #fff;
+  }
+  .spidey .row .meta {
+    background: #ffe600;
+    color: #0d0d0d;
+    font-weight: 700;
+    border: 1.5px solid #0d0d0d;
+  }
+
+  /* ================================================================
+     ★ DIRTY DANCING — KELLERMAN'S 1963
+     ================================================================ */
+  .dancing {
+    background:
+      radial-gradient(ellipse at 80% 10%, #ffd1c2 0%, transparent 50%),
+      radial-gradient(ellipse at 15% 85%, #f9b4a8 0%, transparent 55%),
+      linear-gradient(170deg, #fde4d8 0%, #f5b3a0 50%, #d97a76 100%);
+    color: #5c2a35;
+    font-family: "Nunito Sans", sans-serif;
+  }
+  .dancing::before {
+    /* paper lantern lights */
+    content:"";
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle at 12% 15%, rgba(255,220,180,0.7) 0%, rgba(255,220,180,0.2) 8%, transparent 12%),
+      radial-gradient(circle at 28% 10%, rgba(255,220,180,0.6) 0%, rgba(255,220,180,0.15) 7%, transparent 11%),
+      radial-gradient(circle at 45% 18%, rgba(255,220,180,0.65) 0%, rgba(255,220,180,0.2) 6%, transparent 10%),
+      radial-gradient(circle at 62% 12%, rgba(255,220,180,0.55) 0%, rgba(255,220,180,0.15) 7%, transparent 11%),
+      radial-gradient(circle at 80% 20%, rgba(255,220,180,0.65) 0%, rgba(255,220,180,0.2) 8%, transparent 12%);
+    pointer-events: none;
+    animation: lantern-pulse 6s ease-in-out infinite;
+  }
+  @keyframes lantern-pulse {
+    0%,100% { opacity: 0.7; }
+    50%     { opacity: 1; }
+  }
+  /* grain */
+  .dancing::after {
+    content:"";
+    position: absolute; inset:0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.09'/></svg>");
+    pointer-events: none;
+    mix-blend-mode: multiply;
+  }
+  .dancing h2 {
+    font-family: "Yeseva One", serif;
+    font-weight: 400;
+    color: #8a2e3f;
+    letter-spacing: -0.01em;
+  }
+  .dancing h2 .scribble {
+    display: block;
+    font-family: "Caveat", cursive;
+    font-weight: 700;
+    color: #d4576f;
+    font-size: 0.55em;
+    letter-spacing: -0.02em;
+    transform: rotate(-3deg);
+    margin: 0.1em 0 0.05em -0.2em;
+  }
+  .dancing .label { color: #8a2e3f; }
+  .dancing .label::before { background: #d4576f; }
+
+  /* watermelon ornament */
+  .watermelon {
+    position: absolute;
+    top: 10%; right: -50px;
+    width: 280px; height: 280px;
+    background:
+      radial-gradient(circle at 50% 50%,
+        #ff4d6d 0%, #ff4d6d 55%,
+        #fff8ed 55%, #fff8ed 60%,
+        #4d8a3a 60%, #2d6a25 100%);
+    border-radius: 50%;
+    transform: rotate(-25deg);
+    box-shadow: 0 20px 60px rgba(140,40,60,0.3);
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.85;
+  }
+  .watermelon::before {
+    /* seeds */
+    content:"";
+    position: absolute;
+    inset: 25%;
+    background-image:
+      radial-gradient(ellipse 4px 7px at 20% 20%, #2a1010, transparent 50%),
+      radial-gradient(ellipse 4px 7px at 70% 30%, #2a1010, transparent 50%),
+      radial-gradient(ellipse 4px 7px at 50% 50%, #2a1010, transparent 50%),
+      radial-gradient(ellipse 4px 7px at 80% 65%, #2a1010, transparent 50%),
+      radial-gradient(ellipse 4px 7px at 30% 70%, #2a1010, transparent 50%),
+      radial-gradient(ellipse 4px 7px at 60% 80%, #2a1010, transparent 50%);
+  }
+  .watermelon::after {
+    content:"„I carried a watermelon"";
+    position: absolute;
+    bottom: -3rem; left: 20%;
+    font-family: "Caveat", cursive;
+    font-size: 1.4rem;
+    color: #8a2e3f;
+    transform: rotate(-8deg);
+    width: 240px;
+  }
+
+  /* sparkle stars */
+  .sparkle {
+    position: absolute;
+    color: #fff8ed;
+    font-family: "Caveat", cursive;
+    font-size: 2rem;
+    pointer-events: none;
+    z-index: 1;
+    animation: twinkle 3s ease-in-out infinite;
+  }
+  .sparkle.a { top: 30%; left: 8%; }
+  .sparkle.b { bottom: 25%; left: 38%; animation-delay: -1.2s; font-size: 1.4rem; }
+  .sparkle.c { bottom: 18%; right: 12%; animation-delay: -2.1s; font-size: 1.8rem; }
+  @keyframes twinkle {
+    0%,100% { opacity: 0.4; transform: scale(0.9) rotate(0deg); }
+    50%     { opacity: 1; transform: scale(1.15) rotate(15deg); }
+  }
+
+  /* Dancing phone */
+  .dancing .screen {
+    background:
+      linear-gradient(170deg, #fff1e8 0%, #fbd6c5 60%, #f49d99 100%);
+    color: #5c2a35;
+  }
+  .dancing .screen::before {
+    /* warm bokeh */
+    content:"";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 80% 12%, rgba(255,230,200,0.9), transparent 18%),
+      radial-gradient(circle at 25% 22%, rgba(255,210,180,0.8), transparent 14%);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .dancing .topbar { color: #5c2a35; }
+  .dancing .topbar .back {
+    background: rgba(255,255,255,0.5);
+    color: #8a2e3f;
+  }
+  .dancing .listname {
+    font-family: "Yeseva One", serif;
+    font-size: 1.3rem;
+    color: #8a2e3f;
+  }
+  .dancing .editbtn {
+    background: rgba(212,87,111,0.15);
+    color: #8a2e3f;
+    font-family: "Caveat", cursive;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    font-weight: 700;
+  }
+  .dancing .addbox {
+    background: rgba(255,255,255,0.55);
+    border: 1.5px dashed rgba(212,87,111,0.5);
+    color: #a0455a;
+    font-family: "Caveat", cursive;
+    font-size: 1.05rem;
+    border-radius: 20px;
+  }
+  .dancing .addbox .plus { background: #d4576f; color: #fff8ed; }
+  .dancing .secheader {
+    color: #8a2e3f;
+    font-family: "Caveat", cursive;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    opacity: 1;
+  }
+  .dancing .row {
+    background: rgba(255,255,255,0.6);
+    border: 1.5px solid rgba(212,87,111,0.18);
+    border-radius: 18px;
+    color: #5c2a35;
+  }
+  .dancing .row .box {
+    background: #fff8ed;
+    border: 1.5px solid #d4576f;
+    border-radius: 50%;
+  }
+  .dancing .row.shopped .box {
+    background: linear-gradient(135deg, #ff8aa3, #d4576f);
+    border-color: transparent;
+    color: #fff8ed;
+  }
+  .dancing .row .meta {
+    background: rgba(212,87,111,0.18);
+    color: #8a2e3f;
+    font-family: "Caveat", cursive;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  /* ============ FOOTER ============ */
+  footer {
+    padding: 4rem 2rem;
+    text-align: center;
+    color: #555;
+    font-family: "Space Mono", monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    background: #0a0a0a;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ INTRO ============ -->
+<section class="intro">
+  <div>
+    <h1>Three Films,<br/><em>three lists.</em></h1>
+    <p>What if a theme didn't just pick a palette — it picked a <em>world</em>? Three movie-inspired aesthetics applied front-to-back: paper, type, ornament, and motion all leaning into the source material.</p>
+    <div class="meta">
+      <span>TITANIC · 1997</span>
+      <span>SPIDER-MAN · 2002</span>
+      <span>DIRTY DANCING · 1987</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TITANIC ============ -->
+<section class="theme titanic">
+  <div class="heart-ocean"></div>
+  <div class="rivets">
+    <span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span>
+  </div>
+
+  <div class="info">
+    <div class="label">Theme 01 / White Star Line</div>
+    <h2>Titanic
+      <span class="ornament">— a memorandum from the purser</span>
+    </h2>
+    <p class="lede">Edwardian luxury after dark. Deep Atlantic navy, brushed brass, ivory parchment, and a single sapphire glow. Type carries the formality of a first-class menu; every row sits inside a quietly riveted brass frame. Engineered to feel like the most elegant grocery list ever printed.</p>
+
+    <div class="palette">
+      <span style="background:#0d1a2e" data-hex="#0D1A2E"></span>
+      <span style="background:#1a3a6b" data-hex="#1A3A6B"></span>
+      <span style="background:#3a6fa0" data-hex="#3A6FA0"></span>
+      <span style="background:#c4a865" data-hex="#C4A865"></span>
+      <span style="background:#e8d9a8" data-hex="#E8D9A8"></span>
+      <span style="background:#fff8ed" data-hex="#FFF8ED"></span>
+    </div>
+
+    <dl class="typespec">
+      <dt>Display</dt><dd style="font-family:'Cinzel',serif;text-transform:uppercase;letter-spacing:0.1em;font-size:1.2rem">CINZEL — Roman, monumental, gilt</dd>
+      <dt>Body</dt><dd style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.15rem">Cormorant Garamond italic — the menu card</dd>
+    </dl>
+  </div>
+
+  <div class="stage">
+    <div class="phone">
+      <div class="screen">
+        <div class="topbar">
+          <div class="back">‹</div>
+          <div class="listname">Provisioner</div>
+          <div class="editbtn">Ed.</div>
+        </div>
+        <div class="addbox"><div class="plus">+</div>en vara att tillsätta…</div>
+        <div class="secheader">Att anskaffa · vi</div>
+        <div class="items">
+          <div class="row"><div class="box"></div><div class="nm">Champagne</div><div class="meta">en flaska</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Ostron</div><div class="meta">ett dussin</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Smör</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Earl Grey</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Citron</div><div class="meta">tre</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Honung</div></div>
+          <div class="secheader" style="margin-top:14px">Anskaffat · ii</div>
+          <div class="row shopped"><div class="box">✓</div><div class="nm">Cigarrer</div></div>
+          <div class="row shopped"><div class="box">✓</div><div class="nm">Bröd</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SPIDER-MAN ============ -->
+<section class="theme spidey">
+  <div class="thwip"><div class="thwip-burst">THWIP</div></div>
+  <div class="pow">POW!</div>
+
+  <div class="info">
+    <div class="label">Theme 02 / Friendly Neighborhood</div>
+    <h2>Spider<br/><span class="alt">Sense</span></h2>
+    <p class="lede">A comic book that fell off the spinner rack. Ben-Day halftones over hero red and electric blue, hand-rotated rows like cells in a panel, "THWIP!" stickers landing where they want to. Loud, kinetic, and unmistakable from across the room.</p>
+
+    <div class="palette">
+      <span style="background:#e62429" data-hex="#E62429"></span>
+      <span style="background:#0072ce" data-hex="#0072CE"></span>
+      <span style="background:#ffe600" data-hex="#FFE600"></span>
+      <span style="background:#0d0d0d" data-hex="#0D0D0D"></span>
+      <span style="background:#fff" data-hex="#FFFFFF"></span>
+    </div>
+
+    <dl class="typespec">
+      <dt>Display</dt><dd style="font-family:'Bangers',cursive;font-size:1.8rem;letter-spacing:0.04em">BANGERS — comic letterer, hand-inked</dd>
+      <dt>Body</dt><dd style="font-family:'Inter Tight';font-weight:700">Inter Tight Bold — high-contrast caption</dd>
+    </dl>
+  </div>
+
+  <div class="stage">
+    <div class="phone">
+      <div class="screen">
+        <div class="topbar">
+          <div class="back">←</div>
+          <div class="listname">Tantsm's matlista!</div>
+          <div class="editbtn">Edit</div>
+        </div>
+        <div class="addbox"><div class="plus">+</div>Vad behöver vi nu?!</div>
+        <div class="secheader">ATT HANDLA · 6</div>
+        <div class="items">
+          <div class="row"><div class="box"></div><div class="nm">Köttbullar</div><div class="meta">1 kg</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Vetemjöl</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Mjölk</div><div class="meta">3 l</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Wonder bread</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Äpplen</div><div class="meta">6 st</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Kakao</div></div>
+          <div class="secheader" style="margin-top:14px">BOCKAT · 2</div>
+          <div class="row shopped"><div class="box">✓</div><div class="nm">Tidning</div></div>
+          <div class="row shopped"><div class="box">✓</div><div class="nm">Kamerafilm</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DIRTY DANCING ============ -->
+<section class="theme dancing">
+  <div class="watermelon"></div>
+  <div class="sparkle a">✦</div>
+  <div class="sparkle b">✧</div>
+  <div class="sparkle c">✦</div>
+
+  <div class="info">
+    <div class="label">Theme 03 / Summer at Kellerman's</div>
+    <h2>
+      <span class="scribble">the time of my</span>
+      Dancing
+    </h2>
+    <p class="lede">A 1963 Catskills summer in a single screen. Watermelon pinks, peach lantern light, dusty rose at the edges. Section headers and prompts are handwritten in cursive — a counselor's chalkboard at the dance hall. Every list a little romance.</p>
+
+    <div class="palette">
+      <span style="background:#fde4d8" data-hex="#FDE4D8"></span>
+      <span style="background:#f9b4a8" data-hex="#F9B4A8"></span>
+      <span style="background:#ff8aa3" data-hex="#FF8AA3"></span>
+      <span style="background:#d4576f" data-hex="#D4576F"></span>
+      <span style="background:#8a2e3f" data-hex="#8A2E3F"></span>
+      <span style="background:#fff8ed" data-hex="#FFF8ED"></span>
+    </div>
+
+    <dl class="typespec">
+      <dt>Display</dt><dd style="font-family:'Yeseva One',serif;font-size:1.4rem;color:#8a2e3f">Yeseva One — vintage poster serif</dd>
+      <dt>Accent</dt><dd style="font-family:'Caveat',cursive;font-weight:700;font-size:1.4rem;color:#d4576f">Caveat — the lake-house handwriting</dd>
+      <dt>Body</dt><dd style="font-family:'Nunito Sans';font-weight:600">Nunito Sans — warm, rounded sans</dd>
+    </dl>
+  </div>
+
+  <div class="stage">
+    <div class="phone">
+      <div class="screen">
+        <div class="topbar">
+          <div class="back">←</div>
+          <div class="listname">Kellerman's</div>
+          <div class="editbtn">redigera</div>
+        </div>
+        <div class="addbox"><div class="plus">+</div>vad behöver vi, raring?</div>
+        <div class="secheader">att handla · 6</div>
+        <div class="items">
+          <div class="row"><div class="box"></div><div class="nm">Vattenmelon</div><div class="meta">en stor</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Jordgubbar</div><div class="meta">2 askar</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Iste</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Vit choklad</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Persikor</div><div class="meta">4 st</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Vaniljglass</div></div>
+          <div class="secheader" style="margin-top:14px">bockat · 2</div>
+          <div class="row shopped"><div class="box">✓</div><div class="nm">Solkräm</div></div>
+          <div class="row shopped"><div class="box">✓</div><div class="nm">Vykort</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  MOVIE THEME EXPLORATIONS · SHOPLIST · 2026-05-18
+</footer>
+
+</body>
+</html>

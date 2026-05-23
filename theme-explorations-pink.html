@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Shoplist — Pink theme exploration</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=Inter+Tight:wght@400;500;600;700&family=Noto+Serif+JP:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+  *,*::before,*::after { box-sizing: border-box; }
+  html,body { margin:0; padding:0; }
+  body {
+    background: #0a0a0a;
+    color: #ddd;
+    font-family: "Inter Tight", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  h1, h2, h3 { margin: 0; }
+
+  .intro {
+    min-height: 50vh;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: 4rem 1.5rem 3rem;
+    background:
+      radial-gradient(ellipse at 30% 20%, #2a1424 0%, transparent 55%),
+      radial-gradient(ellipse at 70% 80%, #1a0a1a 0%, transparent 55%),
+      #0a0a0a;
+    position: relative;
+  }
+  .intro h1 {
+    font-family: "Cormorant Garamond", serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: clamp(2.5rem, 8vw, 5rem);
+    line-height: 1;
+    color: #f0e0e8;
+    margin-bottom: 1.2rem;
+  }
+  .intro h1 em { color: #f5a8c8; font-style: italic; }
+  .intro p {
+    max-width: 38rem;
+    margin: 0 auto;
+    color: #888;
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  .intro .meta {
+    margin-top: 2rem;
+    font-family: "Space Mono", monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: #555;
+  }
+
+  .theme-section {
+    padding: 5rem 1.5rem 6rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .theme-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 2;
+  }
+  .theme-title {
+    display: flex;
+    align-items: baseline;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+  }
+  .theme-title .num {
+    font-family: "Space Mono", monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.25em;
+    opacity: 0.6;
+  }
+  .theme-title h2 {
+    font-size: clamp(2rem, 5vw, 3.4rem);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .theme-title .sub {
+    font-family: "Space Mono", monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    opacity: 0.55;
+  }
+
+  /* palette + font + mockup grid */
+  .ident {
+    display: grid;
+    grid-template-columns: 1fr 1fr 320px;
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+    align-items: stretch;
+  }
+  @media (max-width: 900px) {
+    .ident { grid-template-columns: 1fr; }
+  }
+  .panel {
+    border-radius: 22px;
+    padding: 1.5rem;
+    min-height: 200px;
+  }
+  .panel h3 {
+    font-family: "Space Mono", monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: 1rem;
+  }
+  .swatches {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.7rem;
+  }
+  .swatch {
+    border-radius: 12px;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: flex-end;
+    padding: 0.6rem;
+    font-family: "Space Mono", monospace;
+    font-size: 0.62rem;
+  }
+
+  /* phone mockup */
+  .phone {
+    width: 100%;
+    max-width: 320px;
+    aspect-ratio: 9 / 18;
+    border-radius: 36px;
+    position: relative;
+    overflow: hidden;
+    margin: 0 auto;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.5), 0 0 0 6px rgba(255,255,255,0.04);
+  }
+  .phone-screen {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    padding: 1.2rem 1rem;
+    gap: 0.6rem;
+  }
+  .topbar { display: flex; align-items: center; gap: 0.7rem; font-size: 0.75rem; }
+  .topbar .back { width: 28px; height: 28px; border-radius: 50%; display:grid; place-items:center; font-size: 1.1rem; }
+  .listname { font-weight: 600; }
+  .secheader { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.16em; opacity: 0.6; margin-top: 0.5rem; }
+  .row {
+    display: flex; align-items: center; gap: 0.7rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 14px;
+    font-size: 0.85rem;
+  }
+  .row .box {
+    width: 18px; height: 18px; border-radius: 5px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .row.shopped .name { text-decoration: line-through; opacity: 0.5; }
+  .row .meta {
+    font-size: 0.62rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-left: auto;
+  }
+  .check { width: 11px; height: 8px; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-50deg); margin-bottom: 2px; }
+  .addbox {
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.7rem 0.9rem;
+    border-radius: 14px;
+    font-size: 0.85rem;
+    margin-top: 0.4rem;
+  }
+  .addbox .plus { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; }
+
+  /* font display */
+  .font-block .lg {
+    font-size: 2rem;
+    line-height: 1.1;
+    margin-bottom: 0.4rem;
+  }
+  .font-block .md { font-size: 1rem; line-height: 1.4; opacity: 0.75; }
+  .font-block .small { font-size: 0.78rem; font-family: "Space Mono", monospace; margin-top: 0.8rem; opacity: 0.55; }
+
+  /* interaction grid */
+  .ic-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  @media (max-width: 800px) {
+    .ic-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 500px) {
+    .ic-grid { grid-template-columns: 1fr; }
+  }
+  .ic-card {
+    border-radius: 22px;
+    padding: 1rem;
+    display: flex; flex-direction: column;
+    gap: 0.6rem;
+  }
+  .ic-card .label {
+    font-family: "Space Mono", monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    opacity: 0.65;
+  }
+  .ic-scene {
+    border-radius: 16px;
+    aspect-ratio: 10 / 7;
+    position: relative;
+    overflow: hidden;
+    padding: 0.7rem;
+    display: flex; flex-direction: column;
+    justify-content: center;
+    gap: 0.4rem;
+  }
+  .ic-mini-row {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.45rem 0.55rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+  }
+  .ic-mini-row .box {
+    width: 14px; height: 14px; border-radius: 4px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .ic-mini-row .check { width: 8px; height: 6px; border-width: 1.5px; }
+  .ic-mini-row .meta { font-size: 0.55rem; padding: 1px 6px; border-radius: 999px; margin-left: auto; }
+  .ic-mini-row.shopped .name { text-decoration: line-through; opacity: 0.5; }
+
+  .sparks { position: absolute; inset: 0; pointer-events: none; }
+  .sparks i { position: absolute; width: 5px; height: 5px; border-radius: 50%; }
+  .finger { position: absolute; font-size: 1.4rem; pointer-events: none; }
+
+  .empty-state { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 1rem 0; }
+  .empty-state .glyph { font-size: 2.2rem; line-height: 1; }
+  .empty-state .msg { font-size: 1rem; font-weight: 500; }
+  .empty-state .sub { font-size: 0.75rem; opacity: 0.65; }
+
+  .lists-card {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.7rem 0.9rem;
+    border-radius: 14px;
+    font-size: 0.8rem;
+    position: relative;
+  }
+  .new-sticker {
+    font-family: "Space Mono", monospace;
+    font-size: 0.55rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.1em;
+  }
+
+  .loading-stage {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 0.7rem;
+    height: 100%;
+  }
+  .loading-cart {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 1.6rem;
+    animation: cart-roll 1.6s ease-in-out infinite;
+  }
+  @keyframes cart-roll {
+    0%, 100% { transform: translateX(-8px) rotate(-4deg); }
+    50%      { transform: translateX(8px)  rotate(4deg); }
+  }
+  .loading-label {
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+
+  /* ================================================================
+     1 · BUBBLEGUM — playful, candy pink, rounded
+     ================================================================ */
+  .bg {
+    background:
+      radial-gradient(ellipse at 25% 15%, #ffd9eb 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 85%, #ffc4e0 0%, transparent 55%),
+      linear-gradient(170deg, #fff0f8 0%, #ffd7eb 100%);
+    color: #4a1638;
+    font-family: "Quicksand", sans-serif;
+  }
+  .bg h2 { font-family: "Quicksand", sans-serif; font-weight: 700; color: #c92874; }
+  .bg .sub, .bg .num { color: #a14868; }
+  .bg .panel { background: rgba(255,255,255,0.55); border: 1px solid rgba(232,140,180,0.25); }
+  .bg .swatch { border: 1px solid rgba(255,255,255,0.4); }
+  .bg .phone { background: linear-gradient(170deg, #fff5f9 0%, #ffd5e8 70%, #f5a8c8 100%); }
+  .bg .phone-screen { color: #4a1638; }
+  .bg .topbar .back { background: rgba(255,255,255,0.65); color: #c92874; }
+  .bg .listname { color: #6e1d4a; }
+  .bg .secheader { color: #b85a86; }
+  .bg .row { background: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.6); }
+  .bg .row .box { background: white; border: 1.5px solid #f5a8c8; color: #c92874; }
+  .bg .row.shopped .box { background: linear-gradient(135deg, #ff6fa8, #c92874); border-color: transparent; color: white; }
+  .bg .row .meta { background: rgba(232,140,180,0.2); color: #c92874; font-weight: 600; }
+  .bg .addbox { background: rgba(255,255,255,0.55); border: 1.5px dashed rgba(201,40,116,0.35); color: #b85a86; }
+  .bg .addbox .plus { background: #c92874; color: white; }
+  .bg .ic-card { background: rgba(255,255,255,0.55); border: 1px solid rgba(232,140,180,0.25); }
+  .bg .ic-card .label { color: #b85a86; }
+  .bg .ic-scene {
+    background: linear-gradient(170deg, #fff5f9 0%, #ffd5e8 70%, #f5a8c8 100%);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.4);
+    color: #4a1638;
+    --box-bg: white; --box-border: #f5a8c8;
+    --box-checked-bg: linear-gradient(135deg, #ff6fa8, #c92874);
+  }
+  .bg .ic-mini-row { background: rgba(255,255,255,0.7); }
+  .bg .ic-mini-row .box { background: var(--box-bg); border: 1.5px solid var(--box-border); color: #c92874; }
+  .bg .ic-mini-row.shopped .box { background: var(--box-checked-bg); border-color: transparent; color: white; }
+  .bg .ic-mini-row .meta { background: rgba(232,140,180,0.2); color: #c92874; font-weight: 600; }
+  .bg .finger { color: #c92874; }
+  .bg .sparks i { background: #ff6fa8; box-shadow: 0 0 8px rgba(255,111,168,0.7); }
+  .bg .empty-state { color: #6e1d4a; }
+  .bg .empty-state .glyph { color: #ff6fa8; }
+  .bg .empty-state .msg { font-weight: 700; }
+  .bg .lists-card { background: rgba(255,255,255,0.7); border: 1px solid rgba(232,140,180,0.25); }
+  .bg .new-sticker { background: linear-gradient(135deg, #ff4f96, #c92874); color: white; box-shadow: 0 3px 10px rgba(201,40,116,0.4); }
+  .bg .loading-cart { background: white; color: #c92874; box-shadow: 0 8px 24px rgba(201,40,116,0.25); }
+  .bg .loading-label { color: #c92874; font-weight: 600; letter-spacing: 0.04em; }
+
+  /* ================================================================
+     2 · ROSE — soft dusty rose, vintage, serif
+     ================================================================ */
+  .rs {
+    background:
+      radial-gradient(ellipse at 25% 20%, #f5dfd8 0%, transparent 55%),
+      radial-gradient(ellipse at 80% 80%, #e8c6c0 0%, transparent 55%),
+      linear-gradient(170deg, #fbf0ec 0%, #e6cac4 100%);
+    color: #5a3640;
+    font-family: "Fraunces", serif;
+  }
+  .rs h2 { font-family: "Cormorant Garamond", serif; font-style: italic; font-weight: 500; color: #8c4860; }
+  .rs .sub, .rs .num { color: #9c6678; }
+  .rs .panel { background: rgba(255,250,248,0.55); border: 1px solid rgba(180,120,135,0.22); }
+  .rs .phone { background: linear-gradient(170deg, #faeae4 0%, #e5c5be 65%, #c89aa0 100%); }
+  .rs .phone-screen { color: #5a3640; }
+  .rs .topbar .back { background: rgba(255,250,248,0.55); color: #8c4860; }
+  .rs .listname { font-family: "Cormorant Garamond", serif; font-style: italic; font-weight: 500; font-size: 1.1rem; color: #6c2c44; }
+  .rs .secheader { color: #8c5868; font-family: "Cormorant Garamond", serif; font-style: italic; font-weight: 500; letter-spacing: 0.1em; }
+  .rs .row { background: rgba(255,250,248,0.55); border: 1px solid rgba(180,120,135,0.16); border-radius: 16px; }
+  .rs .row .box { background: #faeae4; border: 1.5px solid #c89aa0; color: #8c4860; border-radius: 6px; }
+  .rs .row.shopped .box { background: linear-gradient(135deg, #c89aa0, #8c4860); border-color: transparent; color: #faeae4; }
+  .rs .row .meta {
+    background: rgba(180,120,135,0.18);
+    color: #6c2c44;
+    font-family: "Cormorant Garamond", serif;
+    font-style: italic;
+    font-weight: 500;
+  }
+  .rs .addbox { background: rgba(255,250,248,0.55); border: 1px solid rgba(180,120,135,0.2); color: #9c6678; border-radius: 16px; }
+  .rs .addbox .plus { background: #c89aa0; color: #faeae4; }
+  .rs .ic-card { background: rgba(255,250,248,0.5); border: 1px solid rgba(180,120,135,0.2); }
+  .rs .ic-card .label { color: #8c5868; }
+  .rs .ic-scene {
+    background: linear-gradient(170deg, #faeae4 0%, #e5c5be 65%, #d5a9af 100%);
+    box-shadow: inset 0 0 0 1px rgba(255,250,248,0.4), 0 8px 20px -10px rgba(140,72,96,0.2);
+    color: #5a3640;
+    --box-bg: #faeae4; --box-border: #c89aa0;
+    --box-checked-bg: linear-gradient(135deg, #c89aa0, #8c4860);
+  }
+  .rs .ic-scene::before {
+    content:""; position:absolute; top:10%; right:-20%;
+    width: 180px; height: 180px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(245,200,205,0.55), transparent 60%);
+    filter: blur(20px);
+  }
+  .rs .ic-mini-row { background: rgba(255,250,248,0.6); border-radius: 12px; }
+  .rs .ic-mini-row .box { background: var(--box-bg); border: 1.5px solid var(--box-border); color: #8c4860; }
+  .rs .ic-mini-row.shopped .box { background: var(--box-checked-bg); border-color: transparent; color: #faeae4; }
+  .rs .ic-mini-row .meta {
+    background: rgba(180,120,135,0.18);
+    color: #6c2c44;
+    font-family: "Cormorant Garamond", serif;
+    font-style: italic;
+    font-weight: 500;
+  }
+  .rs .finger { color: #8c4860; }
+  .rs .sparks i { background: #c89aa0; box-shadow: 0 0 8px rgba(200,154,160,0.6); width: 6px; height: 6px; }
+  .rs .empty-state { color: #6c2c44; }
+  .rs .empty-state .glyph { color: #c89aa0; font-family: "Cormorant Garamond", serif; font-style: italic; font-size: 2.6rem; }
+  .rs .empty-state .msg { font-family: "Cormorant Garamond", serif; font-style: italic; font-weight: 500; font-size: 1.2rem; }
+  .rs .empty-state .sub { font-style: italic; }
+  .rs .lists-card { background: rgba(255,250,248,0.6); border: 1px solid rgba(180,120,135,0.2); border-radius: 18px; }
+  .rs .lists-card .title { font-family: "Cormorant Garamond", serif; font-style: italic; font-weight: 500; font-size: 1.05rem; color: #6c2c44; }
+  .rs .new-sticker {
+    background: linear-gradient(135deg, #e8b5bb, #8c4860);
+    color: #faeae4;
+    font-family: "Cormorant Garamond", serif;
+    font-style: italic;
+    font-weight: 600;
+    text-transform: none;
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+  }
+  .rs .loading-cart { background: #faeae4; color: #8c4860; box-shadow: 0 10px 28px rgba(140,72,96,0.25); }
+  .rs .loading-label { color: #6c2c44; font-family: "Cormorant Garamond", serif; font-style: italic; font-weight: 500; font-size: 0.95rem; letter-spacing: 0.04em; }
+
+  /* ================================================================
+     3 · SAKURA — minimal cherry blossom, japan-inspired
+     ================================================================ */
+  .sk {
+    background: linear-gradient(170deg, #fdfafb 0%, #f7e5ec 100%);
+    color: #2e2227;
+    font-family: "Inter Tight", sans-serif;
+    position: relative;
+  }
+  .sk::before {
+    content:""; position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle at 15% 30%, rgba(255,210,225,0.4) 0%, transparent 20%),
+      radial-gradient(circle at 85% 70%, rgba(255,200,215,0.35) 0%, transparent 22%),
+      radial-gradient(circle at 70% 20%, rgba(255,220,232,0.5) 0%, transparent 18%);
+    pointer-events: none;
+  }
+  .sk .theme-inner { position: relative; z-index: 2; }
+  .sk h2 { font-family: "Noto Serif JP", serif; font-weight: 500; color: #c25d80; }
+  .sk .sub, .sk .num { color: #8c6878; }
+  .sk .panel { background: rgba(255,255,255,0.55); border: 1px solid rgba(196,140,160,0.18); }
+  .sk .phone { background: linear-gradient(180deg, #fdfafb 0%, #f7dde6 100%); }
+  .sk .phone-screen { color: #2e2227; }
+  .sk .topbar .back { background: rgba(255,255,255,0.7); color: #c25d80; }
+  .sk .listname { font-family: "Noto Serif JP", serif; font-weight: 500; color: #5a3a48; }
+  .sk .secheader { color: #a06880; letter-spacing: 0.18em; font-weight: 500; }
+  .sk .row { background: rgba(255,255,255,0.78); border: 1px solid rgba(196,140,160,0.14); border-radius: 12px; }
+  .sk .row .box { background: white; border: 1.5px solid #e6b8c8; color: #c25d80; }
+  .sk .row.shopped .box { background: linear-gradient(135deg, #f5a5bd, #c25d80); border-color: transparent; color: white; }
+  .sk .row .meta { background: rgba(196,140,160,0.16); color: #c25d80; font-weight: 500; }
+  .sk .addbox { background: rgba(255,255,255,0.6); border: 1px solid rgba(196,140,160,0.2); color: #8c6878; border-radius: 12px; }
+  .sk .addbox .plus { background: #c25d80; color: white; }
+  .sk .ic-card { background: rgba(255,255,255,0.55); border: 1px solid rgba(196,140,160,0.18); }
+  .sk .ic-card .label { color: #a06880; }
+  .sk .ic-scene {
+    background: linear-gradient(180deg, #fdfafb 0%, #fae0e8 100%);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5);
+    color: #2e2227;
+    --box-bg: white; --box-border: #e6b8c8;
+    --box-checked-bg: linear-gradient(135deg, #f5a5bd, #c25d80);
+  }
+  /* drifting petals */
+  .sk .ic-scene::before, .sk .ic-scene::after {
+    content:"❀"; position: absolute;
+    color: rgba(245,165,189,0.6);
+    pointer-events: none;
+  }
+  .sk .ic-scene::before { top: 8%; right: 12%; font-size: 0.9rem; }
+  .sk .ic-scene::after { bottom: 14%; left: 14%; font-size: 0.7rem; color: rgba(232,184,200,0.5); }
+  .sk .ic-mini-row { background: rgba(255,255,255,0.8); }
+  .sk .ic-mini-row .box { background: var(--box-bg); border: 1.5px solid var(--box-border); color: #c25d80; }
+  .sk .ic-mini-row.shopped .box { background: var(--box-checked-bg); border-color: transparent; color: white; }
+  .sk .ic-mini-row .meta { background: rgba(196,140,160,0.16); color: #c25d80; font-weight: 500; }
+  .sk .finger { color: #c25d80; }
+  .sk .sparks i { background: #f5a5bd; box-shadow: 0 0 6px rgba(245,165,189,0.6); width: 4px; height: 4px; }
+  .sk .empty-state { color: #5a3a48; }
+  .sk .empty-state .glyph { color: #f5a5bd; font-size: 2.4rem; }
+  .sk .empty-state .msg { font-family: "Noto Serif JP", serif; font-weight: 500; font-size: 1.05rem; }
+  .sk .empty-state .sub { color: #8c6878; }
+  .sk .lists-card { background: rgba(255,255,255,0.7); border: 1px solid rgba(196,140,160,0.18); }
+  .sk .lists-card .title { font-family: "Noto Serif JP", serif; font-weight: 500; color: #5a3a48; }
+  .sk .new-sticker {
+    background: white;
+    color: #c25d80;
+    border: 1.5px solid #f5a5bd;
+    font-family: "Noto Serif JP", serif;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0.05em;
+  }
+  .sk .loading-cart { background: white; color: #c25d80; box-shadow: 0 8px 22px rgba(194,93,128,0.18), inset 0 0 0 1px rgba(245,165,189,0.5); }
+  .sk .loading-label { color: #c25d80; font-family: "Noto Serif JP", serif; font-weight: 500; }
+</style>
+</head>
+
+<body>
+
+<section class="intro">
+  <h1>Shoplist <em>·</em> Pink</h1>
+  <p>Three directions for a pink theme — none of them the existing playful Shoplist palette. Bubblegum brings candy-bright energy. Rose leans dusty, vintage, serif. Sakura is quiet, japan-inspired, minimal.</p>
+  <div class="meta">Exploration · 2026-05</div>
+</section>
+
+<!-- ================================================================
+     1 · BUBBLEGUM
+     ================================================================ -->
+<section class="theme-section bg">
+  <div class="theme-inner">
+    <div class="theme-title">
+      <span class="num">Theme 01</span>
+      <h2>Bubblegum</h2>
+      <span class="sub">Candy bright · Playful · Rounded</span>
+    </div>
+
+    <div class="ident">
+      <div class="panel">
+        <h3>Palette</h3>
+        <div class="swatches">
+          <div class="swatch" style="background:#c92874;color:#fff;">#C92874</div>
+          <div class="swatch" style="background:#ff4f96;color:#fff;">#FF4F96</div>
+          <div class="swatch" style="background:#ff6fa8;color:#fff;">#FF6FA8</div>
+          <div class="swatch" style="background:#f5a8c8;color:#6e1d4a;">#F5A8C8</div>
+          <div class="swatch" style="background:#ffd5e8;color:#6e1d4a;">#FFD5E8</div>
+          <div class="swatch" style="background:#fff5f9;color:#6e1d4a;">#FFF5F9</div>
+        </div>
+      </div>
+      <div class="panel font-block">
+        <h3>Type</h3>
+        <div class="lg" style="font-family:'Quicksand',sans-serif;font-weight:700;color:#c92874;">Veckans handla</div>
+        <div class="md" style="font-family:'Quicksand',sans-serif;font-weight:500;">Quicksand · friendly rounded sans · weights 500-700</div>
+        <div class="small">QUICKSAND · 500/600/700 · ALL HEADINGS BOLD</div>
+      </div>
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="topbar"><span class="back">←</span><span class="listname">Veckans handla</span></div>
+          <div class="secheader">FRUKT &amp; GRÖNT</div>
+          <div class="row"><span class="box"></span><span class="name">Bananer</span><span class="meta">6 st</span></div>
+          <div class="row"><span class="box"></span><span class="name">Tomater</span><span class="meta">500 g</span></div>
+          <div class="row"><span class="box"></span><span class="name">Avokado</span><span class="meta">2 st</span></div>
+          <div class="secheader">MEJERI</div>
+          <div class="row shopped"><span class="box"><span class="check"></span></span><span class="name">Mjölk</span></div>
+          <div class="addbox"><span class="plus">+</span><span>Lägg till vara…</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ic-grid">
+      <div class="ic-card">
+        <span class="label">01 · Tap to check</span>
+        <div class="ic-scene">
+          <div class="ic-mini-row shopped"><span class="box"><span class="check"></span></span><span class="name">Bananer</span><span class="meta">6 st</span></div>
+          <span class="finger" style="bottom:18%; right:18%;">👆</span>
+          <div class="sparks">
+            <i style="top:38%;left:24%;"></i><i style="top:46%;left:62%;"></i>
+            <i style="top:30%;left:46%;width:6px;height:6px;"></i>
+            <i style="top:60%;left:40%;width:4px;height:4px;"></i>
+          </div>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">02 · Undo back to active</span>
+        <div class="ic-scene">
+          <div class="ic-mini-row"><span class="box"></span><span class="name">Bananer</span><span class="meta">6 st</span></div>
+          <span class="finger" style="bottom:22%; right:22%;">👆</span>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">03 · Add new item</span>
+        <div class="ic-scene">
+          <div class="ic-mini-row" style="opacity:0.4;"><span class="box"></span><span class="name">Bananer</span></div>
+          <div class="ic-mini-row" style="transform:scale(1.04);box-shadow:0 4px 14px rgba(201,40,116,0.25);"><span class="box"></span><span class="name">Mandelmjöl</span><span class="meta">200 g</span></div>
+          <div class="ic-mini-row" style="opacity:0.4;"><span class="box"></span><span class="name">Avokado</span></div>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">04 · Empty state</span>
+        <div class="ic-scene">
+          <div class="empty-state">
+            <span class="glyph">🎀</span>
+            <span class="msg">Allt klart!</span>
+            <span class="sub" style="color:#b85a86;">Dags att shoppa.</span>
+          </div>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">05 · NEW marker on /lists</span>
+        <div class="ic-scene">
+          <div class="lists-card"><span>Familjen</span><span class="new-sticker">NEW</span></div>
+          <div class="lists-card" style="margin-top:0.5rem;"><span>Veckans</span></div>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">06 · Loading into list</span>
+        <div class="ic-scene">
+          <div class="loading-stage">
+            <div class="loading-cart">🛒</div>
+            <div class="loading-label">Laddar…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================
+     2 · ROSE
+     ================================================================ -->
+<section class="theme-section rs">
+  <div class="theme-inner">
+    <div class="theme-title">
+      <span class="num">Theme 02</span>
+      <h2><em>Rose</em></h2>
+      <span class="sub">Dusty · Vintage · Serif italic</span>
+    </div>
+
+    <div class="ident">
+      <div class="panel">
+        <h3>Palette</h3>
+        <div class="swatches">
+          <div class="swatch" style="background:#6c2c44;color:#faeae4;">#6C2C44</div>
+          <div class="swatch" style="background:#8c4860;color:#faeae4;">#8C4860</div>
+          <div class="swatch" style="background:#c89aa0;color:#5a3640;">#C89AA0</div>
+          <div class="swatch" style="background:#e5c5be;color:#5a3640;">#E5C5BE</div>
+          <div class="swatch" style="background:#f5dfd8;color:#5a3640;">#F5DFD8</div>
+          <div class="swatch" style="background:#fbf0ec;color:#5a3640;">#FBF0EC</div>
+        </div>
+      </div>
+      <div class="panel font-block">
+        <h3>Type</h3>
+        <div class="lg" style="font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:500;color:#8c4860;">Veckans handla</div>
+        <div class="md" style="font-family:'Fraunces',serif;">Fraunces body + Cormorant italic for list names and section headers</div>
+        <div class="small">FRAUNCES · CORMORANT GARAMOND ITALIC</div>
+      </div>
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="topbar"><span class="back">←</span><span class="listname">Veckans handla</span></div>
+          <div class="secheader">Frukt &amp; grönt</div>
+          <div class="row"><span class="box"></span><span class="name">Bananer</span><span class="meta">6 st</span></div>
+          <div class="row"><span class="box"></span><span class="name">Tomater</span><span class="meta">500 g</span></div>
+          <div class="row"><span class="box"></span><span class="name">Avokado</span><span class="meta">2 st</span></div>
+          <div class="secheader">Mejeri</div>
+          <div class="row shopped"><span class="box"><span class="check"></span></span><span class="name">Mjölk</span></div>
+          <div class="addbox"><span class="plus">+</span><span style="font-style:italic;">Lägg till…</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ic-grid">
+      <div class="ic-card">
+        <span class="label">01 · Tap to check</span>
+        <div class="ic-scene">
+          <div class="ic-mini-row shopped"><span class="box"><span class="check"></span></span><span class="name">Bananer</span><span class="meta">6 st</span></div>
+          <span class="finger" style="bottom:18%; right:18%;">👆</span>
+          <div class="sparks">
+            <i style="top:38%;left:28%;"></i><i style="top:46%;left:62%;"></i>
+            <i style="top:30%;left:48%;"></i>
+            <i style="top:60%;left:42%;"></i>
+          </div>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">02 · Undo back to active</span>
+        <div class="ic-scene">
+          <div class="ic-mini-row"><span class="box"></span><span class="name">Bananer</span><span class="meta">6 st</span></div>
+          <span class="finger" style="bottom:22%; right:22%;">👆</span>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">03 · Add new item</span>
+        <div class="ic-scene">
+          <div class="ic-mini-row" style="opacity:0.4;"><span class="box"></span><span class="name">Bananer</span></div>
+          <div class="ic-mini-row" style="transform:scale(1.04);box-shadow:0 4px 14px rgba(140,72,96,0.22);"><span class="box"></span><span class="name">Mandelmjöl</span><span class="meta">200 g</span></div>
+          <div class="ic-mini-row" style="opacity:0.4;"><span class="box"></span><span class="name">Avokado</span></div>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">04 · Empty state</span>
+        <div class="ic-scene">
+          <div class="empty-state">
+            <span class="glyph">❦</span>
+            <span class="msg">En stilla lista.</span>
+            <span class="sub">Allt är klart.</span>
+          </div>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">05 · NEW marker on /lists</span>
+        <div class="ic-scene">
+          <div class="lists-card"><span class="title">Familjen</span><span class="new-sticker">nytt</span></div>
+          <div class="lists-card" style="margin-top:0.5rem;"><span class="title">Veckans</span></div>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">06 · Loading into list</span>
+        <div class="ic-scene">
+          <div class="loading-stage">
+            <div class="loading-cart">🛒</div>
+            <div class="loading-label">Laddar</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================
+     3 · SAKURA
+     ================================================================ -->
+<section class="theme-section sk">
+  <div class="theme-inner">
+    <div class="theme-title">
+      <span class="num">Theme 03</span>
+      <h2>Sakura · 桜</h2>
+      <span class="sub">Minimal · Cherry blossom · Quiet</span>
+    </div>
+
+    <div class="ident">
+      <div class="panel">
+        <h3>Palette</h3>
+        <div class="swatches">
+          <div class="swatch" style="background:#5a3a48;color:#fdfafb;">#5A3A48</div>
+          <div class="swatch" style="background:#c25d80;color:#fff;">#C25D80</div>
+          <div class="swatch" style="background:#f5a5bd;color:#5a3a48;">#F5A5BD</div>
+          <div class="swatch" style="background:#fae0e8;color:#5a3a48;">#FAE0E8</div>
+          <div class="swatch" style="background:#f7e5ec;color:#5a3a48;">#F7E5EC</div>
+          <div class="swatch" style="background:#fdfafb;color:#5a3a48;">#FDFAFB</div>
+        </div>
+      </div>
+      <div class="panel font-block">
+        <h3>Type</h3>
+        <div class="lg" style="font-family:'Noto Serif JP',serif;font-weight:500;color:#c25d80;">Veckans handla</div>
+        <div class="md" style="font-family:'Inter Tight',sans-serif;">Inter Tight body + Noto Serif JP for list names and emphasis</div>
+        <div class="small">NOTO SERIF JP · INTER TIGHT · GENEROUS WHITESPACE</div>
+      </div>
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="topbar"><span class="back">←</span><span class="listname">Veckans handla</span></div>
+          <div class="secheader">FRUKT &amp; GRÖNT</div>
+          <div class="row"><span class="box"></span><span class="name">Bananer</span><span class="meta">6 st</span></div>
+          <div class="row"><span class="box"></span><span class="name">Tomater</span><span class="meta">500 g</span></div>
+          <div class="row"><span class="box"></span><span class="name">Avokado</span><span class="meta">2 st</span></div>
+          <div class="secheader">MEJERI</div>
+          <div class="row shopped"><span class="box"><span class="check"></span></span><span class="name">Mjölk</span></div>
+          <div class="addbox"><span class="plus">+</span><span>Lägg till vara…</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ic-grid">
+      <div class="ic-card">
+        <span class="label">01 · Tap to check</span>
+        <div class="ic-scene">
+          <div class="ic-mini-row shopped"><span class="box"><span class="check"></span></span><span class="name">Bananer</span><span class="meta">6 st</span></div>
+          <span class="finger" style="bottom:18%; right:18%;">👆</span>
+          <div class="sparks">
+            <i style="top:38%;left:32%;"></i><i style="top:46%;left:62%;"></i>
+            <i style="top:32%;left:50%;"></i>
+            <i style="top:58%;left:44%;"></i>
+          </div>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">02 · Undo back to active</span>
+        <div class="ic-scene">
+          <div class="ic-mini-row"><span class="box"></span><span class="name">Bananer</span><span class="meta">6 st</span></div>
+          <span class="finger" style="bottom:22%; right:22%;">👆</span>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">03 · Add new item</span>
+        <div class="ic-scene">
+          <div class="ic-mini-row" style="opacity:0.4;"><span class="box"></span><span class="name">Bananer</span></div>
+          <div class="ic-mini-row" style="transform:scale(1.04);box-shadow:0 4px 14px rgba(194,93,128,0.2);"><span class="box"></span><span class="name">Mandelmjöl</span><span class="meta">200 g</span></div>
+          <div class="ic-mini-row" style="opacity:0.4;"><span class="box"></span><span class="name">Avokado</span></div>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">04 · Empty state</span>
+        <div class="ic-scene">
+          <div class="empty-state">
+            <span class="glyph">❀</span>
+            <span class="msg">静か · Stilla lista</span>
+            <span class="sub">Allt är klart.</span>
+          </div>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">05 · NEW marker on /lists</span>
+        <div class="ic-scene">
+          <div class="lists-card"><span class="title">Familjen</span><span class="new-sticker">nytt ❀</span></div>
+          <div class="lists-card" style="margin-top:0.5rem;"><span class="title">Veckans</span></div>
+        </div>
+      </div>
+      <div class="ic-card">
+        <span class="label">06 · Loading into list</span>
+        <div class="ic-scene">
+          <div class="loading-stage">
+            <div class="loading-cart">🛒</div>
+            <div class="loading-label">Laddar</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

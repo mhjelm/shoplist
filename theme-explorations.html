@@ -1,0 +1,1751 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Shoplist — Tema-utforskningar</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;0,600;1,300;1,500&family=Manrope:wght@300;400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Sora:wght@300;400;500;600&family=Honk&family=Space+Mono:wght@400;700&family=Inter+Tight:wght@500;700;800&display=swap" rel="stylesheet">
+
+<style>
+  /* ================================================================
+     SHELL
+     ================================================================ */
+  *,*::before,*::after { box-sizing: border-box; }
+  html,body { margin:0; padding:0; }
+  body {
+    background: #0a0a0a;
+    color: #ddd;
+    font-family: "Manrope", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: inherit; }
+
+  .intro {
+    min-height: 60vh;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: 4rem 1.5rem;
+    background:
+      radial-gradient(ellipse at 30% 20%, #1a1f2e 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 80%, #2a1a2e 0%, transparent 50%),
+      #0a0a0a;
+    position: relative;
+  }
+  .intro::before {
+    content:"";
+    position: absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 80px 80px;
+    pointer-events: none;
+  }
+  .intro h1 {
+    font-family: "Cormorant Garamond", serif;
+    font-style: italic;
+    font-weight: 300;
+    font-size: clamp(2.5rem, 8vw, 5.5rem);
+    margin: 0 0 1.2rem;
+    line-height: .95;
+    letter-spacing: -0.02em;
+    color: #f0f0f0;
+  }
+  .intro h1 em { color: #c9a96e; font-style: italic; }
+  .intro p {
+    max-width: 42rem;
+    margin: 0 auto;
+    color: #8a8a8a;
+    font-size: 1.05rem;
+    line-height: 1.6;
+  }
+  .intro .meta {
+    margin-top: 2.5rem;
+    display: inline-flex;
+    gap: 1.5rem;
+    font-family: "Space Mono", monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: #555;
+  }
+  .intro .meta span::before {
+    content:"";
+    display:inline-block; width:6px; height:6px;
+    background: #c9a96e;
+    margin-right: .6rem;
+    transform: translateY(-2px);
+  }
+
+  /* ================================================================
+     SECTION SHARED (now 2-row grid: info+phone on top, interactions below)
+     ================================================================ */
+  .theme {
+    min-height: 100vh;
+    padding: 6rem 2rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: auto;
+    gap: 4rem 4rem;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  @media (max-width: 980px) {
+    .theme { grid-template-columns: 1fr; padding: 4rem 1.5rem; gap: 3rem; }
+  }
+  .theme .info { position: relative; z-index: 2; }
+  .theme .stage {
+    position: relative; z-index: 2;
+    display: grid; place-items: center;
+  }
+  .theme .interactions {
+    grid-column: 1 / -1;
+    position: relative;
+    z-index: 2;
+    margin-top: 2rem;
+  }
+
+  .label {
+    font-family: "Space Mono", monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    margin-bottom: 1.5rem;
+    opacity: 0.7;
+  }
+  .label::before {
+    content:"";
+    display: inline-block;
+    width: 28px; height: 1px;
+    background: currentColor;
+    margin-right: 0.8rem;
+    transform: translateY(-4px);
+  }
+
+  .theme h2 {
+    font-size: clamp(2.5rem, 5vw, 4.5rem);
+    line-height: 0.95;
+    margin: 0 0 1.5rem;
+    letter-spacing: -0.025em;
+  }
+  .theme .lede {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    max-width: 30rem;
+    margin: 0 0 2.5rem;
+    opacity: 0.85;
+  }
+
+  .palette {
+    display: flex;
+    gap: 0;
+    margin-bottom: 2rem;
+    border-radius: 4px;
+    overflow: hidden;
+    width: fit-content;
+  }
+  .palette span {
+    width: 56px; height: 56px;
+    display: block;
+    position: relative;
+  }
+  .palette span::after {
+    content: attr(data-hex);
+    position: absolute;
+    bottom: -1.5rem; left: 0;
+    font-family: "Space Mono", monospace;
+    font-size: 0.62rem;
+    opacity: 0.6;
+    letter-spacing: 0.05em;
+  }
+
+  .typespec {
+    margin-top: 3rem;
+    display: grid;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+  }
+  .typespec dt {
+    font-family: "Space Mono", monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    opacity: 0.5;
+  }
+  .typespec dd { margin: 0 0 0.8rem; }
+
+  /* ================================================================
+     PHONE MOCKUP SHELL
+     ================================================================ */
+  .phone {
+    width: 360px;
+    max-width: 100%;
+    aspect-ratio: 9 / 19;
+    border-radius: 44px;
+    padding: 14px;
+    position: relative;
+    background: #0c0c0c;
+    box-shadow:
+      0 60px 90px -30px rgba(0,0,0,0.6),
+      0 0 0 2px rgba(255,255,255,0.04),
+      inset 0 0 0 2px rgba(255,255,255,0.04);
+  }
+  .phone::before {
+    content:"";
+    position: absolute; top: 16px; left: 50%;
+    transform: translateX(-50%);
+    width: 110px; height: 28px;
+    background: #050505;
+    border-radius: 14px;
+    z-index: 10;
+  }
+  .screen {
+    width: 100%; height: 100%;
+    border-radius: 32px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .screen .topbar {
+    padding: 50px 20px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .screen .topbar .back {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 16px;
+  }
+  .screen .listname {
+    flex: 1;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .screen .editbtn {
+    font-size: 0.7rem;
+    padding: 6px 10px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+  }
+
+  .screen .addbox {
+    margin: 0 16px 14px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    font-size: 0.9rem;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .screen .addbox .plus {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-weight: 700;
+  }
+
+  .screen .secheader {
+    margin: 6px 18px 8px;
+    font-family: "Space Mono", monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    opacity: 0.7;
+  }
+
+  .screen .items { padding: 0 12px 80px; overflow: hidden; }
+  .row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 12px;
+    border-radius: 12px;
+    margin-bottom: 4px;
+    font-size: 0.92rem;
+    position: relative;
+  }
+  .row .box {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    flex: none;
+    display: grid; place-items: center;
+    font-size: 13px;
+  }
+  .row .nm { flex: 1; }
+  .row .meta {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    border-radius: 999px;
+    opacity: 0.9;
+  }
+  .row.shopped .nm { text-decoration: line-through; opacity: 0.5; }
+
+  /* ================================================================
+     INTERACTIONS GRID (shared)
+     ================================================================ */
+  .interactions-title {
+    font-family: "Space Mono", monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    margin: 0 0 2.5rem;
+    opacity: 0.7;
+  }
+  .interactions-title::before {
+    content:"";
+    display: inline-block;
+    width: 28px; height: 1px;
+    background: currentColor;
+    margin-right: 0.8rem;
+    transform: translateY(-4px);
+  }
+  .ic-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 1.5rem;
+  }
+  .ic {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+  .ic-label {
+    font-family: "Space Mono", monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    opacity: 0.7;
+  }
+  .ic-caption {
+    font-size: 0.8rem;
+    line-height: 1.5;
+    opacity: 0.75;
+    margin: 0;
+  }
+  .ic-scene {
+    width: 100%;
+    height: 320px;
+    border-radius: 22px;
+    overflow: hidden;
+    position: relative;
+    padding: 18px 14px;
+  }
+  .ic-mini-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 12px;
+    border-radius: 12px;
+    margin-bottom: 6px;
+    font-size: 0.88rem;
+    position: relative;
+  }
+  .ic-mini-row .box {
+    width: 20px; height: 20px;
+    border-radius: 6px;
+    flex: none;
+    display: grid; place-items: center;
+    font-size: 12px;
+  }
+  .ic-mini-row .nm { flex: 1; }
+  .ic-mini-row .meta {
+    font-size: 0.68rem;
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+
+  /* Finger indicator */
+  .finger {
+    position: absolute;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.18);
+    border: 2px solid rgba(255,255,255,0.6);
+    pointer-events: none;
+    opacity: 0;
+  }
+  .finger::after {
+    content:"";
+    position: absolute; inset: -8px;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    opacity: 0;
+  }
+
+  /* sparks */
+  .sparks {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .sparks i {
+    position: absolute;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0;
+    transform: translate(0,0);
+  }
+
+  /* loading cart shared */
+  .loading-stage {
+    display: grid; place-items: center;
+    height: 100%;
+  }
+  .loading-cart {
+    width: 76px; height: 76px;
+    border-radius: 18px;
+    display: grid; place-items: center;
+    font-size: 38px;
+  }
+  .loading-label {
+    margin-top: 1rem;
+    font-family: "Space Mono", monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+  .loading-label::after {
+    content: "…";
+    display: inline-block;
+    animation: dot-pulse 1.4s steps(4, end) infinite;
+  }
+  @keyframes dot-pulse {
+    0%   { content: "·"; }
+    25%  { content: "··"; }
+    50%  { content: "···"; }
+    100% { content: "·"; }
+  }
+
+  /* list card on /lists */
+  .lists-card {
+    position: relative;
+    padding: 16px;
+    border-radius: 18px;
+    display: flex; flex-direction: column; gap: 6px;
+    margin-bottom: 12px;
+  }
+  .lists-card .title { font-weight: 600; font-size: 0.95rem; }
+  .lists-card .count {
+    font-size: 0.72rem;
+    opacity: 0.7;
+    font-family: "Space Mono", monospace;
+    letter-spacing: 0.1em;
+  }
+  .new-sticker {
+    position: absolute;
+    top: -8px; right: 14px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-family: "Space Mono", monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    transform-origin: center;
+    animation: sticker-pop 4s ease-in-out infinite;
+  }
+  @keyframes sticker-pop {
+    0%   { transform: rotate(-12deg) scale(0); opacity: 0; }
+    10%  { transform: rotate(8deg) scale(1.25); opacity: 1; }
+    18%  { transform: rotate(-8deg) scale(1); }
+    25%  { transform: rotate(-12deg) scale(1); }
+    50%  { transform: rotate(-12deg) scale(1.08); }
+    75%  { transform: rotate(-12deg) scale(1); }
+    100% { transform: rotate(-12deg) scale(1); opacity: 1; }
+  }
+
+  /* shared "tap to check" animation timeline (uses CSS vars) */
+  .scene-check .row-to-check .box,
+  .scene-check .row-to-check .nm,
+  .scene-check .row-to-check {
+    transition: none;
+  }
+  .scene-check .row-to-check {
+    animation: row-check 5.5s ease-in-out infinite;
+  }
+  .scene-check .row-to-check .box {
+    animation: box-check 5.5s ease-in-out infinite;
+  }
+  .scene-check .row-to-check .check-mark {
+    opacity: 0;
+    animation: check-mark 5.5s ease-in-out infinite;
+  }
+  .scene-check .finger {
+    animation: finger-tap 5.5s ease-in-out infinite;
+  }
+  .scene-check .sparks i {
+    animation: spark-burst 5.5s ease-in-out infinite;
+  }
+  .scene-check .sparks i:nth-child(1) { --sx: -22px; --sy: -16px; }
+  .scene-check .sparks i:nth-child(2) { --sx:  20px; --sy: -22px; }
+  .scene-check .sparks i:nth-child(3) { --sx:  28px; --sy:  10px; }
+  .scene-check .sparks i:nth-child(4) { --sx: -28px; --sy:  18px; }
+  .scene-check .sparks i:nth-child(5) { --sx:  0px;  --sy: -28px; }
+
+  @keyframes finger-tap {
+    0%, 10%   { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+    15%       { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    25%       { opacity: 1; transform: translate(-50%, -50%) scale(0.85); }
+    35%       { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+    100%      { opacity: 0; }
+  }
+  @keyframes box-check {
+    0%, 18%   { background: var(--box-bg, transparent); border-color: var(--box-border, currentColor); }
+    25%       { transform: scale(1.15); }
+    30%, 100% { background: var(--box-checked-bg, currentColor); border-color: transparent; transform: scale(1); }
+  }
+  @keyframes check-mark {
+    0%, 22%   { opacity: 0; transform: scale(0); }
+    32%       { opacity: 1; transform: scale(1.2); }
+    38%, 100% { opacity: 1; transform: scale(1); }
+  }
+  @keyframes row-check {
+    0%, 22%   { transform: translateY(0); opacity: 1; }
+    25%       { transform: translateY(0) scale(0.97); }
+    35%       { transform: translateY(0) scale(1); }
+    50%       { transform: translateY(68px); opacity: 0.55; }
+    90%       { transform: translateY(68px); opacity: 0.55; }
+    96%       { transform: translateY(68px); opacity: 0; }
+    100%      { transform: translateY(0); opacity: 1; }
+  }
+  .scene-check .row-to-check.checked-look .nm { animation: strike-on 5.5s ease-in-out infinite; }
+  @keyframes strike-on {
+    0%, 32% { text-decoration: none; opacity: 1; }
+    40%,100% { text-decoration: line-through; opacity: 0.55; }
+  }
+  @keyframes spark-burst {
+    0%, 28%   { opacity: 0; transform: translate(0,0) scale(0); }
+    32%       { opacity: 1; transform: translate(0,0) scale(1); }
+    42%       { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(0.4); }
+    100%      { opacity: 0; }
+  }
+
+  /* "back from shopped" timeline */
+  .scene-uncheck .row-to-uncheck {
+    animation: row-uncheck 5.5s ease-in-out infinite;
+  }
+  .scene-uncheck .row-to-uncheck .box {
+    animation: box-uncheck 5.5s ease-in-out infinite;
+  }
+  .scene-uncheck .row-to-uncheck .check-mark {
+    animation: check-uncheck 5.5s ease-in-out infinite;
+  }
+  .scene-uncheck .row-to-uncheck .nm {
+    animation: strike-off 5.5s ease-in-out infinite;
+  }
+  .scene-uncheck .finger {
+    animation: finger-tap 5.5s ease-in-out infinite;
+  }
+  @keyframes row-uncheck {
+    0%, 18%   { transform: translateY(0); }
+    25%       { transform: translateY(0) scale(0.97); }
+    35%       { transform: translateY(0) scale(1); }
+    50%       { transform: translateY(-68px); }
+    90%       { transform: translateY(-68px); }
+    100%      { transform: translateY(0); }
+  }
+  @keyframes box-uncheck {
+    0%, 22%   { background: var(--box-checked-bg, currentColor); border-color: transparent; }
+    32%, 100% { background: var(--box-bg, transparent); border-color: var(--box-border, currentColor); }
+  }
+  @keyframes check-uncheck {
+    0%, 22%   { opacity: 1; }
+    32%, 100% { opacity: 0; }
+  }
+  @keyframes strike-off {
+    0%, 22%   { text-decoration: line-through; opacity: 0.55; }
+    32%, 100% { text-decoration: none; opacity: 1; }
+  }
+
+  /* "list emptied" timeline — three rows fade out then empty state */
+  .scene-empty .demo-stack { position: relative; }
+  .scene-empty .demo-stack .ic-mini-row:nth-child(1) {
+    animation: empty-row 7s ease-in-out infinite;
+    animation-delay: 0s;
+  }
+  .scene-empty .demo-stack .ic-mini-row:nth-child(2) {
+    animation: empty-row 7s ease-in-out infinite;
+    animation-delay: 0.6s;
+  }
+  .scene-empty .demo-stack .ic-mini-row:nth-child(3) {
+    animation: empty-row 7s ease-in-out infinite;
+    animation-delay: 1.2s;
+  }
+  @keyframes empty-row {
+    0%, 10%   { opacity: 1; transform: translateX(0); }
+    18%       { opacity: 1; transform: translateX(0) scale(0.97); }
+    25%       { opacity: 0; transform: translateX(40px); }
+    72%       { opacity: 0; transform: translateX(40px); }
+    85%       { opacity: 0; transform: translateX(40px); }
+    100%      { opacity: 1; transform: translateX(0); }
+  }
+  .scene-empty .empty-state {
+    position: absolute;
+    inset: 18px 14px;
+    display: grid; place-items: center;
+    text-align: center;
+    opacity: 0;
+    animation: empty-show 7s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes empty-show {
+    0%, 30%   { opacity: 0; transform: scale(0.92); }
+    42%, 80%  { opacity: 1; transform: scale(1); }
+    92%, 100% { opacity: 0; transform: scale(0.92); }
+  }
+  .empty-state .glyph {
+    font-size: 2.4rem;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+  }
+  .empty-state .msg {
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+  .empty-state .sub {
+    font-size: 0.72rem;
+    opacity: 0.7;
+    margin-top: 0.3rem;
+  }
+
+  /* "add new item" timeline */
+  .scene-add .input-field {
+    border-radius: 14px;
+    padding: 12px 14px;
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+    min-height: 44px;
+  }
+  .scene-add .typed {
+    position: relative;
+  }
+  .scene-add .typed::after {
+    content:"|";
+    margin-left: 1px;
+    animation: caret 0.9s steps(2) infinite;
+    opacity: 0.7;
+  }
+  @keyframes caret {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+  .scene-add .typed span { animation: typed-letters 5.5s steps(1) infinite; }
+  @keyframes typed-letters { /* placeholder, no-op */ 0% {} 100% {} }
+  .scene-add .typed { animation: type-word 5.5s steps(1) infinite; }
+  @keyframes type-word {
+    0%       { content: ""; }
+    100%     { content: ""; }
+  }
+  .scene-add .typed-text {
+    overflow: hidden;
+    white-space: nowrap;
+    display: inline-block;
+    width: 0;
+    animation: type-grow 5.5s steps(7, end) infinite;
+  }
+  @keyframes type-grow {
+    0%, 5%   { width: 0; }
+    35%      { width: 4ch; }
+    55%      { width: 4ch; }
+    60%      { width: 0; }
+    100%     { width: 0; }
+  }
+  .scene-add .new-row {
+    opacity: 0;
+    transform: translateY(-12px);
+    animation: new-row-in 5.5s ease-in-out infinite;
+  }
+  @keyframes new-row-in {
+    0%, 55%  { opacity: 0; transform: translateY(-12px) scale(0.95); }
+    62%      { opacity: 1; transform: translateY(0) scale(1.04); }
+    70%      { opacity: 1; transform: translateY(0) scale(1); }
+    92%      { opacity: 1; transform: translateY(0) scale(1); }
+    98%      { opacity: 0; transform: translateY(-4px); }
+    100%     { opacity: 0; transform: translateY(-12px); }
+  }
+
+  /* "loading" cart wobble shared */
+  .loading-cart {
+    animation: cart-roll 1.6s ease-in-out infinite;
+  }
+  @keyframes cart-roll {
+    0%, 100% { transform: translateX(-12px) rotate(-6deg); }
+    50%      { transform: translateX(12px) rotate(6deg); }
+  }
+
+  /* ================================================================
+     ★ THEME 1 — POLAR / ICY
+     ================================================================ */
+  .icy {
+    background:
+      radial-gradient(ellipse at 80% 10%, #e0f2fb 0%, transparent 55%),
+      radial-gradient(ellipse at 10% 90%, #c5d9e8 0%, transparent 60%),
+      linear-gradient(180deg, #f3f9fc 0%, #d8e7f0 100%);
+    color: #1f3349;
+    font-family: "Manrope", sans-serif;
+  }
+  .icy::before {
+    content:"";
+    position: absolute; inset:0;
+    background-image:
+      linear-gradient(115deg, transparent 48%, rgba(255,255,255,0.4) 49%, rgba(255,255,255,0.6) 50%, transparent 51%),
+      linear-gradient(80deg, transparent 30%, rgba(255,255,255,0.25) 31%, transparent 32%);
+    background-size: 220px 600px, 380px 800px;
+    background-position: 30% 0, 80% 40%;
+    background-repeat: no-repeat;
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+  .icy::after {
+    content:"";
+    position: absolute; inset:0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.08'/></svg>");
+    pointer-events: none;
+  }
+  .icy h2 {
+    font-family: "Cormorant Garamond", serif;
+    font-style: italic;
+    font-weight: 300;
+  }
+  .icy h2 .accent { color: #4a8eb8; font-style: italic; }
+  .icy .label { color: #2d5b7d; }
+
+  .icy .palette span { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5); }
+
+  .crystal {
+    position: absolute;
+    width: 280px; height: 280px;
+    top: -40px; right: -60px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(200,225,240,0.1) 60%, transparent 100%);
+    clip-path: polygon(50% 0, 90% 30%, 95% 70%, 70% 100%, 30% 100%, 5% 70%, 10% 30%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: inset 0 0 60px rgba(255,255,255,0.4), 0 30px 60px rgba(50,100,140,0.15);
+    animation: float-crystal 14s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .crystal.b {
+    top: auto; right: auto;
+    bottom: 10%; left: -80px;
+    width: 200px; height: 200px;
+    animation-delay: -7s;
+  }
+  @keyframes float-crystal {
+    0%,100% { transform: translateY(0) rotate(0); }
+    50%     { transform: translateY(-22px) rotate(8deg); }
+  }
+
+  .icy .screen {
+    background: linear-gradient(170deg, #f6fbfe 0%, #d6e7f1 100%);
+    color: #1f3349;
+  }
+  .icy .screen::before {
+    content:"";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 50% -10%, rgba(255,255,255,0.9), transparent 60%),
+      linear-gradient(115deg, transparent 60%, rgba(255,255,255,0.5) 65%, transparent 70%);
+    pointer-events: none;
+  }
+  .icy .topbar {
+    background: rgba(255,255,255,0.4);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(180,210,225,0.4);
+  }
+  .icy .topbar .back { background: rgba(255,255,255,0.6); color: #2d5b7d; }
+  .icy .listname {
+    font-family: "Cormorant Garamond", serif;
+    font-weight: 500;
+    font-size: 1.3rem;
+    letter-spacing: -0.01em;
+  }
+  .icy .editbtn { background: rgba(74,142,184,0.15); color: #2d5b7d; }
+  .icy .addbox {
+    margin-top: 12px;
+    background: rgba(255,255,255,0.55);
+    border: 1px solid rgba(180,210,225,0.5);
+    backdrop-filter: blur(12px);
+    color: #5a7a92;
+  }
+  .icy .addbox .plus { background: #4a8eb8; color: white; }
+  .icy .secheader { color: #4a7591; }
+  .icy .row, .icy .ic-mini-row {
+    background: rgba(255,255,255,0.55);
+    border: 1px solid rgba(180,210,225,0.45);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #1f3349;
+  }
+  .icy .row .box, .icy .ic-mini-row .box {
+    background: white; border: 1.5px solid #b9d2e0;
+  }
+  .icy .row.shopped .box, .icy .ic-mini-row.shopped .box {
+    background: linear-gradient(135deg, #6ba9cf, #2d5b7d);
+    border-color: transparent;
+    color: white;
+  }
+  .icy .row .meta, .icy .ic-mini-row .meta {
+    background: rgba(74,142,184,0.15);
+    color: #2d5b7d;
+    font-weight: 600;
+  }
+
+  /* Icy interaction scenes */
+  .icy .ic-scene {
+    background: linear-gradient(170deg, #f6fbfe 0%, #d6e7f1 100%);
+    box-shadow: inset 0 0 0 1px rgba(180,210,225,0.5), 0 12px 30px -10px rgba(50,100,140,0.2);
+    color: #1f3349;
+    --box-bg: white;
+    --box-border: #b9d2e0;
+    --box-checked-bg: linear-gradient(135deg, #6ba9cf, #2d5b7d);
+  }
+  .icy .ic-scene::before {
+    /* subtle crystal sheen */
+    content:"";
+    position: absolute; inset: 0;
+    background: linear-gradient(115deg, transparent 45%, rgba(255,255,255,0.4) 50%, transparent 55%);
+    background-size: 220% 100%;
+    background-position: 0 0;
+    animation: sheen 6s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes sheen {
+    0%, 100% { background-position: -150% 0; }
+    50%      { background-position: 150% 0; }
+  }
+  .icy .ic-scene .finger { color: #4a8eb8; }
+  .icy .ic-scene .sparks i { background: #4a8eb8; box-shadow: 0 0 8px rgba(74,142,184,0.6); }
+  .icy .empty-state { color: #2d5b7d; }
+  .icy .empty-state .glyph { color: #4a8eb8; font-family: "Cormorant Garamond", serif; font-style: italic; }
+  .icy .empty-state .msg { font-family: "Cormorant Garamond", serif; font-style: italic; font-weight: 500; font-size: 1.3rem; }
+  .icy .input-field {
+    background: rgba(255,255,255,0.55);
+    border: 1px solid rgba(180,210,225,0.5);
+    color: #1f3349;
+  }
+  .icy .input-field .plus { background: #4a8eb8; color: white; }
+  .icy .lists-card {
+    background: rgba(255,255,255,0.55);
+    border: 1px solid rgba(180,210,225,0.45);
+    color: #1f3349;
+  }
+  .icy .new-sticker {
+    background: linear-gradient(135deg, #6ba9cf, #2d5b7d);
+    color: #f3f9fc;
+    box-shadow: 0 4px 12px rgba(50,100,140,0.3);
+  }
+  .icy .loading-cart {
+    background: white;
+    color: #2d5b7d;
+    box-shadow: 0 8px 24px rgba(50,100,140,0.18);
+  }
+
+  /* ================================================================
+     ★ THEME 2 — SOOTHING / DUSK
+     ================================================================ */
+  .dusk {
+    background:
+      radial-gradient(ellipse at 20% 30%, #f7e3d4 0%, transparent 55%),
+      radial-gradient(ellipse at 80% 70%, #e8d2c2 0%, transparent 55%),
+      linear-gradient(170deg, #fdf6ee 0%, #f0dccc 100%);
+    color: #4a3a31;
+    font-family: "Sora", sans-serif;
+  }
+  .dusk::before {
+    content:"";
+    position: absolute; inset: 0;
+    background-image:
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.75' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.07'/></svg>");
+    pointer-events: none;
+  }
+  .dusk h2 {
+    font-family: "Fraunces", serif;
+    font-weight: 500;
+    font-style: italic;
+  }
+  .dusk h2 .accent { color: #c47b5e; font-style: italic; font-weight: 400; }
+  .dusk .label { color: #8a6b5a; }
+
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(48px);
+    opacity: 0.55;
+    animation: orb-breathe 9s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .orb.a {
+    width: 360px; height: 360px;
+    top: -80px; right: -80px;
+    background: radial-gradient(circle, #f0b89a, #d68a6a 60%, transparent);
+  }
+  .orb.b {
+    width: 280px; height: 280px;
+    bottom: -60px; left: 20%;
+    background: radial-gradient(circle, #e8b9a0, #c89479 60%, transparent);
+    animation-delay: -4.5s;
+  }
+  .orb.c {
+    width: 200px; height: 200px;
+    top: 40%; left: -40px;
+    background: radial-gradient(circle, #d4a587, #b88066 60%, transparent);
+    animation-delay: -2s;
+  }
+  @keyframes orb-breathe {
+    0%,100% { transform: scale(1) translateY(0); opacity: 0.55; }
+    50%     { transform: scale(1.1) translateY(-14px); opacity: 0.7; }
+  }
+
+  .dusk .screen {
+    background: linear-gradient(170deg, #fdf6ef 0%, #f3e1d2 65%, #d9b8a0 100%);
+    color: #4a3a31;
+  }
+  .dusk .screen::after {
+    content:"";
+    position: absolute;
+    top: 70px; right: 22px;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fff8ed, #f0d8b8);
+    box-shadow: 0 0 30px rgba(255,220,180,0.6);
+    z-index: 1;
+  }
+  .dusk .topbar { color: #4a3a31; }
+  .dusk .topbar .back { background: rgba(255,255,255,0.4); color: #8a5a3e; }
+  .dusk .listname {
+    font-family: "Fraunces", serif;
+    font-weight: 500;
+    font-style: italic;
+    font-size: 1.3rem;
+    letter-spacing: -0.01em;
+  }
+  .dusk .editbtn { background: rgba(196,123,94,0.18); color: #8a4a30; }
+  .dusk .addbox {
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(196,123,94,0.18);
+    color: #8a6b5a;
+    border-radius: 18px;
+  }
+  .dusk .addbox .plus { background: #c47b5e; color: #fff8ed; }
+  .dusk .secheader { color: #8a5a3e; }
+  .dusk .row, .dusk .ic-mini-row {
+    background: rgba(255,255,255,0.5);
+    border-radius: 18px;
+    border: 1px solid rgba(196,123,94,0.12);
+    color: #4a3a31;
+  }
+  .dusk .row .box, .dusk .ic-mini-row .box { background: #fff8ed; border: 1.5px solid #d6a888; border-radius: 8px; }
+  .dusk .row.shopped .box, .dusk .ic-mini-row.shopped .box {
+    background: linear-gradient(135deg, #d68a6a, #a8553a);
+    border-color: transparent;
+    color: #fff8ed;
+  }
+  .dusk .row .meta, .dusk .ic-mini-row .meta {
+    background: rgba(196,123,94,0.16);
+    color: #8a4a30;
+    font-weight: 500;
+    font-style: italic;
+    font-family: "Fraunces", serif;
+  }
+
+  /* Dusk interaction scenes */
+  .dusk .ic-scene {
+    background: linear-gradient(170deg, #fdf6ef 0%, #f3e1d2 65%, #ecd0b6 100%);
+    box-shadow: inset 0 0 0 1px rgba(196,123,94,0.18), 0 12px 30px -10px rgba(196,123,94,0.25);
+    color: #4a3a31;
+    --box-bg: #fff8ed;
+    --box-border: #d6a888;
+    --box-checked-bg: linear-gradient(135deg, #d68a6a, #a8553a);
+  }
+  .dusk .ic-scene::before {
+    /* small warm glow */
+    content:"";
+    position: absolute;
+    top: 12%; right: -30%;
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,200,150,0.55), transparent 60%);
+    filter: blur(20px);
+    animation: orb-breathe 5s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .dusk .ic-scene .finger { color: #c47b5e; }
+  .dusk .ic-scene .sparks i {
+    background: #c47b5e;
+    box-shadow: 0 0 10px rgba(196,123,94,0.7);
+    width: 7px; height: 7px;
+  }
+  .dusk .empty-state { color: #8a4a30; }
+  .dusk .empty-state .glyph {
+    color: #c47b5e;
+    font-size: 2.8rem;
+  }
+  .dusk .empty-state .msg {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 1.35rem;
+  }
+  .dusk .empty-state .sub { font-style: italic; }
+  .dusk .input-field {
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(196,123,94,0.18);
+    color: #8a6b5a;
+    border-radius: 18px;
+  }
+  .dusk .input-field .plus { background: #c47b5e; color: #fff8ed; }
+  .dusk .lists-card {
+    background: rgba(255,255,255,0.55);
+    border: 1px solid rgba(196,123,94,0.18);
+    border-radius: 20px;
+    color: #4a3a31;
+  }
+  .dusk .lists-card .title { font-family: "Fraunces", serif; font-style: italic; font-weight: 500; font-size: 1.1rem; }
+  .dusk .new-sticker {
+    background: linear-gradient(135deg, #f0b89a, #c47b5e);
+    color: #fff8ed;
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0.05em;
+    font-size: 0.72rem;
+    box-shadow: 0 5px 14px rgba(196,123,94,0.35);
+  }
+  .dusk .loading-cart {
+    background: #fff8ed;
+    color: #c47b5e;
+    box-shadow: 0 10px 28px rgba(196,123,94,0.3);
+  }
+
+  /* ================================================================
+     ★ THEME 3 — PSYCHEDELIC
+     ================================================================ */
+  .psych {
+    color: #fdf3a8;
+    font-family: "Inter Tight", sans-serif;
+    background:
+      conic-gradient(from 90deg at 50% 50%, #ff2e88, #ffd23f, #06d6a0, #4cc9f0, #b14aed, #ff2e88);
+    background-size: 200% 200%;
+    background-position: center;
+    animation: psych-shift 18s linear infinite;
+  }
+  @keyframes psych-shift {
+    0%   { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
+  }
+  .psych::before {
+    content:"";
+    position: absolute; inset:0;
+    background:
+      repeating-radial-gradient(circle at 30% 40%, transparent 0 24px, rgba(0,0,0,0.08) 24px 48px),
+      repeating-radial-gradient(circle at 70% 60%, transparent 0 32px, rgba(255,255,255,0.06) 32px 64px);
+    mix-blend-mode: overlay;
+    pointer-events: none;
+  }
+  .psych::after {
+    content:"";
+    position: absolute; inset:0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.18'/></svg>");
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+  .psych h2 {
+    font-family: "Honk", "Inter Tight", sans-serif;
+    font-weight: 400;
+    text-transform: uppercase;
+    line-height: 0.85;
+    color: #fff;
+    text-shadow:
+      3px 3px 0 #ff2e88,
+      6px 6px 0 #06d6a0,
+      9px 9px 0 #4cc9f0;
+    transform: rotate(-2deg);
+  }
+  .psych .label { color: #1a0d2e; background: #fdf3a8; padding: 4px 10px; display: inline-block; }
+  .psych .lede { color: #1a0d2e; font-weight: 500; }
+  .psych .typespec dt { color: #fdf3a8; }
+  .psych .typespec dd { color: #1a0d2e; font-weight: 500; }
+  .psych .interactions-title { color: #1a0d2e; background: #fdf3a8; padding: 4px 10px; display: inline-block; }
+
+  .psych .palette span { box-shadow: inset 0 0 0 2px #1a0d2e; }
+  .psych .palette span::after { color: #1a0d2e; font-weight: 700; }
+
+  .spiral {
+    position: absolute;
+    width: 500px; height: 500px;
+    top: 50%; right: -150px;
+    transform: translateY(-50%);
+    pointer-events: none;
+    opacity: 0.35;
+    animation: spin-spiral 30s linear infinite;
+  }
+  @keyframes spin-spiral { to { transform: translateY(-50%) rotate(360deg); } }
+
+  .eye {
+    position: absolute;
+    top: 8%; left: 4%;
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fdf3a8 0%, #fdf3a8 40%, #1a0d2e 40%, #1a0d2e 55%, #fff 55%, #fff 100%);
+    box-shadow: inset 0 0 0 4px #1a0d2e, 0 0 0 6px #fdf3a8;
+    animation: eye-blink 5s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes eye-blink {
+    0%, 90%, 100% { transform: scaleY(1); }
+    95% { transform: scaleY(0.08); }
+  }
+
+  .psych .phone { background: #1a0d2e; }
+  .psych .screen {
+    background:
+      linear-gradient(180deg, #1a0d2e 0%, #2d1659 50%, #5b1a8a 100%);
+    color: #fdf3a8;
+    position: relative;
+  }
+  .psych .screen::before {
+    content:"";
+    position: absolute; inset:0;
+    background:
+      radial-gradient(circle at 50% 0%, rgba(255,46,136,0.35), transparent 50%),
+      radial-gradient(circle at 100% 100%, rgba(6,214,160,0.3), transparent 55%),
+      radial-gradient(circle at 0% 60%, rgba(76,201,240,0.25), transparent 55%);
+    pointer-events: none;
+  }
+  .psych .topbar { color: #fdf3a8; }
+  .psych .topbar .back {
+    background: #ff2e88;
+    color: #fdf3a8;
+    box-shadow: 2px 2px 0 #06d6a0;
+  }
+  .psych .listname {
+    font-family: "Honk", sans-serif;
+    font-size: 1.55rem;
+    color: #fff;
+    text-shadow: 2px 2px 0 #ff2e88, 4px 4px 0 #06d6a0;
+    letter-spacing: 0.01em;
+    transform: rotate(-1.5deg);
+  }
+  .psych .editbtn {
+    background: #fdf3a8;
+    color: #1a0d2e;
+    font-weight: 700;
+    box-shadow: 2px 2px 0 #ff2e88;
+  }
+  .psych .addbox {
+    background: rgba(253,243,168,0.12);
+    border: 2px dashed #fdf3a8;
+    color: #fdf3a8;
+  }
+  .psych .addbox .plus { background: #ff2e88; color: #fdf3a8; }
+  .psych .secheader { color: #ffd23f; font-weight: 700; }
+  .psych .row, .psych .ic-mini-row {
+    background: rgba(253,243,168,0.08);
+    border: 1.5px solid rgba(253,243,168,0.3);
+    color: #fdf3a8;
+    transition: transform .2s;
+  }
+  .psych .row:nth-child(odd), .psych .ic-mini-row:nth-child(odd)  { transform: rotate(-0.5deg); }
+  .psych .row:nth-child(even), .psych .ic-mini-row:nth-child(even) { transform: rotate(0.4deg); }
+  .psych .row .box, .psych .ic-mini-row .box {
+    background: transparent;
+    border: 2px solid #fdf3a8;
+    border-radius: 6px;
+  }
+  .psych .row.shopped .box, .psych .ic-mini-row.shopped .box {
+    background: #ff2e88;
+    color: #fdf3a8;
+    border-color: #fdf3a8;
+    box-shadow: 2px 2px 0 #06d6a0;
+  }
+  .psych .row .meta, .psych .ic-mini-row .meta {
+    background: #06d6a0;
+    color: #1a0d2e;
+    font-weight: 700;
+    box-shadow: 1.5px 1.5px 0 #ff2e88;
+  }
+
+  /* Psych interaction scenes */
+  .psych .ic { color: #1a0d2e; }
+  .psych .ic-label { color: #1a0d2e; background: #fdf3a8; padding: 2px 8px; align-self: flex-start; }
+  .psych .ic-caption { color: #1a0d2e; font-weight: 600; }
+  .psych .ic-scene {
+    background: linear-gradient(180deg, #2d1659 0%, #5b1a8a 100%);
+    box-shadow:
+      0 0 0 3px #fdf3a8,
+      4px 4px 0 #ff2e88,
+      8px 8px 0 #06d6a0;
+    color: #fdf3a8;
+    --box-bg: transparent;
+    --box-border: #fdf3a8;
+    --box-checked-bg: #ff2e88;
+  }
+  .psych .ic-scene::before {
+    content:"";
+    position: absolute; inset:0;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(255,46,136,0.35), transparent 55%),
+      radial-gradient(circle at 80% 80%, rgba(6,214,160,0.3), transparent 50%);
+    pointer-events: none;
+  }
+  .psych .ic-scene .finger { color: #ffd23f; border-color: #ffd23f; }
+  .psych .ic-scene .sparks i {
+    background: #ffd23f;
+    width: 8px; height: 8px;
+    box-shadow: 0 0 0 2px #ff2e88;
+  }
+  .psych .empty-state { color: #fdf3a8; }
+  .psych .empty-state .glyph {
+    font-family: "Honk", sans-serif;
+    font-size: 3rem;
+    color: #ffd23f;
+    text-shadow: 3px 3px 0 #ff2e88, 6px 6px 0 #06d6a0;
+    animation: shake 0.8s ease-in-out infinite;
+  }
+  @keyframes shake {
+    0%,100% { transform: rotate(-3deg); }
+    50%     { transform: rotate(3deg); }
+  }
+  .psych .empty-state .msg {
+    font-family: "Honk", sans-serif;
+    font-size: 1.4rem;
+    color: #fff;
+    text-shadow: 2px 2px 0 #ff2e88;
+  }
+  .psych .input-field {
+    background: rgba(253,243,168,0.12);
+    border: 2px dashed #fdf3a8;
+    color: #fdf3a8;
+  }
+  .psych .input-field .plus { background: #ff2e88; color: #fdf3a8; }
+  .psych .lists-card {
+    background: rgba(253,243,168,0.1);
+    border: 2px solid #fdf3a8;
+    color: #fdf3a8;
+    box-shadow: 3px 3px 0 #ff2e88;
+    transform: rotate(-1deg);
+  }
+  .psych .lists-card .title { font-family: "Honk", sans-serif; font-size: 1.2rem; }
+  .psych .new-sticker {
+    background: #ffd23f;
+    color: #1a0d2e;
+    box-shadow: 2px 2px 0 #ff2e88, 4px 4px 0 #06d6a0;
+    font-family: "Honk", sans-serif;
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    padding: 4px 10px;
+  }
+  .psych .loading-cart {
+    background: #fdf3a8;
+    color: #1a0d2e;
+    box-shadow: 3px 3px 0 #ff2e88, 6px 6px 0 #06d6a0;
+  }
+  .psych .loading-label { color: #fdf3a8; }
+
+  /* footer */
+  footer {
+    padding: 4rem 2rem;
+    text-align: center;
+    color: #555;
+    font-family: "Space Mono", monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    background: #0a0a0a;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     INTRO
+     ============================================================ -->
+<section class="intro">
+  <div>
+    <h1>Three Worlds<br/>For <em>Shoplist</em></h1>
+    <p>Exploring tonal directions beyond <em>light</em>, <em>dark</em>, and the current playful <em>shoplist</em> palette. Each theme below is a distinct atmosphere — palette, typography, motion, and ornament moving in the same direction. Every theme also defines six core micro-interactions: tap-to-check, undo, add, empty state, "new" marker, and the loading transition.</p>
+    <div class="meta">
+      <span>POLAR</span>
+      <span>DUSK</span>
+      <span>PRISM</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ★ POLAR
+     ============================================================ -->
+<section class="theme icy">
+  <div class="crystal"></div>
+  <div class="crystal b"></div>
+
+  <div class="info">
+    <div class="label">Theme 01 / Cold &amp; Crystalline</div>
+    <h2>Polar<br/><span class="accent">drift</span></h2>
+    <p class="lede">A glacier seen through frosted glass. Cool blues and arctic whites carry the eye while sharp, crystalline shards drift slowly in the background. Type is sharp and elegant — a steady, calm clarity for the everyday list.</p>
+
+    <div class="palette">
+      <span style="background:#f3f9fc" data-hex="#F3F9FC"></span>
+      <span style="background:#d8e7f0" data-hex="#D8E7F0"></span>
+      <span style="background:#9bc1d7" data-hex="#9BC1D7"></span>
+      <span style="background:#4a8eb8" data-hex="#4A8EB8"></span>
+      <span style="background:#2d5b7d" data-hex="#2D5B7D"></span>
+      <span style="background:#1f3349" data-hex="#1F3349"></span>
+    </div>
+
+    <dl class="typespec">
+      <dt>Display</dt><dd style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.4rem;font-weight:300">Cormorant Garamond — italic, soft &amp; ceremonial</dd>
+      <dt>Body</dt><dd style="font-family:'Manrope';font-weight:500">Manrope — geometric, calm, legible</dd>
+    </dl>
+  </div>
+
+  <div class="stage">
+    <div class="phone">
+      <div class="screen">
+        <div class="topbar">
+          <div class="back">←</div>
+          <div class="listname">Veckohandling</div>
+          <div class="editbtn">Edit</div>
+        </div>
+        <div class="addbox"><div class="plus">+</div>Lägg till vara…</div>
+        <div class="secheader">Att handla · 6</div>
+        <div class="items">
+          <div class="row"><div class="box"></div><div class="nm">Mjölk</div><div class="meta">2 l</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Bröd</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Bananer</div><div class="meta">6 st</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Yoghurt</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Pasta</div><div class="meta">500 g</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Smör</div></div>
+          <div class="secheader" style="margin-top:14px">Bockat · 2</div>
+          <div class="row shopped"><div class="box">✓</div><div class="nm">Ägg</div></div>
+          <div class="row shopped"><div class="box">✓</div><div class="nm">Kaffe</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="interactions">
+    <h3 class="interactions-title">Micro-interactions · Polar drift</h3>
+    <div class="ic-grid">
+
+      <!-- 1. Tap to check -->
+      <div class="ic">
+        <div class="ic-label">01 · Tap to check</div>
+        <p class="ic-caption">Crystal blue spark + a calm drop to <em>Bockat</em>.</p>
+        <div class="ic-scene scene-check">
+          <div class="ic-mini-row row-to-check checked-look">
+            <div class="box"><span class="check-mark">✓</span></div>
+            <div class="nm">Mjölk</div>
+            <div class="meta">2 l</div>
+            <div class="sparks"><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="finger" style="top:50%; left:30%; transform: translate(-50%, -50%);"></div>
+          </div>
+          <div class="ic-mini-row" style="opacity:.4"><div class="box"></div><div class="nm">Bröd</div></div>
+        </div>
+      </div>
+
+      <!-- 2. Back from shopped -->
+      <div class="ic">
+        <div class="ic-label">02 · Undo / restore</div>
+        <p class="ic-caption">Tap a checked row — ice melts back to active.</p>
+        <div class="ic-scene scene-uncheck">
+          <div class="ic-mini-row" style="opacity:.5"><div class="box"></div><div class="nm">Yoghurt</div></div>
+          <div class="ic-mini-row shopped row-to-uncheck">
+            <div class="box"><span class="check-mark">✓</span></div>
+            <div class="nm">Ägg</div>
+            <div class="finger" style="top:50%; left:30%; transform: translate(-50%, -50%);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Add new item -->
+      <div class="ic">
+        <div class="ic-label">03 · Add an item</div>
+        <p class="ic-caption">Type, commit, item materialises into the list.</p>
+        <div class="ic-scene scene-add">
+          <div class="input-field">
+            <div class="plus">+</div>
+            <div class="typed"><span class="typed-text">Smör</span></div>
+          </div>
+          <div class="ic-mini-row new-row"><div class="box"></div><div class="nm">Smör</div><div class="meta">250 g</div></div>
+          <div class="ic-mini-row" style="opacity:.5"><div class="box"></div><div class="nm">Mjölk</div></div>
+        </div>
+      </div>
+
+      <!-- 4. List emptied -->
+      <div class="ic">
+        <div class="ic-label">04 · All clear</div>
+        <p class="ic-caption">Last row checked → frosted empty state.</p>
+        <div class="ic-scene scene-empty">
+          <div class="demo-stack">
+            <div class="ic-mini-row"><div class="box"></div><div class="nm">Bröd</div></div>
+            <div class="ic-mini-row"><div class="box"></div><div class="nm">Pasta</div></div>
+            <div class="ic-mini-row"><div class="box"></div><div class="nm">Smör</div></div>
+          </div>
+          <div class="empty-state">
+            <div>
+              <div class="glyph">❄</div>
+              <div class="msg">Allt klart.</div>
+              <div class="sub">Listan vilar.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. NEW marker -->
+      <div class="ic">
+        <div class="ic-label">05 · "NY" marker</div>
+        <p class="ic-caption">A pastel-tinted card with a frosted NEW chip.</p>
+        <div class="ic-scene">
+          <div class="lists-card">
+            <span class="new-sticker">NY</span>
+            <div class="title">Veckohandling</div>
+            <div class="count">8 varor · delad med 2</div>
+          </div>
+          <div class="lists-card">
+            <div class="title">Söndagsmiddag</div>
+            <div class="count">4 varor</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Loading -->
+      <div class="ic">
+        <div class="ic-label">06 · Loading list</div>
+        <p class="ic-caption">A cart icon glides on a frosted plate.</p>
+        <div class="ic-scene">
+          <div class="loading-stage">
+            <div>
+              <div class="loading-cart">🛒</div>
+              <div class="loading-label" style="text-align:center; color:#2d5b7d">Laddar</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ★ DUSK
+     ============================================================ -->
+<section class="theme dusk">
+  <div class="orb a"></div>
+  <div class="orb b"></div>
+  <div class="orb c"></div>
+
+  <div class="info">
+    <div class="label">Theme 02 / Soothing &amp; Warm</div>
+    <h2>Dusk<br/><span class="accent">&amp; Ember</span></h2>
+    <p class="lede">A long exhale at the end of the day. Warm terracotta, soft cream and amber light pool gently through the interface. Curves replace edges; everything breathes. Designed to feel as relaxing as a Sunday-morning list.</p>
+
+    <div class="palette">
+      <span style="background:#fdf6ee" data-hex="#FDF6EE"></span>
+      <span style="background:#f0dccc" data-hex="#F0DCCC"></span>
+      <span style="background:#d6a888" data-hex="#D6A888"></span>
+      <span style="background:#c47b5e" data-hex="#C47B5E"></span>
+      <span style="background:#8a4a30" data-hex="#8A4A30"></span>
+      <span style="background:#4a3a31" data-hex="#4A3A31"></span>
+    </div>
+
+    <dl class="typespec">
+      <dt>Display</dt><dd style="font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:1.4rem">Fraunces — generous serif with optical sizing</dd>
+      <dt>Body</dt><dd style="font-family:'Sora';font-weight:400">Sora — gentle humanist sans</dd>
+    </dl>
+  </div>
+
+  <div class="stage">
+    <div class="phone">
+      <div class="screen">
+        <div class="topbar">
+          <div class="back">←</div>
+          <div class="listname">Söndagsmys</div>
+          <div class="editbtn">Edit</div>
+        </div>
+        <div class="addbox"><div class="plus">+</div>Lägg till vara…</div>
+        <div class="secheader">Att handla · 6</div>
+        <div class="items">
+          <div class="row"><div class="box"></div><div class="nm">Bröd</div><div class="meta">surdeg</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Ost</div><div class="meta">200 g</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Avokado</div><div class="meta">3 st</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Honung</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Te</div><div class="meta">earl grey</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Kanelbullar</div></div>
+          <div class="secheader" style="margin-top:14px">Bockat · 2</div>
+          <div class="row shopped"><div class="box">✓</div><div class="nm">Färska blåbär</div></div>
+          <div class="row shopped"><div class="box">✓</div><div class="nm">Yoghurt</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="interactions">
+    <h3 class="interactions-title">Micro-interactions · Dusk &amp; Ember</h3>
+    <div class="ic-grid">
+
+      <div class="ic">
+        <div class="ic-label">01 · Tap to check</div>
+        <p class="ic-caption">A warm ember spark, then a soft glide downward.</p>
+        <div class="ic-scene scene-check">
+          <div class="ic-mini-row row-to-check checked-look">
+            <div class="box"><span class="check-mark">✓</span></div>
+            <div class="nm">Bröd</div>
+            <div class="meta">surdeg</div>
+            <div class="sparks"><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="finger" style="top:50%; left:30%; transform: translate(-50%, -50%);"></div>
+          </div>
+          <div class="ic-mini-row" style="opacity:.4"><div class="box"></div><div class="nm">Ost</div></div>
+        </div>
+      </div>
+
+      <div class="ic">
+        <div class="ic-label">02 · Undo / restore</div>
+        <p class="ic-caption">Tap a shopped row — strikethrough fades, row floats up.</p>
+        <div class="ic-scene scene-uncheck">
+          <div class="ic-mini-row" style="opacity:.5"><div class="box"></div><div class="nm">Honung</div></div>
+          <div class="ic-mini-row shopped row-to-uncheck">
+            <div class="box"><span class="check-mark">✓</span></div>
+            <div class="nm">Färska blåbär</div>
+            <div class="finger" style="top:50%; left:30%; transform: translate(-50%, -50%);"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ic">
+        <div class="ic-label">03 · Add an item</div>
+        <p class="ic-caption">Letters drift in, the new item appears with a warm pulse.</p>
+        <div class="ic-scene scene-add">
+          <div class="input-field">
+            <div class="plus">+</div>
+            <div class="typed"><span class="typed-text">Smör</span></div>
+          </div>
+          <div class="ic-mini-row new-row"><div class="box"></div><div class="nm">Smör</div><div class="meta">250 g</div></div>
+          <div class="ic-mini-row" style="opacity:.5"><div class="box"></div><div class="nm">Te</div></div>
+        </div>
+      </div>
+
+      <div class="ic">
+        <div class="ic-label">04 · All clear</div>
+        <p class="ic-caption">Empty list = the moon at the end of the day.</p>
+        <div class="ic-scene scene-empty">
+          <div class="demo-stack">
+            <div class="ic-mini-row"><div class="box"></div><div class="nm">Ost</div></div>
+            <div class="ic-mini-row"><div class="box"></div><div class="nm">Avokado</div></div>
+            <div class="ic-mini-row"><div class="box"></div><div class="nm">Kanelbullar</div></div>
+          </div>
+          <div class="empty-state">
+            <div>
+              <div class="glyph">☾</div>
+              <div class="msg">Klart för i kväll.</div>
+              <div class="sub">Andas ut.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ic">
+        <div class="ic-label">05 · "NY" marker</div>
+        <p class="ic-caption">A handwritten chip on a softly-tinted card.</p>
+        <div class="ic-scene">
+          <div class="lists-card">
+            <span class="new-sticker">nytt</span>
+            <div class="title">Söndagsmys</div>
+            <div class="count">6 varor · 1 delning</div>
+          </div>
+          <div class="lists-card">
+            <div class="title">Vardag</div>
+            <div class="count">3 varor</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ic">
+        <div class="ic-label">06 · Loading list</div>
+        <p class="ic-caption">A cream cart glows against a sunset wash.</p>
+        <div class="ic-scene">
+          <div class="loading-stage">
+            <div>
+              <div class="loading-cart">🛒</div>
+              <div class="loading-label" style="text-align:center; color:#8a4a30; font-style: italic; font-family: 'Fraunces', serif; text-transform: none; letter-spacing: 0.05em">Laddar</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ★ PSYCHEDELIC
+     ============================================================ -->
+<section class="theme psych">
+  <div class="eye"></div>
+  <svg class="spiral" viewBox="0 0 200 200">
+    <defs>
+      <radialGradient id="sp" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#fdf3a8"/>
+        <stop offset="100%" stop-color="#ff2e88"/>
+      </radialGradient>
+    </defs>
+    <g fill="none" stroke="url(#sp)" stroke-width="3">
+      <path d="M100,100 m0,-90 a90,90 0 1,1 -0.1,0 a80,80 0 1,0 0.1,-0 a70,70 0 1,1 -0.1,0 a60,60 0 1,0 0.1,0 a50,50 0 1,1 -0.1,0 a40,40 0 1,0 0.1,0 a30,30 0 1,1 -0.1,0 a20,20 0 1,0 0.1,0"/>
+    </g>
+  </svg>
+
+  <div class="info">
+    <div class="label">Theme 03 / Maximalist Trip</div>
+    <h2>Prism<br/>State</h2>
+    <p class="lede">Loud, alive, and unapologetic. Acid yellow on hot pink on electric teal, rotating gradients, hand-tossed rotations on every row. Bring this one out when groceries deserve a little chaos. (Best paired with a strong reduced-motion toggle.)</p>
+
+    <div class="palette">
+      <span style="background:#fdf3a8" data-hex="#FDF3A8"></span>
+      <span style="background:#ffd23f" data-hex="#FFD23F"></span>
+      <span style="background:#ff2e88" data-hex="#FF2E88"></span>
+      <span style="background:#b14aed" data-hex="#B14AED"></span>
+      <span style="background:#4cc9f0" data-hex="#4CC9F0"></span>
+      <span style="background:#06d6a0" data-hex="#06D6A0"></span>
+      <span style="background:#1a0d2e" data-hex="#1A0D2E"></span>
+    </div>
+
+    <dl class="typespec">
+      <dt>Display</dt><dd style="font-family:'Honk',sans-serif;font-size:1.6rem;color:#fff;text-shadow:2px 2px 0 #ff2e88, 4px 4px 0 #06d6a0">HONK — chrome, drippy, alive</dd>
+      <dt>Body</dt><dd style="font-family:'Inter Tight';font-weight:700;color:#1a0d2e">Inter Tight — punchy, high contrast</dd>
+    </dl>
+  </div>
+
+  <div class="stage">
+    <div class="phone">
+      <div class="screen">
+        <div class="topbar">
+          <div class="back">←</div>
+          <div class="listname">Festfix!</div>
+          <div class="editbtn">Edit</div>
+        </div>
+        <div class="addbox"><div class="plus">+</div>Lägg till vara…</div>
+        <div class="secheader">Att handla · 6</div>
+        <div class="items">
+          <div class="row"><div class="box"></div><div class="nm">Chips</div><div class="meta">2 påsar</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Cola</div><div class="meta">1.5 l</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Tacos</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Glass</div><div class="meta">mango</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Lime</div><div class="meta">4 st</div></div>
+          <div class="row"><div class="box"></div><div class="nm">Pop-corn</div></div>
+          <div class="secheader" style="margin-top:14px">Bockat · 2</div>
+          <div class="row shopped"><div class="box">✓</div><div class="nm">Ballonger</div></div>
+          <div class="row shopped"><div class="box">✓</div><div class="nm">Tårta</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="interactions">
+    <h3 class="interactions-title">Micro-interactions · Prism state</h3>
+    <div class="ic-grid">
+
+      <div class="ic">
+        <div class="ic-label">01 · Tap to check</div>
+        <p class="ic-caption">A neon-yellow firework, hot-pink box slam.</p>
+        <div class="ic-scene scene-check">
+          <div class="ic-mini-row row-to-check checked-look">
+            <div class="box"><span class="check-mark">✓</span></div>
+            <div class="nm">Chips</div>
+            <div class="meta">2 påsar</div>
+            <div class="sparks"><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="finger" style="top:50%; left:30%; transform: translate(-50%, -50%);"></div>
+          </div>
+          <div class="ic-mini-row" style="opacity:.4"><div class="box"></div><div class="nm">Cola</div></div>
+        </div>
+      </div>
+
+      <div class="ic">
+        <div class="ic-label">02 · Undo / restore</div>
+        <p class="ic-caption">Pink box unsnaps, row springs back up.</p>
+        <div class="ic-scene scene-uncheck">
+          <div class="ic-mini-row" style="opacity:.5"><div class="box"></div><div class="nm">Glass</div></div>
+          <div class="ic-mini-row shopped row-to-uncheck">
+            <div class="box"><span class="check-mark">✓</span></div>
+            <div class="nm">Ballonger</div>
+            <div class="finger" style="top:50%; left:30%; transform: translate(-50%, -50%);"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ic">
+        <div class="ic-label">03 · Add an item</div>
+        <p class="ic-caption">Type it, slam it in — gradient row pops.</p>
+        <div class="ic-scene scene-add">
+          <div class="input-field">
+            <div class="plus">+</div>
+            <div class="typed"><span class="typed-text">Lime</span></div>
+          </div>
+          <div class="ic-mini-row new-row"><div class="box"></div><div class="nm">Lime</div><div class="meta">4 st</div></div>
+          <div class="ic-mini-row" style="opacity:.5"><div class="box"></div><div class="nm">Tacos</div></div>
+        </div>
+      </div>
+
+      <div class="ic">
+        <div class="ic-label">04 · All clear</div>
+        <p class="ic-caption">Big, loud, declarative.</p>
+        <div class="ic-scene scene-empty">
+          <div class="demo-stack">
+            <div class="ic-mini-row"><div class="box"></div><div class="nm">Cola</div></div>
+            <div class="ic-mini-row"><div class="box"></div><div class="nm">Tacos</div></div>
+            <div class="ic-mini-row"><div class="box"></div><div class="nm">Glass</div></div>
+          </div>
+          <div class="empty-state">
+            <div>
+              <div class="glyph">★</div>
+              <div class="msg">FÄRDIG!</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ic">
+        <div class="ic-label">05 · "NY" marker</div>
+        <p class="ic-caption">A vibrating sticker on a tilted card.</p>
+        <div class="ic-scene">
+          <div class="lists-card">
+            <span class="new-sticker">NYHET!</span>
+            <div class="title">Festfix!</div>
+            <div class="count">6 varor</div>
+          </div>
+          <div class="lists-card" style="transform: rotate(0.8deg)">
+            <div class="title">Veckan</div>
+            <div class="count">2 varor</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ic">
+        <div class="ic-label">06 · Loading list</div>
+        <p class="ic-caption">A neon cart on a black-ink shadow.</p>
+        <div class="ic-scene">
+          <div class="loading-stage">
+            <div>
+              <div class="loading-cart">🛒</div>
+              <div class="loading-label" style="text-align:center">LADDAR</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<footer>
+  THEME EXPLORATIONS · SHOPLIST · 2026-05-18
+</footer>
+
+</body>
+</html>
