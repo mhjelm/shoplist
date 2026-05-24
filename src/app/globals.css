@@ -330,6 +330,13 @@ body {
   [data-row-anim] { animation: none; }
 }
 
+/* ── Shared-item chain-link indicator — per-theme color ─────────────────── */
+.sl-shared-icon              { color: var(--color-gray-500); }
+.dark    .sl-shared-icon     { color: var(--color-gray-400); }
+.shoplist .sl-shared-icon    { color: var(--sl-teal); }
+.polar   .sl-shared-icon     { color: var(--pl-mid); }
+.dusk    .sl-shared-icon     { color: var(--dk-clay); }
+
 /* ── Empty state: per-theme glyph + headline + subline ──────────────────── */
 .empty-state-glyph { transition: transform 0.3s ease-out; }
 .polar    .empty-state-glyph    { color: var(--pl-mid); }
