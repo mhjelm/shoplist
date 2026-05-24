@@ -145,3 +145,16 @@ describe('SortableRow — shopped (muted)', () => {
     expect(screen.getByText('Mjölk')).toBeInTheDocument()
   })
 })
+
+describe('SortableRow — shared-item indicator', () => {
+  it('renders the chain-link icon when shared_group_id is set', () => {
+    const item = makeItem({ shared_group_id: 'group-uuid-1' })
+    render(<ul><SortableRow {...defaultProps} item={item} /></ul>)
+    expect(screen.getByLabelText('Delad mellan listor')).toBeInTheDocument()
+  })
+
+  it('does NOT render the chain-link icon when shared_group_id is null', () => {
+    render(<ul><SortableRow {...defaultProps} /></ul>)
+    expect(screen.queryByLabelText('Delad mellan listor')).toBeNull()
+  })
+})

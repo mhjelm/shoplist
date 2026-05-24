@@ -22,7 +22,7 @@ export function SelectionBar({ count, isOffline, onCopy, onMove, onShare, onClea
         title={isOffline ? 'Kräver anslutning' : undefined}
         className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40"
       >
-        Kopiera till…
+        Kopiera
       </button>
       <button
         onClick={onShare}
@@ -30,7 +30,7 @@ export function SelectionBar({ count, isOffline, onCopy, onMove, onShare, onClea
         title={isOffline ? 'Kräver anslutning' : undefined}
         className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40"
       >
-        Dela till…
+        Dela
       </button>
       <button
         onClick={onMove}
@@ -38,7 +38,7 @@ export function SelectionBar({ count, isOffline, onCopy, onMove, onShare, onClea
         title={isOffline ? 'Kräver anslutning' : undefined}
         className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors disabled:opacity-40"
       >
-        Flytta till…
+        Flytta
       </button>
       <button
         onClick={onClear}

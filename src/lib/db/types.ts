@@ -78,6 +78,7 @@ export interface LocalListCatalog {
   created_at: string
   has_members: boolean
   last_activity: string | null
+  last_activity_by: string | null
 }
 
 export interface LocalListView {

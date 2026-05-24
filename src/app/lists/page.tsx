@@ -32,12 +32,16 @@ export default async function ListsPage() {
   // "Unread" indicator: a list shows a dot when its most recent item activity
   // is newer than the user's last_viewed_at (or they've never opened it).
   const [{ data: activityRows }, { data: viewRows }] = await Promise.all([
-    supabase.from('list_activity').select('list_id, last_activity'),
+    supabase.from('list_activity').select('list_id, last_activity, last_activity_by'),
     supabase.from('list_views').select('list_id, last_viewed_at').eq('user_id', user.id),
   ])
   // Convert to plain Records for RSC serialization (Map can't cross the boundary)
   const lastActivity: Record<string, string> = {}
-  for (const r of activityRows ?? []) lastActivity[r.list_id as string] = r.last_activity as string
+  const lastActivityBy: Record<string, string | null> = {}
+  for (const r of activityRows ?? []) {
+    lastActivity[r.list_id as string] = r.last_activity as string
+    lastActivityBy[r.list_id as string] = (r.last_activity_by as string | null) ?? null
+  }
   const lastViewed: Record<string, string> = {}
   for (const r of viewRows ?? []) lastViewed[r.list_id as string] = r.last_viewed_at as string
 
@@ -58,7 +62,7 @@ export default async function ListsPage() {
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-8">
         <CreateListForm />
-        <ListsView initialLists={lists} memberCounts={memberCounts} lastActivity={lastActivity} lastViewed={lastViewed} theme={theme} currentUserId={user.id} />
+        <ListsView initialLists={lists} memberCounts={memberCounts} lastActivity={lastActivity} lastActivityBy={lastActivityBy} lastViewed={lastViewed} theme={theme} currentUserId={user.id} />
       </main>
     </div>
   )

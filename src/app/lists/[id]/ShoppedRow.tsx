@@ -66,6 +66,17 @@ export function ShoppedRow({
               className={`${thumbClass} rounded object-cover flex-shrink-0 opacity-60`} />
           )}
           <span className={`${textClass} flex-1 min-w-0 truncate text-gray-400 dark:text-gray-500`}>{item.name}</span>
+          {item.shared_group_id && (
+            <span
+              aria-label="Delad mellan listor"
+              title="Delad mellan listor"
+              className="shrink-0 text-gray-300 dark:text-gray-600"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 015.656 5.656l-3 3a4 4 0 01-5.656 0M10.172 13.828a4 4 0 01-5.656-5.656l3-3a4 4 0 015.656 0" />
+              </svg>
+            </span>
+          )}
           <MeasurementBadge item={item} muted onCombine={onCombine} />
           {showHint && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30 rounded-xl">
@@ -90,6 +101,17 @@ export function ShoppedRow({
           className={`${thumbClass} rounded object-cover flex-shrink-0 opacity-60`} />
       )}
       <span className={`${textClass} flex-1 min-w-0 truncate text-gray-400 dark:text-gray-500`}>{item.name}</span>
+      {item.shared_group_id && (
+        <span
+          aria-label="Delad mellan listor"
+          title="Delad mellan listor"
+          className="shrink-0 text-gray-300 dark:text-gray-600"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 015.656 5.656l-3 3a4 4 0 01-5.656 0M10.172 13.828a4 4 0 01-5.656-5.656l3-3a4 4 0 015.656 0" />
+          </svg>
+        </span>
+      )}
       <MeasurementBadge item={item} muted onCombine={onCombine} />
     </li>
   )

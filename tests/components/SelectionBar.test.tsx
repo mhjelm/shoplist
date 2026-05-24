@@ -20,21 +20,21 @@ describe('SelectionBar', () => {
   it('calls onCopy when copy button is clicked', () => {
     const onCopy = vi.fn()
     render(<SelectionBar {...defaultProps} onCopy={onCopy} />)
-    fireEvent.click(screen.getByRole('button', { name: /kopiera/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Kopiera$/i }))
     expect(onCopy).toHaveBeenCalledOnce()
   })
 
   it('calls onMove when move button is clicked', () => {
     const onMove = vi.fn()
     render(<SelectionBar {...defaultProps} onMove={onMove} />)
-    fireEvent.click(screen.getByRole('button', { name: /flytta/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Flytta$/i }))
     expect(onMove).toHaveBeenCalledOnce()
   })
 
   it('calls onShare when share button is clicked', () => {
     const onShare = vi.fn()
     render(<SelectionBar {...defaultProps} onShare={onShare} />)
-    fireEvent.click(screen.getByRole('button', { name: /dela/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Dela$/i }))
     expect(onShare).toHaveBeenCalledOnce()
   })
 
@@ -47,15 +47,15 @@ describe('SelectionBar', () => {
 
   it('disables copy, share, and move buttons when offline', () => {
     render(<SelectionBar {...defaultProps} isOffline />)
-    expect(screen.getByRole('button', { name: /kopiera/i })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /dela/i })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /flytta/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Kopiera$/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Dela$/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Flytta$/i })).toBeDisabled()
   })
 
   it('enables buttons when online', () => {
     render(<SelectionBar {...defaultProps} isOffline={false} />)
-    expect(screen.getByRole('button', { name: /kopiera/i })).not.toBeDisabled()
-    expect(screen.getByRole('button', { name: /dela/i })).not.toBeDisabled()
-    expect(screen.getByRole('button', { name: /flytta/i })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Kopiera$/i })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Dela$/i })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Flytta$/i })).not.toBeDisabled()
   })
 })

@@ -15,6 +15,7 @@ describe('computeUnread', () => {
       lists: [mkList('a', THEM)],
       memberCounts: {},
       lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastActivityBy: new Map(),
       lastViewed: new Map([['a', '2026-05-18T10:00:00Z']]),
       currentUserId: ME,
     })
@@ -26,6 +27,7 @@ describe('computeUnread', () => {
       lists: [mkList('a', ME)],
       memberCounts: { a: true },
       lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastActivityBy: new Map(),
       lastViewed: new Map([['a', '2026-05-18T10:00:00Z']]),
       currentUserId: ME,
     })
@@ -37,6 +39,7 @@ describe('computeUnread', () => {
       lists: [mkList('a', ME)],
       memberCounts: { a: false },
       lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastActivityBy: new Map(),
       lastViewed: new Map([['a', '2026-05-18T10:00:00Z']]),
       currentUserId: ME,
     })
@@ -48,6 +51,7 @@ describe('computeUnread', () => {
       lists: [mkList('a', ME)],
       memberCounts: {},
       lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastActivityBy: new Map(),
       lastViewed: new Map(),
       currentUserId: ME,
     })
@@ -59,6 +63,7 @@ describe('computeUnread', () => {
       lists: [mkList('a', THEM)],
       memberCounts: {},
       lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastActivityBy: new Map(),
       lastViewed: new Map(),
       currentUserId: ME,
     })
@@ -70,6 +75,7 @@ describe('computeUnread', () => {
       lists: [mkList('a', THEM)],
       memberCounts: {},
       lastActivity: new Map(),
+      lastActivityBy: new Map(),
       lastViewed: new Map(),
       currentUserId: ME,
     })
@@ -81,6 +87,7 @@ describe('computeUnread', () => {
       lists: [mkList('a', THEM)],
       memberCounts: {},
       lastActivity: new Map([['a', '2026-05-18T10:00:00Z']]),
+      lastActivityBy: new Map(),
       lastViewed: new Map([['a', '2026-05-18T12:00:00Z']]),
       currentUserId: ME,
     })
@@ -101,6 +108,7 @@ describe('computeUnread', () => {
         ['owned-shared', '2026-05-18T12:00:00Z'],
         ['joined', '2026-05-18T12:00:00Z'],
       ]),
+      lastActivityBy: new Map(),
       lastViewed: new Map([
         ['owned-shared', '2026-05-18T10:00:00Z'],
         ['joined', '2026-05-18T13:00:00Z'],
@@ -111,5 +119,84 @@ describe('computeUnread', () => {
       'owned-shared': true, // activity > last_viewed
       'joined': false,      // already seen later
     })
+  })
+
+  // ---------------------------------------------------------------------------
+  // same-user suppression (bugs 1, 3, 4)
+  // ---------------------------------------------------------------------------
+
+  it('suppresses NEW when lastActivityBy matches currentUserId (bug #1 — shared to own list)', () => {
+    const result = computeUnread({
+      lists: [mkList('a', THEM)],
+      memberCounts: {},
+      lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastActivityBy: new Map([['a', ME]]),
+      lastViewed: new Map([['a', '2026-05-18T10:00:00Z']]),
+      currentUserId: ME,
+    })
+    expect(result).toEqual({})
+  })
+
+  it('still surfaces NEW when lastActivityBy is a different user', () => {
+    const result = computeUnread({
+      lists: [mkList('a', THEM)],
+      memberCounts: {},
+      lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastActivityBy: new Map([['a', THEM]]),
+      lastViewed: new Map([['a', '2026-05-18T10:00:00Z']]),
+      currentUserId: ME,
+    })
+    expect(result).toEqual({ a: true })
+  })
+
+  it('does not auto-suppress when lastActivityBy is null (pre-migration row)', () => {
+    const result = computeUnread({
+      lists: [mkList('a', THEM)],
+      memberCounts: {},
+      lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastActivityBy: new Map<string, string | null>([['a', null]]),
+      lastViewed: new Map([['a', '2026-05-18T10:00:00Z']]),
+      currentUserId: ME,
+    })
+    expect(result).toEqual({ a: true })
+  })
+
+  it('personal-list suppression wins regardless of lastActivityBy', () => {
+    const result = computeUnread({
+      lists: [mkList('a', ME)],
+      memberCounts: { a: false },
+      lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastActivityBy: new Map([['a', THEM]]),
+      lastViewed: new Map([['a', '2026-05-18T10:00:00Z']]),
+      currentUserId: ME,
+    })
+    expect(result).toEqual({})
+  })
+
+  it('does not mark NEW when my own action propagated via shared-item trigger (bug #3)', () => {
+    // Sibling list I have viewed; trigger bumped last_activity in my session
+    const result = computeUnread({
+      lists: [mkList('source', ME)],
+      memberCounts: { source: true },
+      lastActivity: new Map([['source', '2026-05-18T12:00:00Z']]),
+      lastActivityBy: new Map([['source', ME]]),
+      lastViewed: new Map([['source', '2026-05-18T10:00:00Z']]),
+      currentUserId: ME,
+    })
+    expect(result).toEqual({})
+  })
+
+  it('does not mark NEW for previously-unviewed list whose activity was caused by me (bug #4)', () => {
+    // I shared an item; the source list last_activity was bumped by my session,
+    // but I have never explicitly navigated to this list
+    const result = computeUnread({
+      lists: [mkList('source', ME)],
+      memberCounts: { source: true },
+      lastActivity: new Map([['source', '2026-05-18T12:00:00Z']]),
+      lastActivityBy: new Map([['source', ME]]),
+      lastViewed: new Map(), // no last_viewed_at entry
+      currentUserId: ME,
+    })
+    expect(result).toEqual({})
   })
 })

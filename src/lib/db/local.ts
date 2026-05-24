@@ -30,6 +30,8 @@ class LocalDB extends Dexie {
     // v3: items gain `shared_group_id` (no index needed — cascades are
     // server-side; Dexie just stores the field).
     this.version(3).stores({})
+    // v4: list_catalog gains `last_activity_by` (no new index needed).
+    this.version(4).stores({})
   }
 }
 

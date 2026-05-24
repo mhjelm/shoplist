@@ -81,16 +81,30 @@ export function subscribeToListsOverview(
             return
           }
           if (payload.eventType === 'UPDATE') {
-            // last_activity-only updates are produced by the items trigger
-            // (migration 0017). The items handler below already bumps Dexie's
-            // catalog optimistically, so no need to fire a full overview
-            // reconcile — that would mean 3 server queries per item write.
+            // last_activity / last_activity_by updates are produced by the
+            // items trigger (migration 0017 + 0019). The items handler below
+            // already bumps Dexie's catalog optimistically; for the actor
+            // field we pull it straight from the lists payload so Dexie
+            // converges within one realtime round-trip.
             const newRow = payload.new as Record<string, unknown>
             const oldRow = payload.old as Record<string, unknown>
             const changedKeys = Object.keys(newRow).filter(
               k => newRow[k] !== oldRow[k],
             )
-            if (changedKeys.length === 1 && changedKeys[0] === 'last_activity') return
+            const activityOnlyChange = changedKeys.every(
+              k => k === 'last_activity' || k === 'last_activity_by',
+            )
+            if (activityOnlyChange) {
+              // Bump last_activity_by in Dexie so computeUnread can suppress
+              // same-user NEW markers without waiting for a full reconcile.
+              const listId = newRow.id as string
+              const activityBy = (newRow.last_activity_by as string | null) ?? null
+              await localDB.list_catalog
+                .where('id').equals(listId)
+                .modify((c: LocalListCatalog) => { c.last_activity_by = activityBy })
+                .catch(() => { /* row not in catalog yet */ })
+              return
+            }
           }
           // INSERT or structural UPDATE: reconcile for fresh has_members + activity
           onReconcile()

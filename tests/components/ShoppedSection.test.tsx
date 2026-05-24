@@ -94,4 +94,15 @@ describe('ShoppedSection', () => {
     fireEvent.click(rows[0])
     expect(onToggle).toHaveBeenCalledOnce()
   })
+
+  it('renders the chain-link icon on shopped rows with shared_group_id', () => {
+    const sharedItem = { ...makeItem('a', 'Mjölk'), shared_group_id: 'group-uuid-1' }
+    render(<ul><ShoppedSection {...defaultProps} shopped={[sharedItem]} /></ul>)
+    expect(screen.getByLabelText('Delad mellan listor')).toBeInTheDocument()
+  })
+
+  it('does NOT render the chain-link icon on shopped rows without shared_group_id', () => {
+    render(<ul><ShoppedSection {...defaultProps} /></ul>)
+    expect(screen.queryByLabelText('Delad mellan listor')).toBeNull()
+  })
 })

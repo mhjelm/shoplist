@@ -18,12 +18,13 @@ interface Props {
   initialLists: List[]
   memberCounts: Record<string, boolean>
   lastActivity: Record<string, string>
+  lastActivityBy: Record<string, string | null>
   lastViewed: Record<string, string>
   theme: Theme
   currentUserId: string
 }
 
-export default function ListsView({ initialLists, memberCounts, lastActivity, lastViewed, theme, currentUserId }: Props) {
+export default function ListsView({ initialLists, memberCounts, lastActivity, lastActivityBy, lastViewed, theme, currentUserId }: Props) {
   const { isOffline } = useSyncState()
   const [navigatingToListId, setNavigatingToListId] = useState<string | null>(null)
   const [openEditListId, setOpenEditListId] = useState<string | null>(null)
@@ -39,6 +40,7 @@ export default function ListsView({ initialLists, memberCounts, lastActivity, la
       created_at: list.created_at,
       has_members: memberCounts[list.id] ?? false,
       last_activity: lastActivity[list.id] ?? null,
+      last_activity_by: lastActivityBy[list.id] ?? null,
     }))
     const viewRows: LocalListView[] = Object.entries(lastViewed).map(([list_id, last_viewed_at]) => ({
       list_id,
@@ -82,12 +84,15 @@ export default function ListsView({ initialLists, memberCounts, lastActivity, la
       created_at: l.created_at,
       has_members: memberCounts[l.id] ?? false,
       last_activity: lastActivity[l.id] ?? null,
+      last_activity_by: lastActivityBy[l.id] ?? null,
     }))
     const views: LocalListView[] = liveViews ?? Object.entries(lastViewed).map(([list_id, last_viewed_at]) => ({ list_id, last_viewed_at }))
 
     const activityMap = new Map<string, string>()
+    const activityByMap = new Map<string, string | null>()
     for (const c of catalog) {
       if (c.last_activity) activityMap.set(c.id, c.last_activity)
+      activityByMap.set(c.id, c.last_activity_by)
     }
     const viewMap = new Map<string, string>()
     for (const v of views) viewMap.set(v.list_id, v.last_viewed_at)
@@ -108,6 +113,7 @@ export default function ListsView({ initialLists, memberCounts, lastActivity, la
       lists: sorted,
       memberCounts: mc,
       lastActivity: activityMap,
+      lastActivityBy: activityByMap,
       lastViewed: viewMap,
       currentUserId,
     })
@@ -118,7 +124,7 @@ export default function ListsView({ initialLists, memberCounts, lastActivity, la
       computedMemberCounts: mc,
       computedUnread: unread,
     }
-  }, [liveCatalog, liveViews, initialLists, memberCounts, lastActivity, lastViewed, renamedLists, currentUserId])
+  }, [liveCatalog, liveViews, initialLists, memberCounts, lastActivity, lastActivityBy, lastViewed, renamedLists, currentUserId])
 
   const toggleEdit = (listId: string) => {
     setOpenEditListId(current => current === listId ? null : listId)
