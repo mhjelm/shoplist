@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Pending manual tasks
 
-_(none)_
+- Apply `supabase/migrations/0020_clear_shopped_rpc.sql` against the Supabase project (Dashboard → SQL Editor, or `supabase db push`). The `clearShoppedItems` server action calls `rpc('clear_shopped_items', ...)` and will return an error at runtime until this function exists.
 
 > Signup is now invitation-only (done 2026-05-17). See `docs/how-to-add-new-user.html` for the invite flow and how to re-enable public signup if ever needed.
 
