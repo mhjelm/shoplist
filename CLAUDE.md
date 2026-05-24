@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Pending manual tasks
 
-- **Migration `0019_last_activity_by.sql`** — add `last_activity_by uuid` column to `lists`, update `bump_list_activity()` function body, recreate `list_activity` view. Apply via Supabase dashboard or CLI.
+_(none)_
 
 > Signup is now invitation-only (done 2026-05-17). See `docs/how-to-add-new-user.html` for the invite flow and how to re-enable public signup if ever needed.
 
