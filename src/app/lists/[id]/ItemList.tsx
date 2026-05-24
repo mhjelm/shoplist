@@ -7,7 +7,7 @@ import { localDB } from '@/lib/db/local'
 import type { Item, List, ListTextSize, Theme } from '@/lib/types'
 import { type CategorySlug } from '@/lib/categories'
 import { itemToLocalItem, sortItemsByOrder, groupByCategory } from './itemHelpers'
-import { touchListView } from './actions'
+import { touchListView, clearShoppedItems } from './actions'
 import { muUpdateItem, muDeleteItem, muBulkDelete } from '@/lib/sync/mutations'
 import { hasDecorativeTheme, FIREWORK_PALETTES } from '@/lib/sl-theme'
 import { useSyncState } from '@/lib/sync/engine'
@@ -165,7 +165,17 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
   }
 
   async function handleClearShopped() {
-    await muBulkDelete(listId, items.filter(i => i.is_checked).map(i => i.id))
+    const shoppedIds = items.filter(i => i.is_checked).map(i => i.id)
+    if (shoppedIds.length === 0) return
+    // Optimistic local delete.
+    await localDB.items.bulkDelete(shoppedIds)
+    // Direct server action — cascades to shared siblings (cross-list op, so
+    // no outbox; mirrors copy/move). If it fails, pull state back via reconcile.
+    const res = await clearShoppedItems(listId)
+    if (res?.error) {
+      const { reconcileList } = await import('@/lib/sync/reconcile')
+      await reconcileList(listId)
+    }
   }
 
   async function handleClearAll() {
@@ -262,6 +272,7 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
           isOffline={isOffline}
           onCopy={() => { setPickerError(null); setPickerMode('copy') }}
           onMove={() => { setPickerError(null); setPickerMode('move') }}
+          onShare={() => { setPickerError(null); setPickerMode('share') }}
           onClear={() => setSelectedIds(new Set())}
         />
       )}

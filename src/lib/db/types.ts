@@ -20,6 +20,7 @@ export interface LocalItem {
   quantity: number
   category: CategorySlug | null
   measurement: string | null
+  shared_group_id: string | null
   _pending_local_updated_at?: number
 }
 

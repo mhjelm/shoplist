@@ -34,6 +34,7 @@ function makeItem(id: string, name: string): Item {
     quantity: 1,
     category: 'mejeri',
     measurement: null,
+    shared_group_id: null,
   }
 }
 

@@ -20,6 +20,7 @@ function makeItem(overrides: Partial<Item> = {}): Item {
     quantity: 2,
     category: 'mejeri',
     measurement: '1 l',
+    shared_group_id: null,
     ...overrides,
   }
 }

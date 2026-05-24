@@ -27,6 +27,9 @@ class LocalDB extends Dexie {
       list_catalog: 'id, owner_id',
       list_views: 'list_id',
     })
+    // v3: items gain `shared_group_id` (no index needed — cascades are
+    // server-side; Dexie just stores the field).
+    this.version(3).stores({})
   }
 }
 

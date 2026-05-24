@@ -23,7 +23,10 @@ vi.mock('@/lib/sync/mutations', () => ({
 }))
 
 vi.mock('@/lib/db/local', () => ({
-  localDB: { items: { bulkPut: vi.fn().mockResolvedValue(undefined) } },
+  localDB: { items: {
+    bulkPut: vi.fn().mockResolvedValue(undefined),
+    bulkDelete: vi.fn().mockResolvedValue(undefined),
+  } },
 }))
 
 vi.mock('@/lib/sync/realtime', () => ({
@@ -41,6 +44,8 @@ vi.mock('@/app/lists/[id]/actions', () => ({
   addItems: vi.fn().mockResolvedValue({ items: [] }),
   copyItemsToList: vi.fn(),
   moveItemsToList: vi.fn(),
+  shareItemsToList: vi.fn(),
+  clearShoppedItems: vi.fn().mockResolvedValue(undefined),
   touchListView: vi.fn().mockResolvedValue({}),
 }))
 
@@ -130,6 +135,7 @@ function makeItem(id: string, overrides: Partial<Item> = {}): Item {
     quantity: 1,
     category: null,
     measurement: null,
+    shared_group_id: null,
     ...overrides,
   }
 }

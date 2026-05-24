@@ -20,6 +20,7 @@ export function itemToLocalItem(item: Item): LocalItem {
     quantity: item.quantity,
     category: item.category,
     measurement: item.measurement,
+    shared_group_id: item.shared_group_id,
   }
 }
 
@@ -36,6 +37,7 @@ export function localItemToItem(li: LocalItem): Item {
     quantity: li.quantity,
     category: li.category,
     measurement: li.measurement,
+    shared_group_id: li.shared_group_id,
   }
 }
 
@@ -106,6 +108,7 @@ export function buildLocalItem(
     quantity: opts.quantity ?? 1,
     category: opts.category ?? null,
     measurement: opts.measurement ?? null,
+    shared_group_id: null,
   }
 }
 

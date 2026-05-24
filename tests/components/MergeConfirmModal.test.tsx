@@ -16,6 +16,7 @@ function makeItem(id: string, name: string): Item {
     quantity: 1,
     category: null,
     measurement: null,
+    shared_group_id: null,
   }
 }
 

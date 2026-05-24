@@ -89,6 +89,7 @@ function mkItem(id: string, listId: string): LocalItem {
     id, list_id: listId, name: 'x', is_checked: false,
     created_at: '', updated_at: '', picture_url: null, sort_order: null,
     quantity: 1, category: null, measurement: null, added_by: 'me',
+    shared_group_id: null,
   }
 }
 

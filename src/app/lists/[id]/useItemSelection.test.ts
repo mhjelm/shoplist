@@ -6,6 +6,7 @@ import type { Item } from '@/lib/types'
 vi.mock('./actions', () => ({
   moveItemsToList: vi.fn(),
   copyItemsToList: vi.fn(),
+  shareItemsToList: vi.fn(),
 }))
 vi.mock('@/lib/db/local', () => ({
   localDB: { items: { bulkDelete: vi.fn().mockResolvedValue(undefined) } },
@@ -24,6 +25,7 @@ function makeItem(id: string, overrides: Partial<Item> = {}): Item {
     quantity: 1,
     category: null,
     measurement: null,
+    shared_group_id: null,
     ...overrides,
   }
 }
@@ -185,5 +187,57 @@ describe('useItemSelection', () => {
     await act(async () => { await result.current.handlePickTarget('list-2') })
 
     expect(vi.mocked(copyItemsToList)).not.toHaveBeenCalled()
+  })
+
+  // ---------------------------------------------------------------------------
+  // handlePickTarget — share
+  // ---------------------------------------------------------------------------
+
+  it('setPickerMode accepts the share mode', () => {
+    const { result } = renderHook(() => useItemSelection(defaultProps))
+    act(() => { result.current.setPickerMode('share') })
+    expect(result.current.pickerMode).toBe('share')
+  })
+
+  it('handlePickTarget share calls shareItemsToList and clears state (no Dexie mutation)', async () => {
+    const { shareItemsToList } = await import('./actions')
+    const { localDB } = await import('@/lib/db/local')
+    vi.mocked(shareItemsToList).mockResolvedValue({ items: [] })
+
+    const { result } = renderHook(() => useItemSelection(defaultProps))
+    act(() => {
+      result.current.toggleSelect('a')
+      result.current.toggleSelect('b')
+      result.current.setPickerMode('share')
+    })
+
+    await act(async () => { await result.current.handlePickTarget('list-2') })
+
+    expect(vi.mocked(shareItemsToList)).toHaveBeenCalledWith('list-1', 'list-2', expect.arrayContaining(['a', 'b']))
+    // Sharing must NOT touch local items — siblings live on another list; the
+    // source row's shared_group_id arrives via the realtime UPDATE.
+    expect(vi.mocked(localDB.items.bulkDelete)).not.toHaveBeenCalled()
+    expect(result.current.selectedIds.size).toBe(0)
+    expect(result.current.pickerMode).toBeNull()
+  })
+
+  it('handlePickTarget share sets pickerError and throws on server error', async () => {
+    const { shareItemsToList } = await import('./actions')
+    vi.mocked(shareItemsToList).mockResolvedValue({ error: 'no permission' })
+
+    const { result } = renderHook(() => useItemSelection(defaultProps))
+    act(() => {
+      result.current.toggleSelect('a')
+      result.current.setPickerMode('share')
+    })
+
+    let threw = false
+    await act(async () => {
+      try { await result.current.handlePickTarget('list-2') }
+      catch { threw = true }
+    })
+
+    expect(threw).toBe(true)
+    expect(result.current.pickerError).toBe('no permission')
   })
 })

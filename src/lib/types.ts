@@ -26,6 +26,7 @@ export interface Item {
   quantity: number
   category: CategorySlug | null
   measurement: string | null
+  shared_group_id: string | null
 }
 
 export type Theme = 'light' | 'dark' | 'shoplist' | 'polar' | 'dusk'

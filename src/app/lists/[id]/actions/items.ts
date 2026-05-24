@@ -201,12 +201,33 @@ export async function reorderItem(itemId: string, listId: string, sortOrder: num
 
 export async function clearShoppedItems(listId: string) {
   const supabase = await createClient()
-  const { error } = await supabase
+
+  // Collect shared_group_ids of locally-checked rows so we can cascade the
+  // delete to their siblings on other lists. (Because `is_checked` syncs
+  // across siblings, every member of a shared group is checked when one is —
+  // so deleting the whole group is consistent.)
+  const { data: shoppedShared } = await supabase
     .from('items')
-    .delete()
+    .select('shared_group_id')
     .eq('list_id', listId)
     .eq('is_checked', true)
+    .not('shared_group_id', 'is', null)
 
+  const groupIds = Array.from(new Set(
+    (shoppedShared ?? [])
+      .map(r => r.shared_group_id)
+      .filter((g): g is string => !!g)
+  ))
+
+  // Always delete this list's checked rows. If any of them were shared, also
+  // delete every sibling in those groups (across all lists the user can see).
+  let query = supabase.from('items').delete()
+  if (groupIds.length > 0) {
+    query = query.or(`and(list_id.eq.${listId},is_checked.eq.true),shared_group_id.in.(${groupIds.join(',')})`)
+  } else {
+    query = query.eq('list_id', listId).eq('is_checked', true)
+  }
+  const { error } = await query
   if (error) return { error: error.message }
   revalidatePath(`/lists/${listId}`)
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { localDB } from '@/lib/db/local'
-import { copyItemsToList, moveItemsToList } from './actions'
+import { copyItemsToList, moveItemsToList, shareItemsToList } from './actions'
 import type { Item } from '@/lib/types'
 
 export function useItemSelection({
@@ -13,7 +13,7 @@ export function useItemSelection({
   listId: string
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [pickerMode, setPickerMode] = useState<'copy' | 'move' | null>(null)
+  const [pickerMode, setPickerMode] = useState<'copy' | 'move' | 'share' | null>(null)
   const [pickerError, setPickerError] = useState<string | null>(null)
 
   // Clear selection when leaving edit mode (render-time derived-state pattern —
@@ -59,6 +59,17 @@ export function useItemSelection({
         throw new Error(res.error)
       }
       await localDB.items.bulkDelete(ids)
+    } else if (mode === 'share') {
+      // Sharing stamps a shared_group_id on the source row (server-side) and
+      // creates a linked sibling in the target list. No local Dexie mutation
+      // needed — realtime UPDATE on the source list refreshes the row's
+      // shared_group_id, and the target list's own subscription/reconcile
+      // surfaces the new sibling when the user navigates there.
+      const res = await shareItemsToList(listId, targetListId, ids)
+      if (res?.error) {
+        setPickerError(res.error)
+        throw new Error(res.error)
+      }
     } else {
       const res = await copyItemsToList(targetListId, payload)
       if (res?.error) {

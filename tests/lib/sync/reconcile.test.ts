@@ -139,6 +139,7 @@ function makeLocalItem(id: string, name: string): LocalItem {
     category: null,
     measurement: null,
     added_by: 'user-1',
+    shared_group_id: null,
   }
 }
 

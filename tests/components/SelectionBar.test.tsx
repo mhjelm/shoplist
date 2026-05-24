@@ -7,6 +7,7 @@ const defaultProps = {
   isOffline: false,
   onCopy: vi.fn(),
   onMove: vi.fn(),
+  onShare: vi.fn(),
   onClear: vi.fn(),
 }
 
@@ -30,6 +31,13 @@ describe('SelectionBar', () => {
     expect(onMove).toHaveBeenCalledOnce()
   })
 
+  it('calls onShare when share button is clicked', () => {
+    const onShare = vi.fn()
+    render(<SelectionBar {...defaultProps} onShare={onShare} />)
+    fireEvent.click(screen.getByRole('button', { name: /dela/i }))
+    expect(onShare).toHaveBeenCalledOnce()
+  })
+
   it('calls onClear when clear button is clicked', () => {
     const onClear = vi.fn()
     render(<SelectionBar {...defaultProps} onClear={onClear} />)
@@ -37,15 +45,17 @@ describe('SelectionBar', () => {
     expect(onClear).toHaveBeenCalledOnce()
   })
 
-  it('disables copy and move buttons when offline', () => {
+  it('disables copy, share, and move buttons when offline', () => {
     render(<SelectionBar {...defaultProps} isOffline />)
     expect(screen.getByRole('button', { name: /kopiera/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /dela/i })).toBeDisabled()
     expect(screen.getByRole('button', { name: /flytta/i })).toBeDisabled()
   })
 
   it('enables buttons when online', () => {
     render(<SelectionBar {...defaultProps} isOffline={false} />)
     expect(screen.getByRole('button', { name: /kopiera/i })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: /dela/i })).not.toBeDisabled()
     expect(screen.getByRole('button', { name: /flytta/i })).not.toBeDisabled()
   })
 })

@@ -30,6 +30,7 @@ function makeItem(id: string, overrides: Partial<Item> = {}): Item {
     quantity: 1,
     category: null,
     measurement: null,
+    shared_group_id: null,
     ...overrides,
   }
 }

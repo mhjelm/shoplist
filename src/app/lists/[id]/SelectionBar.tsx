@@ -5,10 +5,11 @@ interface Props {
   isOffline: boolean
   onCopy: () => void
   onMove: () => void
+  onShare: () => void
   onClear: () => void
 }
 
-export function SelectionBar({ count, isOffline, onCopy, onMove, onClear }: Props) {
+export function SelectionBar({ count, isOffline, onCopy, onMove, onShare, onClear }: Props) {
   return (
     <div
       className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-4 pt-3 flex items-center gap-2 shadow-lg"
@@ -22,6 +23,14 @@ export function SelectionBar({ count, isOffline, onCopy, onMove, onClear }: Prop
         className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40"
       >
         Kopiera till…
+      </button>
+      <button
+        onClick={onShare}
+        disabled={isOffline}
+        title={isOffline ? 'Kräver anslutning' : undefined}
+        className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40"
+      >
+        Dela till…
       </button>
       <button
         onClick={onMove}

@@ -5,7 +5,7 @@ import type { List } from '@/lib/types'
 import { createList } from '@/app/lists/actions'
 
 type Props = {
-  mode: 'copy' | 'move'
+  mode: 'copy' | 'move' | 'share'
   availableLists: Pick<List, 'id' | 'name' | 'owner_id'>[]
   currentUserId: string
   onPick: (targetListId: string) => Promise<void>
@@ -63,7 +63,7 @@ export default function TargetListModal({ mode, availableLists, currentUserId, o
     }
   }
 
-  const title = mode === 'copy' ? 'Kopiera till lista' : 'Flytta till lista'
+  const title = mode === 'copy' ? 'Kopiera till lista' : mode === 'share' ? 'Dela till lista' : 'Flytta till lista'
 
   return (
     <div
@@ -100,7 +100,7 @@ export default function TargetListModal({ mode, availableLists, currentUserId, o
                 disabled={busy || !newName.trim()}
                 className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-medium transition-colors"
               >
-                {mode === 'copy' ? 'Skapa & kopiera' : 'Skapa & flytta'}
+                {mode === 'copy' ? 'Skapa & kopiera' : mode === 'share' ? 'Skapa & dela' : 'Skapa & flytta'}
               </button>
             </div>
           </div>

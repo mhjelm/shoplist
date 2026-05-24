@@ -47,6 +47,11 @@ describe('TargetListModal', () => {
       expect(screen.getByText('Flytta till lista')).toBeInTheDocument()
     })
 
+    it('shows "Dela till lista" heading when mode is share', () => {
+      renderModal({ mode: 'share' })
+      expect(screen.getByText('Dela till lista')).toBeInTheDocument()
+    })
+
     it('renders one button per available list', () => {
       renderModal()
       expect(screen.getByRole('button', { name: /veckohandling/i })).toBeInTheDocument()
@@ -107,6 +112,12 @@ describe('TargetListModal', () => {
       renderModal({ mode: 'move' })
       fireEvent.click(screen.getByRole('button', { name: /^\+ skapa ny lista$/i }))
       expect(screen.getByRole('button', { name: /skapa & flytta/i })).toBeInTheDocument()
+    })
+
+    it('uses "Skapa & dela" label when mode is share', () => {
+      renderModal({ mode: 'share' })
+      fireEvent.click(screen.getByRole('button', { name: /^\+ skapa ny lista$/i }))
+      expect(screen.getByRole('button', { name: /skapa & dela/i })).toBeInTheDocument()
     })
 
     it('on submit, calls createList then onPick with the new list id', async () => {

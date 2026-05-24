@@ -27,6 +27,7 @@ export {
 export {
   copyItemsToList,
   moveItemsToList,
+  shareItemsToList,
 } from './cross-list'
 
 export { touchListView } from './views'

@@ -29,6 +29,7 @@ function makeItem(overrides: Partial<Item> = {}): Item {
     quantity: 1,
     category: null,
     measurement: null,
+    shared_group_id: null,
     ...overrides,
   }
 }
@@ -47,6 +48,7 @@ function makeLocalItem(overrides: Partial<LocalItem> = {}): LocalItem {
     quantity: 1,
     category: null,
     measurement: null,
+    shared_group_id: null,
     ...overrides,
   }
 }
