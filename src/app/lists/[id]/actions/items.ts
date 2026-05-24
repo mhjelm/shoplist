@@ -219,25 +219,16 @@ export async function clearShoppedItems(listId: string) {
       .filter((g): g is string => !!g)
   ))
 
-  // Step 1: delete this list's checked rows (shared or not).
-  const { error: err1 } = await supabase
-    .from('items')
-    .delete()
-    .eq('list_id', listId)
-    .eq('is_checked', true)
-  if (err1) return { error: err1.message }
-
-  // Step 2: cascade to every sibling in the same shared groups. Two separate
-  // simple DELETEs instead of one nested or(and(...)) filter — PostgREST's
-  // and() sub-function inside .or() is unreliable for DELETE in Supabase JS v2.
+  // Always delete this list's checked rows. If any of them were shared, also
+  // delete every sibling in those groups (across all lists the user can see).
+  let query = supabase.from('items').delete()
   if (groupIds.length > 0) {
-    const { error: err2 } = await supabase
-      .from('items')
-      .delete()
-      .in('shared_group_id', groupIds)
-    if (err2) return { error: err2.message }
+    query = query.or(`and(list_id.eq.${listId},is_checked.eq.true),shared_group_id.in.(${groupIds.join(',')})`)
+  } else {
+    query = query.eq('list_id', listId).eq('is_checked', true)
   }
-
+  const { error } = await query
+  if (error) return { error: error.message }
   revalidatePath(`/lists/${listId}`)
 }
 
