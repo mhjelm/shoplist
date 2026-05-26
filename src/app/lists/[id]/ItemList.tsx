@@ -51,14 +51,17 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
   const [editMode, setEditMode] = useEditMode()
   const [storeMode, setStoreMode] = useStoreMode()
 
-  // Item-row sizing. Store mode renders larger than the chrome regardless of
-  // the textSize preference, but x-large still bumps it up another step.
+  // Item-row sizing. The 'large-store-xlarge' preference renders 'large' while
+  // browsing but 'x-large' once in store mode; every other value applies the
+  // same size in both modes. Store mode keeps a text-lg floor below x-large.
+  const effectiveSize: 'normal' | 'large' | 'x-large' =
+    textSize === 'large-store-xlarge' ? (storeMode ? 'x-large' : 'large') : textSize
   const itemTextClass = storeMode
-    ? (textSize === 'x-large' ? 'text-2xl' : 'text-lg')
-    : (textSize === 'x-large' ? 'text-xl' : textSize === 'large' ? 'text-base' : 'text-sm')
+    ? (effectiveSize === 'x-large' ? 'text-2xl' : 'text-lg')
+    : (effectiveSize === 'x-large' ? 'text-xl' : effectiveSize === 'large' ? 'text-base' : 'text-sm')
   const thumbSizeClass = storeMode
-    ? (textSize === 'x-large' ? 'w-20 h-20' : 'w-16 h-16')
-    : (textSize === 'x-large' ? 'w-20 h-20' : textSize === 'large' ? 'w-16 h-16' : 'w-12 h-12')
+    ? (effectiveSize === 'x-large' ? 'w-20 h-20' : 'w-16 h-16')
+    : (effectiveSize === 'x-large' ? 'w-20 h-20' : effectiveSize === 'large' ? 'w-16 h-16' : 'w-12 h-12')
   const { isOffline } = useSyncState()
   const router = useRouter()
 

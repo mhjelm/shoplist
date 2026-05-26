@@ -42,7 +42,7 @@ export interface LocalHistory {
 export interface LocalPrefs {
   user_id: string
   theme: 'light' | 'dark'
-  list_text_size: 'normal' | 'large' | 'x-large'
+  list_text_size: 'normal' | 'large' | 'x-large' | 'large-store-xlarge'
   category_order: string[]
   updated_at: string
 }

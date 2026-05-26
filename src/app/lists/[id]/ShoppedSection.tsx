@@ -30,13 +30,15 @@ export function ShoppedSection({
     <div className="space-y-1">
       <div className="flex items-center justify-between px-1">
         <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Shopped</span>
-        <button
-          onClick={onClearShopped}
-          className="text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none"
-          aria-label="Clear shopped items"
-        >
-          ×
-        </button>
+        {!storeMode && (
+          <button
+            onClick={onClearShopped}
+            className="text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none"
+            aria-label="Clear shopped items"
+          >
+            ×
+          </button>
+        )}
       </div>
       {editMode ? (
         <SortableContext items={shopped.map(i => i.id)} strategy={verticalListSortingStrategy}>
