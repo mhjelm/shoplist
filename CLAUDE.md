@@ -41,6 +41,8 @@ See `REFACTOR.md` — the single source of truth for architectural smells worth 
 
 **What's confirmed working** (don't regress these): `/lists` renders fast on back-nav (cache-first via Dexie + `useLiveQuery`); `/lists/[id]` items paint instantly from Dexie via `useLiveQuery` (no SSR items fetch); reconcile uses a cheap `list_activity` precheck.
 
+**Store mode intercepts Back** (`StoreModeContext.tsx`): while store mode is on, the provider pushes a throwaway history entry; a Back press (hardware/browser or the in-app `BackLink` arrow, which calls `setStoreMode(false)`) pops it and exits store mode *without* navigating to `/lists`. Exiting store mode any other way removes the pushed entry in the effect cleanup. This lands on the same `/lists/[id]` entry, so it doesn't trigger the scroll-jump above — but if you touch this page's history handling, account for this pushState/popstate.
+
 ## Active plan
 
 _(none)_

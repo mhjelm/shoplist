@@ -6,11 +6,22 @@
 // scrolls to top" under "Known issues" in CLAUDE.md for the full list of
 // failed attempts and untested hypotheses BEFORE trying another fix here.
 
+import { useStoreMode } from './StoreModeContext'
+
 export function BackLink() {
+  const [storeMode, setStoreMode] = useStoreMode()
   const onClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     // Let browser handle modifier-key clicks (open in new tab etc.)
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
     e.preventDefault()
+
+    // In store mode, Back exits store mode and stays on the list rather than
+    // navigating to /lists. The StoreModeProvider effect cleans up the history
+    // entry it pushed on activation.
+    if (storeMode) {
+      setStoreMode(false)
+      return
+    }
 
     if (typeof window !== 'undefined' && window.history.length > 1) {
       // Clone the route-root into a fixed-position overlay so Next.js's

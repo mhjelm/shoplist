@@ -53,6 +53,27 @@ export function StoreModeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [active])
 
+  // Make Back exit store mode instead of leaving the list. On activation we
+  // push a throwaway history entry; a hardware/browser Back press pops it and
+  // we drop out of store mode without navigating. If store mode is exited any
+  // other way (toggle button, or the in-app arrow calling setActive(false)),
+  // the cleanup removes the entry we added so Back isn't a dead press.
+  useEffect(() => {
+    if (!active) return
+    if (typeof window === 'undefined') return
+
+    let popped = false
+    window.history.pushState({ __storeMode: true }, '')
+
+    const onPop = () => { popped = true; setActive(false) }
+    window.addEventListener('popstate', onPop)
+
+    return () => {
+      window.removeEventListener('popstate', onPop)
+      if (!popped) window.history.back()
+    }
+  }, [active])
+
   return <StoreModeContext.Provider value={[active, setActive]}>{children}</StoreModeContext.Provider>
 }
 
