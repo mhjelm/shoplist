@@ -45,13 +45,20 @@ interface Props {
 }
 
 export default function ItemList({ list, listId, suggestions, textSize, theme, categoryOrder, availableLists, currentUserId }: Props) {
-  const itemTextClass = textSize === 'x-large' ? 'text-xl' : textSize === 'large' ? 'text-base' : 'text-sm'
-  const thumbSizeClass = textSize === 'x-large' ? 'w-20 h-20' : textSize === 'large' ? 'w-16 h-16' : 'w-12 h-12'
   const [editingItem, setEditingItem] = useState<Item | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const [showRecipe, setShowRecipe] = useState(false)
   const [editMode, setEditMode] = useEditMode()
   const [storeMode, setStoreMode] = useStoreMode()
+
+  // Item-row sizing. Store mode renders larger than the chrome regardless of
+  // the textSize preference, but x-large still bumps it up another step.
+  const itemTextClass = storeMode
+    ? (textSize === 'x-large' ? 'text-2xl' : 'text-lg')
+    : (textSize === 'x-large' ? 'text-xl' : textSize === 'large' ? 'text-base' : 'text-sm')
+  const thumbSizeClass = storeMode
+    ? (textSize === 'x-large' ? 'w-20 h-20' : 'w-16 h-16')
+    : (textSize === 'x-large' ? 'w-20 h-20' : textSize === 'large' ? 'w-16 h-16' : 'w-12 h-12')
   const { isOffline } = useSyncState()
   const router = useRouter()
 

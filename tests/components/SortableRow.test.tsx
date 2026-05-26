@@ -115,10 +115,9 @@ describe('SortableRow — store mode', () => {
     expect(screen.queryByRole('button', { name: /edit item/i })).toBeNull()
   })
 
-  it('bumps item name to text-lg regardless of itemTextClass prop', () => {
-    render(<ul><SortableRow {...defaultProps} storeMode itemTextClass="text-sm" /></ul>)
-    expect(screen.getByText('Mjölk')).toHaveClass('text-lg')
-    expect(screen.getByText('Mjölk')).not.toHaveClass('text-sm')
+  it('applies the given itemTextClass in store mode (parent supplies store sizing)', () => {
+    render(<ul><SortableRow {...defaultProps} storeMode itemTextClass="text-2xl" /></ul>)
+    expect(screen.getByText('Mjölk')).toHaveClass('text-2xl')
   })
 
   it('does not call onToggle on plain click (swipe-to-check replaces tap)', () => {

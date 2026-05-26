@@ -38,8 +38,6 @@ export function ShoppedRow({
   })
 
   const slColor = hasDecorativeTheme(theme) ? slColorFor(item.id) : undefined
-  const thumbClass = storeMode ? 'w-16 h-16' : thumbSizeClass
-  const textClass = storeMode ? 'text-lg' : itemTextClass
 
   if (storeMode) {
     return (
@@ -63,9 +61,9 @@ export function ShoppedRow({
         >
           {item.picture_url && (
             <img src={item.picture_url} alt="" onError={e => { e.currentTarget.style.display = 'none' }}
-              className={`${thumbClass} rounded object-cover flex-shrink-0 opacity-60`} />
+              className={`${thumbSizeClass} rounded object-cover flex-shrink-0 opacity-60`} />
           )}
-          <span className={`${textClass} flex-1 min-w-0 break-words text-gray-400 dark:text-gray-500`}>{item.name}</span>
+          <span className={`${itemTextClass} flex-1 min-w-0 break-words text-gray-400 dark:text-gray-500`}>{item.name}</span>
           {item.shared_group_id && (
             <span
               aria-label="Delad mellan listor"
@@ -98,9 +96,9 @@ export function ShoppedRow({
     >
       {item.picture_url && (
         <img src={item.picture_url} alt="" onError={e => { e.currentTarget.style.display = 'none' }}
-          className={`${thumbClass} rounded object-cover flex-shrink-0 opacity-60`} />
+          className={`${thumbSizeClass} rounded object-cover flex-shrink-0 opacity-60`} />
       )}
-      <span className={`${textClass} flex-1 min-w-0 break-words text-gray-400 dark:text-gray-500`}>{item.name}</span>
+      <span className={`${itemTextClass} flex-1 min-w-0 break-words text-gray-400 dark:text-gray-500`}>{item.name}</span>
       {item.shared_group_id && (
         <span
           aria-label="Delad mellan listor"

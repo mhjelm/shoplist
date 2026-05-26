@@ -69,9 +69,6 @@ export function SortableRow({
       ? 'text-blue-800 dark:text-blue-100 font-medium'
       : muted ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'
 
-  const rowItemTextClass = storeMode ? 'text-lg' : itemTextClass
-  const rowThumbSizeClass = storeMode ? 'w-16 h-16' : thumbSizeClass
-
   if (storeMode) {
     return (
       <li
@@ -103,10 +100,10 @@ export function SortableRow({
               onPointerUp={e => e.stopPropagation()}
               onClick={e => { e.stopPropagation(); onPicture() }}
               onError={e => { e.currentTarget.style.display = 'none' }}
-              className={`${rowThumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
+              className={`${thumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
             />
           )}
-          <span className={`${rowItemTextClass} flex-1 min-w-0 break-words ${nameClass}`}>{item.name}</span>
+          <span className={`${itemTextClass} flex-1 min-w-0 break-words ${nameClass}`}>{item.name}</span>
           <MeasurementBadge item={item} muted={muted} onCombine={onCombine} />
           {showHint && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30 rounded-xl">
@@ -145,10 +142,10 @@ export function SortableRow({
           alt=""
           onClick={e => { e.stopPropagation(); onPicture() }}
           onError={e => { e.currentTarget.style.display = 'none' }}
-          className={`${rowThumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
+          className={`${thumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
         />
       )}
-      <span className={`${rowItemTextClass} flex-1 min-w-0 break-words ${nameClass}`}>
+      <span className={`${itemTextClass} flex-1 min-w-0 break-words ${nameClass}`}>
         {item.name}
       </span>
       {item.shared_group_id && (
