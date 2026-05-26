@@ -139,7 +139,7 @@ export default function ListsView({ initialLists, memberCounts, lastActivity, la
         <div
           role="status"
           aria-live="polite"
-          className={`fixed inset-0 z-50 flex flex-col items-center justify-center ${theme === 'polar' ? 'loading-bg-polar' : theme === 'dusk' ? 'loading-bg-dusk' : 'bg-white dark:bg-black'}`}
+          className={`loading-overlay fixed top-0 left-0 right-0 z-50 flex flex-col items-center justify-center ${theme === 'polar' ? 'loading-bg-polar' : theme === 'dusk' ? 'loading-bg-dusk' : 'bg-white dark:bg-black'}`}
         >
           {theme === 'polar' || theme === 'dusk' ? (
             <div className={`loading-plate ${theme === 'polar' ? 'loading-plate-polar' : 'loading-plate-dusk'} w-64 h-64 sm:w-80 sm:h-80 loading-cart`} aria-hidden>
