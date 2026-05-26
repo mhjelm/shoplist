@@ -45,8 +45,8 @@ interface Props {
 }
 
 export default function ItemList({ list, listId, suggestions, textSize, theme, categoryOrder, availableLists, currentUserId }: Props) {
-  const itemTextClass = textSize === 'large' ? 'text-base' : 'text-sm'
-  const thumbSizeClass = textSize === 'large' ? 'w-16 h-16' : 'w-12 h-12'
+  const itemTextClass = textSize === 'x-large' ? 'text-xl' : textSize === 'large' ? 'text-base' : 'text-sm'
+  const thumbSizeClass = textSize === 'x-large' ? 'w-20 h-20' : textSize === 'large' ? 'w-16 h-16' : 'w-12 h-12'
   const [editingItem, setEditingItem] = useState<Item | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const [showRecipe, setShowRecipe] = useState(false)

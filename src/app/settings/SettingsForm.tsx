@@ -164,6 +164,12 @@ export default function SettingsForm({ initialTheme, initialListTextSize, initia
             selected={size === 'large'}
             onSelect={() => pickSize('large')}
           />
+          <div className="border-t border-gray-100 dark:border-gray-800" />
+          <OptionRow
+            label="Extra large"
+            selected={size === 'x-large'}
+            onSelect={() => pickSize('x-large')}
+          />
         </div>
       </section>
 

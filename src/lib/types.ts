@@ -30,7 +30,7 @@ export interface Item {
 }
 
 export type Theme = 'light' | 'dark' | 'shoplist' | 'polar' | 'dusk'
-export type ListTextSize = 'normal' | 'large'
+export type ListTextSize = 'normal' | 'large' | 'x-large'
 
 export interface UserPreferences {
   user_id: string

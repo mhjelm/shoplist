@@ -6,7 +6,7 @@ import type { Theme, ListTextSize } from '@/lib/types'
 import { DEFAULT_CATEGORY_ORDER, isValidCategorySlug, type CategorySlug } from '@/lib/categories'
 
 const THEMES: readonly Theme[] = ['light', 'dark', 'shoplist', 'polar', 'dusk']
-const SIZES: readonly ListTextSize[] = ['normal', 'large']
+const SIZES: readonly ListTextSize[] = ['normal', 'large', 'x-large']
 
 export async function updateSettings(theme: Theme, listTextSize: ListTextSize, highContrast: boolean) {
   if (!THEMES.includes(theme) || !SIZES.includes(listTextSize) || typeof highContrast !== 'boolean') {
