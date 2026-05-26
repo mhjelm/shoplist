@@ -347,11 +347,15 @@ body {
 .dusk     .empty-state-headline { color: var(--dk-brown); font-style: italic; }
 .dusk     .empty-state-subline  { color: var(--dk-clay); font-style: italic; }
 .dusk     .loading-label        { color: var(--dk-brown) !important; font-style: italic; font-family: "Fraunces", "Georgia", serif; font-weight: 500; letter-spacing: 0.05em; text-transform: none; }
-/* Full-screen nav loading overlay. On Chrome Android the dynamic URL bar can
-   size a `fixed; inset-0` element to the small viewport, leaving a strip of the
-   page visible at the bottom when the bar retracts. Anchor at the top and force
-   the height to the LARGE viewport so the overlay always over-covers — it
-   extends past the visible bottom rather than leaving a gap. */
+/* Full-screen nav loading overlay. Two failure modes to satisfy at once:
+   - Desktop: needs all four sides anchored (`inset: 0`) so the top↔bottom gap
+     sizes the box to the full viewport. Dropping the bottom anchor (top-only +
+     min-height) left it covering just the top of the view.
+   - Chrome Android: with `inset: 0` alone, the dynamic URL bar sizes the fixed
+     element to the SMALL viewport, leaving a strip at the bottom when the bar
+     retracts. The large-viewport `min-height` clamp forces the box taller than
+     that small-viewport gap, so it over-covers past the retracting bar.
+   Keep both: `inset: 0` on the element + `min-height: 100lvh` here. */
 .loading-overlay {
   min-height: 100vh;  /* fallback for browsers without large-viewport units */
   min-height: 100lvh;
