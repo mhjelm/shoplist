@@ -65,7 +65,7 @@ export function ShoppedRow({
             <img src={item.picture_url} alt="" onError={e => { e.currentTarget.style.display = 'none' }}
               className={`${thumbClass} rounded object-cover flex-shrink-0 opacity-60`} />
           )}
-          <span className={`${textClass} flex-1 min-w-0 truncate text-gray-400 dark:text-gray-500`}>{item.name}</span>
+          <span className={`${textClass} flex-1 min-w-0 break-words text-gray-400 dark:text-gray-500`}>{item.name}</span>
           {item.shared_group_id && (
             <span
               aria-label="Delad mellan listor"
@@ -100,7 +100,7 @@ export function ShoppedRow({
         <img src={item.picture_url} alt="" onError={e => { e.currentTarget.style.display = 'none' }}
           className={`${thumbClass} rounded object-cover flex-shrink-0 opacity-60`} />
       )}
-      <span className={`${textClass} flex-1 min-w-0 truncate text-gray-400 dark:text-gray-500`}>{item.name}</span>
+      <span className={`${textClass} flex-1 min-w-0 break-words text-gray-400 dark:text-gray-500`}>{item.name}</span>
       {item.shared_group_id && (
         <span
           aria-label="Delad mellan listor"

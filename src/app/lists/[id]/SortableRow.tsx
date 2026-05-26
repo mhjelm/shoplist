@@ -106,7 +106,7 @@ export function SortableRow({
               className={`${rowThumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
             />
           )}
-          <span className={`${rowItemTextClass} flex-1 min-w-0 truncate ${nameClass}`}>{item.name}</span>
+          <span className={`${rowItemTextClass} flex-1 min-w-0 break-words ${nameClass}`}>{item.name}</span>
           <MeasurementBadge item={item} muted={muted} onCombine={onCombine} />
           {showHint && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30 rounded-xl">
@@ -148,7 +148,7 @@ export function SortableRow({
           className={`${rowThumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
         />
       )}
-      <span className={`${rowItemTextClass} flex-1 min-w-0 truncate ${nameClass}`}>
+      <span className={`${rowItemTextClass} flex-1 min-w-0 break-words ${nameClass}`}>
         {item.name}
       </span>
       {item.shared_group_id && (

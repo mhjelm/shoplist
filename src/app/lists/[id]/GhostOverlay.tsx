@@ -45,7 +45,7 @@ export function GhostOverlay({ ghost, onDone }: { ghost: GhostItem; onDone: () =
           className={`${ghost.thumbSizeClass} rounded object-cover flex-shrink-0`}
         />
       )}
-      <span className={`${ghost.itemTextClass} flex-1 min-w-0 truncate text-gray-800 dark:text-gray-200`}>
+      <span className={`${ghost.itemTextClass} flex-1 min-w-0 break-words text-gray-800 dark:text-gray-200`}>
         {ghost.name}
       </span>
       {ghost.measurement && (
