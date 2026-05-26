@@ -48,7 +48,13 @@
       "Bash(dir C:\\\\proj\\\\shoplist\\\\src\\\\app\\\\lists\\\\ *)",
       "Bash(git log *)",
       "Bash(grep -E '\\\\.\\(ts|tsx\\)$')",
-      "Bash(xargs wc -l)"
+      "Bash(xargs wc -l)",
+      "Bash(git rm *)",
+      "Bash(git stash *)",
+      "Bash(git checkout *)",
+      "Bash(xargs grep -l \"clearShoppedItems\\\\|clear.*shopped\")",
+      "Bash(git restore *)",
+      "PowerShell(npm test *)"
     ]
   }
 }

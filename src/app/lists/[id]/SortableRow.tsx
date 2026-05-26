@@ -99,8 +99,11 @@ export function SortableRow({
             <img
               src={item.picture_url}
               alt=""
+              onPointerDown={e => e.stopPropagation()}
+              onPointerUp={e => e.stopPropagation()}
+              onClick={e => { e.stopPropagation(); onPicture() }}
               onError={e => { e.currentTarget.style.display = 'none' }}
-              className={`${rowThumbSizeClass} rounded object-cover flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
+              className={`${rowThumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
             />
           )}
           <span className={`${rowItemTextClass} flex-1 min-w-0 truncate ${nameClass}`}>{item.name}</span>
