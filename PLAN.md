@@ -37,8 +37,11 @@ removed.
   the existing `prefers-reduced-motion` block.
 
 ## Limitations (by design)
-- Covers the in-app Back arrow only (hardware back doesn't route through `BackLink`).
 - Masks, does not solve, the underlying scroll-jump known issue.
+- Hardware/gesture Back is covered via a `popstate` listener in `BackLink` (added
+  2026-05-27 — Android uses the system back, which never fires the arrow's `onClick`).
+  Only works for soft-nav SPA routes in the same document (normal online case); a
+  deep-linked/hard-loaded list page falls back to the browser's own navigation.
 
 ## Verification
 1. `npm run dev`: open a list, scroll, tap Back — theme-matched overlay + small hourglass,
