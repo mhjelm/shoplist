@@ -29,6 +29,11 @@ function setSync(partial: Partial<SyncState>) {
   for (const fn of listeners) fn(syncState)
 }
 
+// Test/diagnostic accessor for the current sync snapshot (no React).
+export function getSyncState(): SyncState {
+  return syncState
+}
+
 export function useSyncState(): SyncState {
   const [state, setState] = useState(() => syncState)
   useEffect(() => {
@@ -92,7 +97,16 @@ export function getActiveList(): string | null {
 // ---------------------------------------------------------------------------
 
 const RETRY_DELAYS = [1_000, 5_000, 30_000, 300_000]
-let isFlushing = false
+
+// Single-flight outbox drain. `draining` is non-null while a drain loop is
+// running; `resyncRequested` records that new work (or a fresh flush request)
+// arrived during the loop so we re-read the queue instead of dropping the
+// signal. Without the rerun flag, an entry committed AFTER the loop snapshotted
+// its pending set — and whose own flushOutbox() call was swallowed because a
+// drain was already in progress — would be stranded until the next
+// connectivity trigger (the "stuck on N syncing" bug on rapid edits).
+let draining: Promise<void> | null = null
+let resyncRequested = false
 
 function check(result: { error?: string } | undefined | void) {
   if (result && 'error' in result && result.error) {
@@ -163,13 +177,30 @@ async function dispatch(entry: OutboxEntry) {
   await touchListView(listId).catch(() => {})
 }
 
-export async function flushOutbox(): Promise<void> {
-  if (isFlushing) return
-  isFlushing = true
+// Drain the outbox. Safe to call concurrently and fire-and-forget: a single
+// drain loop runs at a time, and any call made while it's running is folded in
+// (the loop re-reads the queue). Always returns the in-flight drain promise, so
+// callers that `await flushOutbox()` (notably triggerSync) genuinely block
+// until the queue is drained — never on a resolved no-op that would let a
+// reconcile race an in-flight push.
+export function flushOutbox(): Promise<void> {
+  resyncRequested = true
+  if (!draining) {
+    draining = drainLoop().finally(() => { draining = null })
+  }
+  return draining
+}
 
-  try {
-    // Reset stuck in-flight entries from a previous crash.
-    await localDB.outbox.where('status').equals('in_flight').modify({ status: 'pending' })
+async function drainLoop(): Promise<void> {
+  // Reset stuck in-flight entries from a previous crash.
+  await localDB.outbox.where('status').equals('in_flight').modify({ status: 'pending' })
+
+  // Re-read the queue while signals keep arriving. Resetting the flag at the
+  // top of each pass (then re-checking it as the loop condition) closes the
+  // lost-wakeup window: a flushOutbox() call that lands during a pass sets the
+  // flag again and triggers one more pass.
+  while (resyncRequested) {
+    resyncRequested = false
 
     const pending = await localDB.outbox
       .where('status').anyOf(['pending', 'failed'])
@@ -178,7 +209,7 @@ export async function flushOutbox(): Promise<void> {
     if (pending.length === 0) {
       setSync({ pendingCount: 0, lastSyncError: null })
       markOnlineIfBrowserAgrees()
-      return
+      continue
     }
 
     setSync({ pendingCount: pending.length })
@@ -207,13 +238,13 @@ export async function flushOutbox(): Promise<void> {
         })
         setSync({ lastSyncError: errMsg })
         markOffline()
+        // Hand the retry to the backoff timer and stop this loop. The timer
+        // re-enters via flushOutbox once draining has cleared.
         const delay = RETRY_DELAYS[Math.min(entry.attempts, RETRY_DELAYS.length - 1)]
-        setTimeout(() => { isFlushing = false; flushOutbox() }, delay)
+        setTimeout(() => { flushOutbox() }, delay)
         return
       }
     }
-  } finally {
-    isFlushing = false
   }
 }
 

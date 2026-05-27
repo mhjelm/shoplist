@@ -76,13 +76,25 @@ export async function reconcileList(listId: string): Promise<void> {
       } else if (pending.type === 'item.delete') {
         // Our delete is pending — keep item gone locally.
         await localDB.items.delete(row.id as string)
-      } else if (row.updated_at && row.updated_at > new Date(pending.created_at).toISOString()) {
+      } else if (
+        pending.status !== 'in_flight' &&
+        row.updated_at &&
+        row.updated_at > new Date(pending.created_at).toISOString()
+      ) {
         // Server modified this item after we queued our edit → server wins.
+        // Skip this for in_flight entries: those are being pushed RIGHT NOW, so
+        // a server row newer than our queued-at time is almost certainly our own
+        // write echoing back (the server's updated_at is set server-side the
+        // moment our push lands, but the outbox entry isn't deleted until the
+        // push fully returns). Treating that as a server conflict produced the
+        // bogus "uppdaterades på servern medan du var offline" banner — and
+        // worse, deleted the entry mid-push. Keep local + leave the entry; the
+        // flush will clear it.
         await localDB.items.put(row as LocalItem)
         await localDB.outbox.delete(pending.seq!)
         conflicts.push({ id: row.id as string, name: row.name as string })
       }
-      // Else: our edit is newer — keep Dexie state, outbox will sync it.
+      // Else: our edit is newer (or in-flight) — keep Dexie state, outbox syncs it.
     }
 
     await localDB.sync_meta.put({ list_id: listId, last_sync_at: new Date().toISOString() })
