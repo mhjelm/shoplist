@@ -10,6 +10,7 @@ import { itemToLocalItem, sortItemsByOrder, groupByCategory } from './itemHelper
 import { touchListView, clearShoppedItems } from './actions'
 import { muUpdateItem, muDeleteItem, muBulkDelete } from '@/lib/sync/mutations'
 import { hasDecorativeTheme, FIREWORK_PALETTES } from '@/lib/sl-theme'
+import { useRevealFx } from '@/lib/useRevealFx'
 import { useSyncState } from '@/lib/sync/engine'
 import { useEditMode } from './EditModeContext'
 import { useStoreMode } from './StoreModeContext'
@@ -102,6 +103,8 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
   }, [listId, router])
 
   const { items, hasLoaded } = useListItemsSync(list, listId)
+  // Random one-of-six reveal animation once Dexie has loaded the list.
+  const revealFx = useRevealFx(hasLoaded)
   const addItems = useAddItems({ listId, items, suggestions, isOffline })
   const { selectedIds, setSelectedIds, pickerMode, setPickerMode, pickerError, setPickerError, toggleSelect, handlePickTarget } = useItemSelection({ editMode, items, listId })
   const { sensors, handleDragEnd, pendingMerge, setPendingMerge, handleMergeConfirm } = useDragMergeReorder({ listId, items, editMode })
@@ -211,9 +214,9 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
   const isEmpty = toShop.length === 0 && shopped.length === 0
 
   return (
-    // sl-reveal pops the list in (60%→100% size, 50%→100% brightness, 0.3s)
-    // once Dexie has loaded — see useListItemsSync's hasLoaded.
-    <div className={`space-y-4${hasLoaded ? ' sl-reveal' : ''}`}>
+    // revealFx is one of six subtle entrance animations, chosen at random once
+    // Dexie has loaded (see useRevealFx + hasLoaded); '' otherwise.
+    <div className={`space-y-4${revealFx ? ' ' + revealFx : ''}`}>
       {!storeMode && (
         <AddItemForm
           {...addItems}

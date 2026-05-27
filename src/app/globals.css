@@ -407,19 +407,33 @@ body {
 }
 
 /* Screen reveal: when a list (/lists/[id]) or the overview (/lists) becomes
-   ready, the content pops from 60% size + 50% brightness up to 100%.
-   `backwards` fill so the start state shows on the first frame (no flash) AND
-   the transform fully reverts after — leaving NO lingering transform that
-   would establish a containing block for fixed descendants inside the wrapper
-   (firework canvas, nav loading overlays). */
-.sl-reveal {
-  animation: sl-reveal 0.3s ease-out backwards;
-  transform-origin: center;
-}
-@keyframes sl-reveal {
-  from { transform: scale(0.6); filter: brightness(0.5); opacity: 0.4; }
-  to   { transform: scale(1);   filter: brightness(1);   opacity: 1;   }
-}
+   ready, useRevealFx picks ONE of these six subtle entrances at random and
+   applies its class for ~0.8s. `backwards` fill so the start state shows on the
+   first frame (no flash) AND any transform/filter fully reverts after — leaving
+   NO lingering transform that would establish a containing block for fixed
+   descendants inside the wrapper (firework canvas, nav loading overlays).
+   Disabled by the reduce-motion setting + prefers-reduced-motion (below). */
+.sl-fx-fade   { animation: sl-fade   0.40s ease     backwards; }
+.sl-fx-rise   { animation: sl-rise   0.40s ease-out backwards; }
+.sl-fx-blur   { animation: sl-blur   0.50s ease-out backwards; }
+.sl-fx-zoom   { animation: sl-zoom   0.40s ease-out backwards; transform-origin: center; }
+.sl-fx-bright { animation: sl-bright 0.45s ease     backwards; }
+/* Stagger: rows ripple in one by one — animate the <li> rows, not the card. */
+.sl-fx-stagger li               { animation: sl-rise 0.35s ease-out backwards; }
+.sl-fx-stagger li:nth-child(1)  { animation-delay: 0s; }
+.sl-fx-stagger li:nth-child(2)  { animation-delay: 0.05s; }
+.sl-fx-stagger li:nth-child(3)  { animation-delay: 0.10s; }
+.sl-fx-stagger li:nth-child(4)  { animation-delay: 0.15s; }
+.sl-fx-stagger li:nth-child(5)  { animation-delay: 0.20s; }
+.sl-fx-stagger li:nth-child(6)  { animation-delay: 0.25s; }
+.sl-fx-stagger li:nth-child(7)  { animation-delay: 0.30s; }
+.sl-fx-stagger li:nth-child(8)  { animation-delay: 0.35s; }
+
+@keyframes sl-fade   { from { opacity: 0; }                              to { opacity: 1; } }
+@keyframes sl-rise   { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes sl-blur   { from { opacity: 0; filter: blur(8px); }           to { opacity: 1; filter: blur(0); } }
+@keyframes sl-zoom   { from { opacity: 0; transform: scale(0.97); }      to { opacity: 1; transform: scale(1); } }
+@keyframes sl-bright { from { opacity: 0.4; filter: brightness(0.8); }   to { opacity: 1; filter: brightness(1); } }
 .shoplist .empty-state-glyph    { animation: empty-bob 3.5s ease-in-out infinite; }
 @keyframes empty-bob {
   0%, 100% { transform: translateY(0); }
@@ -428,7 +442,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .shoplist .empty-state-glyph { animation: none; }
   .backnav-glass { animation: none; }
-  .sl-reveal { animation: none; }
+  .sl-fx-fade, .sl-fx-rise, .sl-fx-blur, .sl-fx-zoom, .sl-fx-bright,
+  .sl-fx-stagger li { animation: none !important; }
 }
 
 /* Explicit "disable animations" setting (Settings → Animationer → Av). Mirrors

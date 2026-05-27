@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Subtle screen-ready animations — 6 options</title>
+<style>
+  :root {
+    --pink: #EC4899;
+    --teal: #14B8A6;
+    --bg: #f6f7f9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: #1f2937;
+    padding: 32px 20px 64px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 24px; color: #6b7280; font-size: 14px; }
+
+  .controls { margin-bottom: 28px; }
+  button {
+    font: inherit;
+    font-weight: 600;
+    background: var(--pink);
+    color: #fff;
+    border: 0;
+    border-radius: 9999px;
+    padding: 10px 22px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(236,72,153,0.35);
+  }
+  button:active { transform: translateY(1px); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 28px;
+    max-width: 920px;
+  }
+  .demo .label { margin-bottom: 10px; }
+  .demo .name { font-size: 14px; font-weight: 700; color: #111827; }
+  .demo .meta { font-size: 12px; color: #6b7280; }
+
+  /* ── The screen we reveal ─────────────────────────────────────────────── */
+  .screen {
+    border-radius: 22px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.10);
+    transform-origin: center;
+    will-change: transform, filter, opacity;
+  }
+
+  /* Effects only run while `.play` is present — Replay toggles it off/on so
+     the animation restarts. `both` holds the end state between replays. */
+
+  /* 1 · Fade — opacity only. The quietest possible entrance. */
+  .screen.fx-fade.play   { animation: fx-fade   0.40s ease       both; }
+  /* 2 · Rise & fade — drift up a few px while fading in. */
+  .screen.fx-rise.play   { animation: fx-rise   0.40s ease-out   both; }
+  /* 3 · Blur-in — focus pulls from soft to sharp. */
+  .screen.fx-blur.play   { animation: fx-blur   0.50s ease-out   both; }
+  /* 4 · Gentle zoom — barely-there 97%→100% scale (much softer than 60/90%). */
+  .screen.fx-zoom.play   { animation: fx-zoom   0.40s ease-out   both; }
+  /* 5 · Brighten — a small lighting wash, 85%→100% brightness. */
+  .screen.fx-bright.play { animation: fx-bright 0.45s ease       both; }
+
+  /* 6 · Staggered cascade — rows ripple in one by one (animate the items, not
+     the card). 0.06s between rows reads as a light, organic settle. */
+  .screen.fx-stagger.play .item { animation: fx-rise 0.35s ease-out both; }
+  .screen.fx-stagger.play .item:nth-child(1) { animation-delay: 0.00s; }
+  .screen.fx-stagger.play .item:nth-child(2) { animation-delay: 0.06s; }
+  .screen.fx-stagger.play .item:nth-child(3) { animation-delay: 0.12s; }
+  .screen.fx-stagger.play .item:nth-child(4) { animation-delay: 0.18s; }
+
+  @keyframes fx-fade   { from { opacity: 0; }                              to { opacity: 1; } }
+  @keyframes fx-rise   { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fx-blur   { from { opacity: 0; filter: blur(8px); }           to { opacity: 1; filter: blur(0); } }
+  @keyframes fx-zoom   { from { opacity: 0; transform: scale(0.97); }      to { opacity: 1; transform: scale(1); } }
+  @keyframes fx-bright { from { opacity: 0.4; filter: brightness(0.8); }   to { opacity: 1; filter: brightness(1); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .screen.play, .screen.play .item { animation: none !important; }
+  }
+
+  /* ── Mock shoplist UI inside each screen ──────────────────────────────── */
+  .app-header {
+    background: var(--pink);
+    color: #fff;
+    padding: 14px 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .app-header .back { font-size: 18px; opacity: 0.9; }
+  .list { padding: 10px 12px 16px; }
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 10px;
+    border-radius: 14px;
+    margin-bottom: 8px;
+    background: #fafafa;
+  }
+  .item .check {
+    width: 22px; height: 22px;
+    border-radius: 7px;
+    border: 2px solid #d1d5db;
+    flex: none;
+  }
+  .item .name { font-weight: 600; font-size: 15px; }
+  .item .qty { margin-left: auto; color: #9ca3af; font-size: 13px; }
+  .item.alt { background: #f1fbf9; }
+  .item.alt .check { border-color: var(--teal); background: var(--teal); }
+</style>
+</head>
+<body>
+  <h1>Subtle screen-ready animations — 6 options</h1>
+  <p class="sub">Quieter alternatives to the 60%→100% pop. Plays on load — click Replay to compare.</p>
+
+  <div class="controls">
+    <button id="replay" type="button">Replay ▶</button>
+  </div>
+
+  <div class="grid" id="grid">
+    <!-- screens injected by script so all six share one markup template -->
+  </div>
+
+  <script>
+    const EFFECTS = [
+      { cls: 'fx-fade',    name: '1 · Fade',              meta: 'opacity only · 0.4s' },
+      { cls: 'fx-rise',    name: '2 · Rise & fade',       meta: 'translateY 10px · 0.4s' },
+      { cls: 'fx-blur',    name: '3 · Blur-in',           meta: 'blur 8px→0 · 0.5s' },
+      { cls: 'fx-zoom',    name: '4 · Gentle zoom',       meta: 'scale 97→100% · 0.4s' },
+      { cls: 'fx-bright',  name: '5 · Brighten',          meta: 'brightness 85→100% · 0.45s' },
+      { cls: 'fx-stagger', name: '6 · Staggered cascade', meta: 'rows ripple in · 0.06s apart' },
+    ];
+
+    const screenHTML = `
+      <div class="app-header"><span class="back">←</span> Veckohandling</div>
+      <div class="list">
+        <div class="item"><span class="check"></span><span class="name">Mjölk</span><span class="qty">2 l</span></div>
+        <div class="item alt"><span class="check"></span><span class="name">Bröd</span><span class="qty">1</span></div>
+        <div class="item"><span class="check"></span><span class="name">Ägg</span><span class="qty">12</span></div>
+        <div class="item"><span class="check"></span><span class="name">Smör</span><span class="qty">500 g</span></div>
+      </div>`;
+
+    const grid = document.getElementById('grid');
+    grid.innerHTML = EFFECTS.map(e => `
+      <div class="demo">
+        <div class="label"><div class="name">${e.name}</div><div class="meta">${e.meta}</div></div>
+        <div class="screen ${e.cls} play">${screenHTML}</div>
+      </div>`).join('');
+
+    // Replay: remove .play, force reflow, add it back to restart the animations.
+    document.getElementById('replay').addEventListener('click', () => {
+      document.querySelectorAll('.screen').forEach(el => {
+        el.classList.remove('play');
+        void el.offsetWidth;
+        el.classList.add('play');
+      });
+    });
+  </script>
+</body>
+</html>

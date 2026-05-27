@@ -11,6 +11,7 @@ import { computeUnread } from '@/lib/listsUnread'
 import { useSyncState } from '@/lib/sync/engine'
 import type { List, Theme } from '@/lib/types'
 import { slColorFor, slFlareDelay } from '@/lib/sl-theme'
+import { useRevealFx } from '@/lib/useRevealFx'
 import DeleteListButton from './DeleteListButton'
 import ListEditPanel from './ListEditPanel'
 
@@ -26,6 +27,8 @@ interface Props {
 
 export default function ListsView({ initialLists, memberCounts, lastActivity, lastActivityBy, lastViewed, theme, currentUserId }: Props) {
   const { isOffline } = useSyncState()
+  // Random one-of-six reveal animation on mount (incl. after back-nav overlay).
+  const revealFx = useRevealFx(true)
   const [navigatingToListId, setNavigatingToListId] = useState<string | null>(null)
   const [openEditListId, setOpenEditListId] = useState<string | null>(null)
   const [renamedLists, setRenamedLists] = useState<Record<string, string>>({})
@@ -139,9 +142,9 @@ export default function ListsView({ initialLists, memberCounts, lastActivity, la
   }
 
   return (
-    // sl-reveal pops the overview in (60%→100% size, 50%→100% brightness,
-    // 0.3s) on mount — including after the back-nav overlay is removed.
-    <div className="space-y-8 sl-reveal">
+    // revealFx is one of six subtle entrance animations, chosen at random on
+    // mount (including after the back-nav overlay is removed); '' otherwise.
+    <div className={`space-y-8${revealFx ? ' ' + revealFx : ''}`}>
       {navigatingToListId && (
         <div
           role="status"
