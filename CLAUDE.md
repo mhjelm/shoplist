@@ -188,9 +188,10 @@ The back-link uses a **DOM snapshot overlay** to prevent Next.js's React-tree te
 
 User-level UI preferences live in the `user_preferences` table (one row per user, lazily upserted). `src/lib/preferences.ts` exposes `getUserPreferences()` — wrapped in `React.cache` so multiple Server Components in the same request share one query, and returns `DEFAULT_PREFERENCES` for unauthenticated users or users without a row.
 
-Four preferences today:
+Five preferences today:
 - `theme` (`'light'` | `'dark'` | `'shoplist'` | `'polar'` | `'dusk'`) — applied by adding the matching class (`dark`, `shoplist`, `polar`, `dusk`) to `<html>` in `src/app/layout.tsx`. `SettingsForm` also toggles these classes immediately on the client for instant feedback. The `shoplist` variant drives a gradient background, frosted headers, per-item pastel tints inside a list, and matching pastel tints + a subtle light-flare sweep on the list cards on `/lists` (see `.shoplist [data-sl-color]` and `.shoplist .sl-tile::after` in `globals.css`). The `theme` value is also passed as a prop from `src/app/lists/[id]/page.tsx` → `ItemList` so the list page can gate the `FireworkCanvas` and per-item `data-sl-color` attributes. Hash-based helpers `slColorFor(id)` (0–3 tint index) and `slFlareDelay(id)` (animation stagger) live in `src/lib/sl-theme.ts` and are shared by `ItemList.tsx` and `ListsView.tsx`.
 - `high_contrast` (`boolean`) — adds `hc` to `<html>`. CSS in `globals.css` overrides Tailwind gray tokens to push text and border contrast to the extreme.
+- `reduce_motion` (`boolean`) — adds `reduce-motion` to `<html>` (migration `0023_reduce_motion.sql`). A user-controlled equivalent of `prefers-reduced-motion`: `globals.css` kills every keyframe animation under `.reduce-motion *` (the `sl-reveal` screen pop, nav loading cart/glass, flares, row-entrance, empty-state bob) while leaving transitions intact; `FireworkCanvas.explode()` also bails when the class is present (JS canvas, not stoppable via CSS). `SettingsForm` toggles the class immediately for instant feedback.
 - `list_text_size` (`'normal'` | `'large'` | `'x-large'` | `'large-store-xlarge'`) — read in `src/app/lists/[id]/page.tsx` and passed as `textSize` to `ItemList`, which scales the item rows only (the rest of the chrome stays at its normal size). `ItemList` maps it to the row text class (`text-sm` / `text-base` / `text-xl`) and thumbnail size (`w-12` / `w-16` / `w-20`). The DB CHECK constraint that gates valid values lives in migrations `0021_x_large_text_size.sql` and `0022_store_xlarge_text_size.sql` (both applied). `ItemList` is the single place that computes these classes — `SortableRow`/`ShoppedRow` just render whatever `itemTextClass`/`thumbSizeClass` they're handed. It first derives an `effectiveSize`: `'large-store-xlarge'` resolves to `'large'` while browsing and `'x-large'` in store mode; every other value is the same in both modes. Store mode then renders larger than the chrome (`text-lg`, `w-16`) regardless, with `x-large` bumping it up another step (`text-2xl`, `w-20`).
 - `category_order` (`text[]`) — the user's preferred order for the 11 grocery categories. Used to sort the to-shop section. Defaults to `DEFAULT_CATEGORY_ORDER` from `src/lib/categories.ts`.
 
@@ -293,7 +294,7 @@ Six tables. Initial schema in `supabase/migrations/0001_init.sql`; subsequent mi
 - `list_members` (list_id, user_id, added_at) — join table for sharing
 - `items` (id, list_id, added_by, name, is_checked, created_at, picture_url, sort_order, quantity, category, measurement)
 - `user_item_history` (user_id, name, last_used_at, use_count, category) — autocomplete source
-- `user_preferences` (user_id, theme, list_text_size, category_order, high_contrast, updated_at) — `theme` is `'light' | 'dark' | 'shoplist'`
+- `user_preferences` (user_id, theme, list_text_size, category_order, high_contrast, reduce_motion, updated_at) — `theme` is `'light' | 'dark' | 'shoplist' | 'polar' | 'dusk'`
 - `pending_imports` (id, user_id, items jsonb, created_at) — transient store for Web Share Target payloads
 
 TypeScript mirrors of these are in `src/lib/types.ts`. Keep them in sync when the schema changes.
@@ -322,4 +323,4 @@ Realtime publication includes `items`, `lists`, and `list_members`. `items` uses
 
 - **`@/...` imports** resolve to `src/...` (Next.js default).
 - **Tailwind v4** — uses `@tailwindcss/postcss`; no `tailwind.config.js`.
-- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0023_`.
+- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0024_`.

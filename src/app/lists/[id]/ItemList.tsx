@@ -211,7 +211,9 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
   const isEmpty = toShop.length === 0 && shopped.length === 0
 
   return (
-    <div className="space-y-4">
+    // sl-reveal pops the list in (60%→100% size, 50%→100% brightness, 0.3s)
+    // once Dexie has loaded — see useListItemsSync's hasLoaded.
+    <div className={`space-y-4${hasLoaded ? ' sl-reveal' : ''}`}>
       {!storeMode && (
         <AddItemForm
           {...addItems}

@@ -405,6 +405,21 @@ body {
   50.01%    { transform: rotate(180deg);  opacity: 1; }
   100%      { transform: rotate(360deg);  opacity: 0.85; }
 }
+
+/* Screen reveal: when a list (/lists/[id]) or the overview (/lists) becomes
+   ready, the content pops from 60% size + 50% brightness up to 100%.
+   `backwards` fill so the start state shows on the first frame (no flash) AND
+   the transform fully reverts after — leaving NO lingering transform that
+   would establish a containing block for fixed descendants inside the wrapper
+   (firework canvas, nav loading overlays). */
+.sl-reveal {
+  animation: sl-reveal 0.3s ease-out backwards;
+  transform-origin: center;
+}
+@keyframes sl-reveal {
+  from { transform: scale(0.6); filter: brightness(0.5); opacity: 0.4; }
+  to   { transform: scale(1);   filter: brightness(1);   opacity: 1;   }
+}
 .shoplist .empty-state-glyph    { animation: empty-bob 3.5s ease-in-out infinite; }
 @keyframes empty-bob {
   0%, 100% { transform: translateY(0); }
@@ -413,6 +428,18 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .shoplist .empty-state-glyph { animation: none; }
   .backnav-glass { animation: none; }
+  .sl-reveal { animation: none; }
+}
+
+/* Explicit "disable animations" setting (Settings → Animationer → Av). Mirrors
+   prefers-reduced-motion but user-controlled: kills every keyframe animation
+   (sl-reveal, nav loading cart/glass, flares, row entrance, empty-state bob…).
+   Transitions — hover colours, dnd-kit reorder — are left intact. JS canvas
+   fireworks can't be stopped by CSS, so FireworkCanvas bails on this class too. */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation: none !important;
 }
 
 /* ── Store mode: collapse page chrome and stretch items full-width ─────────── */

@@ -139,7 +139,9 @@ export default function ListsView({ initialLists, memberCounts, lastActivity, la
   }
 
   return (
-    <div className="space-y-8">
+    // sl-reveal pops the overview in (60%→100% size, 50%→100% brightness,
+    // 0.3s) on mount — including after the back-nav overlay is removed.
+    <div className="space-y-8 sl-reveal">
       {navigatingToListId && (
         <div
           role="status"

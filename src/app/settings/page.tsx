@@ -9,7 +9,7 @@ export default async function SettingsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { theme, list_text_size, category_order, high_contrast } = await getUserPreferences()
+  const { theme, list_text_size, category_order, high_contrast, reduce_motion } = await getUserPreferences()
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -24,6 +24,7 @@ export default async function SettingsPage() {
           initialListTextSize={list_text_size}
           initialCategoryOrder={category_order}
           initialHighContrast={high_contrast}
+          initialReduceMotion={reduce_motion}
         />
       </main>
     </div>

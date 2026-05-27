@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Loading reveal animation — scale 90%→100% + brightness 70%→100%</title>
+<style>
+  :root {
+    --pink: #EC4899;
+    --teal: #14B8A6;
+    --bg: #f6f7f9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: #1f2937;
+    padding: 32px 20px 64px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 24px; color: #6b7280; font-size: 14px; }
+
+  .controls { margin-bottom: 28px; }
+  button {
+    font: inherit;
+    font-weight: 600;
+    background: var(--pink);
+    color: #fff;
+    border: 0;
+    border-radius: 9999px;
+    padding: 10px 22px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(236,72,153,0.35);
+  }
+  button:active { transform: translateY(1px); }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    align-items: flex-start;
+  }
+  .demo { width: 280px; }
+  .demo .label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6b7280;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+
+  /* ── The screen we reveal ───────────────────────────────────────────────
+     transform-origin center so the 90%→100% scale grows from the middle.
+     will-change keeps it cheap. The animation runs once on load and again
+     whenever the .reveal class is re-added (see Replay). */
+  .screen {
+    border-radius: 22px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.10);
+    transform-origin: center;
+    will-change: transform, filter, opacity;
+  }
+  .screen.reveal {
+    animation-name: reveal;
+    animation-timing-function: ease-out;
+    animation-fill-mode: both;
+  }
+
+  /* THE EFFECT: start at 90% size + 70% brightness (and a touch of opacity
+     so it reads as a fade), settle at 100% of everything. */
+  @keyframes reveal {
+    from {
+      transform: scale(0.90);
+      filter: brightness(0.70);
+      opacity: 0.6;
+    }
+    to {
+      transform: scale(1);
+      filter: brightness(1);
+      opacity: 1;
+    }
+  }
+
+  /* Stronger variant: starts at 60% size + 50% brightness (more dramatic
+     "pop"). Add `strong` alongside `reveal` to use it. */
+  .screen.reveal.strong { animation-name: reveal-strong; }
+  @keyframes reveal-strong {
+    from {
+      transform: scale(0.60);
+      filter: brightness(0.50);
+      opacity: 0.4;
+    }
+    to {
+      transform: scale(1);
+      filter: brightness(1);
+      opacity: 1;
+    }
+  }
+
+  /* The three durations the question asked for. */
+  .dur-500 { animation-duration: 0.5s; }
+  .dur-300 { animation-duration: 0.3s; }
+  .dur-200 { animation-duration: 0.2s; }
+
+  /* Respect users who prefer no motion: jump straight to the final state. */
+  @media (prefers-reduced-motion: reduce) {
+    .screen.reveal { animation: none; }
+  }
+
+  /* ── Mock shoplist UI inside each screen ──────────────────────────────── */
+  .app-header {
+    background: var(--pink);
+    color: #fff;
+    padding: 14px 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .app-header .back { font-size: 18px; opacity: 0.9; }
+  .list { padding: 10px 12px 16px; }
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 10px;
+    border-radius: 14px;
+    margin-bottom: 8px;
+    background: #fafafa;
+  }
+  .item .check {
+    width: 22px; height: 22px;
+    border-radius: 7px;
+    border: 2px solid #d1d5db;
+    flex: none;
+  }
+  .item .name { font-weight: 600; font-size: 15px; }
+  .item .qty { margin-left: auto; color: #9ca3af; font-size: 13px; }
+  .item.alt { background: #f1fbf9; }
+  .item.alt .check { border-color: var(--teal); background: var(--teal); }
+</style>
+</head>
+<body>
+  <h1>Loading reveal — 90% → 100% size, 70% → 100% brightness</h1>
+  <p class="sub">Plays on load. Click Replay to compare the three durations.</p>
+
+  <div class="controls">
+    <button id="replay" type="button">Replay ▶</button>
+  </div>
+
+  <h2 style="font-size:15px;margin:0 0 14px;color:#374151;">Subtle — 90% size, 70% brightness</h2>
+  <div class="row">
+    <div class="demo">
+      <div class="label">0.5s (slow / calm)</div>
+      <div class="screen reveal dur-500">
+        <div class="app-header"><span class="back">←</span> Veckohandling</div>
+        <div class="list">
+          <div class="item"><span class="check"></span><span class="name">Mjölk</span><span class="qty">2 l</span></div>
+          <div class="item alt"><span class="check"></span><span class="name">Bröd</span><span class="qty">1</span></div>
+          <div class="item"><span class="check"></span><span class="name">Ägg</span><span class="qty">12</span></div>
+          <div class="item"><span class="check"></span><span class="name">Smör</span><span class="qty">500 g</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo">
+      <div class="label">0.3s (balanced) ⭐</div>
+      <div class="screen reveal dur-300">
+        <div class="app-header"><span class="back">←</span> Veckohandling</div>
+        <div class="list">
+          <div class="item"><span class="check"></span><span class="name">Mjölk</span><span class="qty">2 l</span></div>
+          <div class="item alt"><span class="check"></span><span class="name">Bröd</span><span class="qty">1</span></div>
+          <div class="item"><span class="check"></span><span class="name">Ägg</span><span class="qty">12</span></div>
+          <div class="item"><span class="check"></span><span class="name">Smör</span><span class="qty">500 g</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo">
+      <div class="label">0.2s (snappy)</div>
+      <div class="screen reveal dur-200">
+        <div class="app-header"><span class="back">←</span> Veckohandling</div>
+        <div class="list">
+          <div class="item"><span class="check"></span><span class="name">Mjölk</span><span class="qty">2 l</span></div>
+          <div class="item alt"><span class="check"></span><span class="name">Bröd</span><span class="qty">1</span></div>
+          <div class="item"><span class="check"></span><span class="name">Ägg</span><span class="qty">12</span></div>
+          <div class="item"><span class="check"></span><span class="name">Smör</span><span class="qty">500 g</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2 style="font-size:15px;margin:36px 0 14px;color:#374151;">Stronger — 60% size, 50% brightness</h2>
+  <div class="row">
+    <div class="demo">
+      <div class="label">0.5s (slow / calm)</div>
+      <div class="screen reveal strong dur-500">
+        <div class="app-header"><span class="back">←</span> Veckohandling</div>
+        <div class="list">
+          <div class="item"><span class="check"></span><span class="name">Mjölk</span><span class="qty">2 l</span></div>
+          <div class="item alt"><span class="check"></span><span class="name">Bröd</span><span class="qty">1</span></div>
+          <div class="item"><span class="check"></span><span class="name">Ägg</span><span class="qty">12</span></div>
+          <div class="item"><span class="check"></span><span class="name">Smör</span><span class="qty">500 g</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo">
+      <div class="label">0.3s (balanced) ⭐</div>
+      <div class="screen reveal strong dur-300">
+        <div class="app-header"><span class="back">←</span> Veckohandling</div>
+        <div class="list">
+          <div class="item"><span class="check"></span><span class="name">Mjölk</span><span class="qty">2 l</span></div>
+          <div class="item alt"><span class="check"></span><span class="name">Bröd</span><span class="qty">1</span></div>
+          <div class="item"><span class="check"></span><span class="name">Ägg</span><span class="qty">12</span></div>
+          <div class="item"><span class="check"></span><span class="name">Smör</span><span class="qty">500 g</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo">
+      <div class="label">0.2s (snappy)</div>
+      <div class="screen reveal strong dur-200">
+        <div class="app-header"><span class="back">←</span> Veckohandling</div>
+        <div class="list">
+          <div class="item"><span class="check"></span><span class="name">Mjölk</span><span class="qty">2 l</span></div>
+          <div class="item alt"><span class="check"></span><span class="name">Bröd</span><span class="qty">1</span></div>
+          <div class="item"><span class="check"></span><span class="name">Ägg</span><span class="qty">12</span></div>
+          <div class="item"><span class="check"></span><span class="name">Smör</span><span class="qty">500 g</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Re-trigger the CSS animation by removing the class, forcing a reflow,
+    // then adding it back. (This is exactly how you'd kick it off in the app
+    // once the data is loaded and ready — add the `reveal` class then.)
+    const replay = document.getElementById('replay');
+    replay.addEventListener('click', () => {
+      document.querySelectorAll('.screen').forEach(el => {
+        el.classList.remove('reveal');
+        void el.offsetWidth; // force reflow so the animation restarts
+        el.classList.add('reveal');
+      });
+    });
+  </script>
+</body>
+</html>

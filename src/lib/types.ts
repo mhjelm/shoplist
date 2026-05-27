@@ -37,5 +37,6 @@ export interface UserPreferences {
   theme: Theme
   list_text_size: ListTextSize
   high_contrast: boolean
+  reduce_motion: boolean
   updated_at: string
 }

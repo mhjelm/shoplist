@@ -8,8 +8,8 @@ import { DEFAULT_CATEGORY_ORDER, isValidCategorySlug, type CategorySlug } from '
 const THEMES: readonly Theme[] = ['light', 'dark', 'shoplist', 'polar', 'dusk']
 const SIZES: readonly ListTextSize[] = ['normal', 'large', 'x-large', 'large-store-xlarge']
 
-export async function updateSettings(theme: Theme, listTextSize: ListTextSize, highContrast: boolean) {
-  if (!THEMES.includes(theme) || !SIZES.includes(listTextSize) || typeof highContrast !== 'boolean') {
+export async function updateSettings(theme: Theme, listTextSize: ListTextSize, highContrast: boolean, reduceMotion: boolean) {
+  if (!THEMES.includes(theme) || !SIZES.includes(listTextSize) || typeof highContrast !== 'boolean' || typeof reduceMotion !== 'boolean') {
     return { error: 'Invalid value' }
   }
 
@@ -22,6 +22,7 @@ export async function updateSettings(theme: Theme, listTextSize: ListTextSize, h
     theme,
     list_text_size: listTextSize,
     high_contrast: highContrast,
+    reduce_motion: reduceMotion,
     updated_at: new Date().toISOString(),
   })
 

@@ -50,6 +50,8 @@ export const FireworkCanvas = forwardRef<{ explode: (x: number, y: number) => vo
     useImperativeHandle(ref, () => ({
       explode(x: number, y: number) {
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+        // Respect the user-controlled "disable animations" setting too.
+        if (document.documentElement.classList.contains('reduce-motion')) return
         const s = stateRef.current
         const color = fwPick()
         const secondary = fwPick()

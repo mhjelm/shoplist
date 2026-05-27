@@ -27,22 +27,24 @@ interface Props {
   initialListTextSize: ListTextSize
   initialCategoryOrder: CategorySlug[]
   initialHighContrast: boolean
+  initialReduceMotion: boolean
 }
 
-export default function SettingsForm({ initialTheme, initialListTextSize, initialCategoryOrder, initialHighContrast }: Props) {
+export default function SettingsForm({ initialTheme, initialListTextSize, initialCategoryOrder, initialHighContrast, initialReduceMotion }: Props) {
   const [theme, setTheme] = useState<Theme>(initialTheme)
   const [size, setSize] = useState<ListTextSize>(initialListTextSize)
   const [categoryOrder, setCategoryOrder] = useState<CategorySlug[]>(initialCategoryOrder)
   const [highContrast, setHighContrast] = useState<boolean>(initialHighContrast)
+  const [reduceMotion, setReduceMotion] = useState<boolean>(initialReduceMotion)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const { isOffline } = useSyncState()
 
-  function save(nextTheme: Theme, nextSize: ListTextSize, nextHighContrast: boolean) {
+  function save(nextTheme: Theme, nextSize: ListTextSize, nextHighContrast: boolean, nextReduceMotion: boolean) {
     setError(null)
     if (isOffline) return
     startTransition(async () => {
-      const result = await updateSettings(nextTheme, nextSize, nextHighContrast)
+      const result = await updateSettings(nextTheme, nextSize, nextHighContrast, nextReduceMotion)
       if (result?.error) setError(result.error)
     })
   }
@@ -54,18 +56,24 @@ export default function SettingsForm({ initialTheme, initialListTextSize, initia
     html.classList.toggle('shoplist', next === 'shoplist')
     html.classList.toggle('polar',    next === 'polar')
     html.classList.toggle('dusk',     next === 'dusk')
-    save(next, size, highContrast)
+    save(next, size, highContrast, reduceMotion)
   }
 
   function pickSize(next: ListTextSize) {
     setSize(next)
-    save(theme, next, highContrast)
+    save(theme, next, highContrast, reduceMotion)
   }
 
   function pickHighContrast(next: boolean) {
     setHighContrast(next)
     document.documentElement.classList.toggle('hc', next)
-    save(theme, size, next)
+    save(theme, size, next, reduceMotion)
+  }
+
+  function pickReduceMotion(next: boolean) {
+    setReduceMotion(next)
+    document.documentElement.classList.toggle('reduce-motion', next)
+    save(theme, size, highContrast, next)
   }
 
   function handleCategoryDragEnd(event: DragEndEvent) {
@@ -145,6 +153,25 @@ export default function SettingsForm({ initialTheme, initialListTextSize, initia
             sublabel="Stronger borders and text"
             selected={highContrast}
             onSelect={() => pickHighContrast(true)}
+          />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Animationer</h2>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <OptionRow
+            label="På"
+            sublabel="Standard"
+            selected={!reduceMotion}
+            onSelect={() => pickReduceMotion(false)}
+          />
+          <div className="border-t border-gray-100 dark:border-gray-800" />
+          <OptionRow
+            label="Av"
+            sublabel="Stäng av rörelser och effekter"
+            selected={reduceMotion}
+            onSelect={() => pickReduceMotion(true)}
           />
         </div>
       </section>
