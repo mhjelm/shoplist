@@ -33,6 +33,11 @@ export default function ListsView({ initialLists, memberCounts, lastActivity, la
   // Seed list_catalog and list_views from SSR data before the first paint so
   // useLiveQuery has data on the very first frame after hydration.
   useLayoutEffect(() => {
+    // Remove the back-nav loading overlay (if any) the moment /lists is ready
+    // to paint — BackLink.tsx leaves a detached #backnav-loading node on <body>
+    // when navigating here from a list. Doing it here (pre-paint) reveals
+    // /lists without a flash of the leaving page's scroll-jump.
+    document.getElementById('backnav-loading')?.remove()
     const catalogRows: LocalListCatalog[] = initialLists.map(list => ({
       id: list.id,
       name: list.name,

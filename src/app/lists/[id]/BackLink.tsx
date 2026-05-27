@@ -1,14 +1,31 @@
 'use client'
 
-// KNOWN ISSUE: this snapshot-clone approach was the 8th attempt at preventing
-// the leaving page from visibly scrolling to top during back-nav, and it still
-// doesn't fully fix the jump. See "Back-nav from /lists/[id] still visibly
-// scrolls to top" under "Known issues" in CLAUDE.md for the full list of
-// failed attempts and untested hypotheses BEFORE trying another fix here.
+// Back-nav from /lists/[id] to /lists used to visibly scroll-jump on the
+// leaving page during Next.js's React-tree teardown (see "Known issues" in
+// CLAUDE.md — 8 failed attempts to *fix* it). We no longer try to fix it: we
+// MASK it with a full-screen, theme-matched loading overlay shown over the
+// leaving page until /lists has painted.
+//
+// The overlay is built as DETACHED DOM (vanilla, appended to <body>) — not
+// React-rendered. window.history.back() fires popstate, Next.js unmounts this
+// page's React tree, and any React-managed overlay would be torn down
+// mid-transition. Detached DOM survives the unmount. ListsView removes the
+// overlay (#backnav-loading) in its pre-paint useLayoutEffect, so it lasts
+// exactly until /lists is ready; a 1.5s timeout is a safety net only.
 
+import type { Theme } from '@/lib/types'
 import { useStoreMode } from './StoreModeContext'
 
-export function BackLink() {
+function bgClassFor(theme: Theme): string {
+  switch (theme) {
+    case 'polar': return 'loading-bg-polar'
+    case 'dusk': return 'loading-bg-dusk'
+    case 'dark': return 'bg-black'
+    default: return 'bg-white' // light + shoplist
+  }
+}
+
+export function BackLink({ theme }: { theme: Theme }) {
   const [storeMode, setStoreMode] = useStoreMode()
   const onClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     // Let browser handle modifier-key clicks (open in new tab etc.)
@@ -17,33 +34,14 @@ export function BackLink() {
 
     // In store mode, Back exits store mode and stays on the list rather than
     // navigating to /lists. The StoreModeProvider effect cleans up the history
-    // entry it pushed on activation.
+    // entry it pushed on activation. No overlay — we're not navigating.
     if (storeMode) {
       setStoreMode(false)
       return
     }
 
     if (typeof window !== 'undefined' && window.history.length > 1) {
-      // Clone the route-root into a fixed-position overlay so Next.js's
-      // teardown of the React tree can't cause a visible scroll jump.
-      // The clone is a detached DOM snapshot — not React-managed — so it
-      // survives the popstate-driven unmount until we remove it ourselves.
-      const root = document.querySelector<HTMLElement>('[data-route-root]')
-      if (root) {
-        const y = window.scrollY
-        const clone = root.cloneNode(true) as HTMLElement
-        clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'))
-        clone.style.position = 'fixed'
-        clone.style.top = `-${y}px`
-        clone.style.left = '0'
-        clone.style.right = '0'
-        clone.style.width = '100%'
-        clone.style.zIndex = '9999'
-        clone.style.pointerEvents = 'none'
-        document.body.appendChild(clone)
-        root.style.visibility = 'hidden'
-        setTimeout(() => clone.remove(), 250)
-      }
+      showBackNavOverlay(theme)
       window.history.back()
     } else {
       // Deep-link with no in-app history: fall back to full navigation.
@@ -61,4 +59,25 @@ export function BackLink() {
       ←
     </a>
   )
+}
+
+function showBackNavOverlay(theme: Theme) {
+  if (document.getElementById('backnav-loading')) return
+  const overlay = document.createElement('div')
+  overlay.id = 'backnav-loading'
+  overlay.setAttribute('role', 'status')
+  overlay.setAttribute('aria-live', 'polite')
+  overlay.className = `loading-overlay fixed inset-0 flex items-center justify-center ${bgClassFor(theme)}`
+  overlay.style.zIndex = '9999'
+
+  const glass = document.createElement('span')
+  glass.className = 'backnav-glass select-none'
+  glass.setAttribute('aria-hidden', 'true')
+  glass.textContent = '⏳'
+  overlay.appendChild(glass)
+
+  document.body.appendChild(overlay)
+  // Safety net: ListsView removes this on mount (its pre-paint useLayoutEffect).
+  // This only fires if /lists never mounts (error path).
+  setTimeout(() => overlay.remove(), 1500)
 }

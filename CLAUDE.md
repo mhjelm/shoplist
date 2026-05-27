@@ -18,6 +18,8 @@ See `REFACTOR.md` — the single source of truth for architectural smells worth 
 
 **Symptom**: user is mid-scroll on the item page, taps the back arrow, and the item page itself snaps to the top for a frame or two before `/lists` is shown. `/lists` itself renders at its correct scroll position — the jump is on the leaving page.
 
+**Current status — MASKED, not fixed (2026-05-27)**: the in-app Back arrow (`BackLink.tsx`) now paints a full-screen, theme-matched loading overlay with a small hourglass over the leaving page before `window.history.back()`, so the user never sees the jump. The overlay is a detached `#backnav-loading` DOM node on `<body>` (survives Next.js's React-tree teardown) and is removed by `ListsView`'s pre-paint `useLayoutEffect` the moment `/lists` is ready. The underlying scroll-jump still happens beneath the overlay — it's hidden, not solved. The hardware/browser Back button does NOT route through `BackLink`, so it still shows the bare jump. If you ever want to *actually* fix the jump (e.g. to also cover hardware back), the failed attempts and untested hypotheses below still stand.
+
 **Do not attempt another fix without first proving which hypothesis below is actually true.** Every attempt so far has either failed or fixed the symptom while introducing a worse one.
 
 **Failed attempts (chronological)**:
@@ -29,7 +31,7 @@ See `REFACTOR.md` — the single source of truth for architectural smells worth 
 5. **`loading.tsx` for `/lists/[id]` painting cached items from Dexie** — introduced a NEW bug: page scrolled to top a few seconds after entering a list, because the `loading.tsx → page.tsx` tree swap collapsed document height. Reverted.
 6. **`position: fixed; top: -scrollY; width: 100%` on `[data-route-root]` wrapper before `history.back()`** — the popstate handler unmounts the React tree before the browser repaints the freeze; CSS never visually applies.
 7. **`requestAnimationFrame` before `history.back()` to force a paint of the position-fixed style** — not yet tried in isolation; expected to add a frame of latency at best.
-8. **Snapshot-clone via `cloneNode(true)`, appended as `position: fixed` overlay with `visibility: hidden` on the original, removed after 250 ms** — the current implementation in `BackLink.tsx`. Best attempt structurally (a detached DOM clone can't be unmounted by React) but the user still observes the jump.
+8. **Snapshot-clone via `cloneNode(true)`, appended as `position: fixed` overlay with `visibility: hidden` on the original, removed after 250 ms** — best attempt structurally (a detached DOM clone can't be unmounted by React) but the user still observed the jump. **Removed 2026-05-27**, superseded by the masking overlay (see "Current status" above); `BackLink.tsx` no longer clones the route root.
 
 **Untested hypotheses for next time**:
 
@@ -45,7 +47,7 @@ See `REFACTOR.md` — the single source of truth for architectural smells worth 
 
 ## Active plan
 
-_(none)_
+**Back-nav loading overlay** (started 2026-05-27) — see `PLAN.md`. Mask the slow `/lists/[id]` → `/lists` back transition with a theme-matched full-screen overlay + small hourglass (replaces the snapshot-clone hack in `BackLink.tsx`). Does not solve the underlying scroll-jump known issue — masks it.
 
   Last completed plan: **Fix clear-shopped not cascading to shared siblings** — 2026-05-24. Bug: clearing shopped items in L2 left the shared sibling in L1. Root cause: `clearShoppedItems` used a fragile PostgREST `.or(and(...))` DELETE that only matched one row when multiple shared groups were present. Fix: new `SECURITY DEFINER` Postgres function `clear_shopped_items(p_list_id)` (migration `0020_clear_shopped_rpc.sql`, applied) does a single atomic CTE-DELETE — captures group ids, then deletes this list's checked rows + all siblings in one statement. Client action now calls `supabase.rpc(...)`. TDD: 6-case `clearShoppedItems.test.ts` was red before fix, green after. `deleteItem` (edit-mode unshare) unchanged — still removes by id only. 442 tests pass; `npm run build` clean.
 

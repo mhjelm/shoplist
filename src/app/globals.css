@@ -391,6 +391,20 @@ body {
   color: var(--dk-clay);
   box-shadow: 0 10px 32px rgba(196,123,94,0.32), inset 0 0 0 1px rgba(214,168,136,0.45);
 }
+
+/* Small "waiting glass" shown on the back-nav loading overlay (BackLink.tsx).
+   Deliberately small/minimal — just an hourglass, no label. */
+.backnav-glass {
+  font-size: 3rem;
+  line-height: 1;
+  animation: backnav-glass-flip 1.6s ease-in-out infinite;
+}
+@keyframes backnav-glass-flip {
+  0%        { transform: rotate(0deg);    opacity: 0.85; }
+  50%       { transform: rotate(180deg);  opacity: 1; }
+  50.01%    { transform: rotate(180deg);  opacity: 1; }
+  100%      { transform: rotate(360deg);  opacity: 0.85; }
+}
 .shoplist .empty-state-glyph    { animation: empty-bob 3.5s ease-in-out infinite; }
 @keyframes empty-bob {
   0%, 100% { transform: translateY(0); }
@@ -398,6 +412,7 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .shoplist .empty-state-glyph { animation: none; }
+  .backnav-glass { animation: none; }
 }
 
 /* ── Store mode: collapse page chrome and stretch items full-width ─────────── */
