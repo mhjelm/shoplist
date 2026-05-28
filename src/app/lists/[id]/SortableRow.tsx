@@ -55,7 +55,7 @@ export function SortableRow({
   const bgClass = mergeTarget
     ? 'bg-blue-100 dark:bg-blue-950/60 border-blue-400 dark:border-blue-500'
     : isSelected
-      ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-400 dark:border-blue-500'
+      ? 'bg-blue-100 dark:bg-blue-900/50 border-blue-500 dark:border-blue-400'
       : editMode
         ? muted
           ? 'bg-rose-50/40 dark:bg-blue-950/35 border-rose-200/70 dark:border-blue-800/50'
@@ -76,7 +76,8 @@ export function SortableRow({
         style={{ ...style, touchAction: 'pan-y' }}
         className={`${bgClass} rounded-xl border overflow-hidden relative select-none`}
         data-sl-color={slColor}
-        data-muted={muted ? 'true' : undefined}
+        data-selected={isSelected ? 'true' : undefined}
+        data-muted={muted && !isSelected ? 'true' : undefined}
         data-row-anim={!transform ? rowAnim : undefined}
         {...swipeHandlers}
       >
@@ -122,7 +123,8 @@ export function SortableRow({
       onClick={editMode ? onToggleSelect : e => onToggle((e.currentTarget as HTMLElement).getBoundingClientRect())}
       className={`flex items-center gap-3 ${bgClass} rounded-xl border px-4 py-3 transition-colors select-none cursor-pointer`}
       data-sl-color={slColor}
-      data-muted={muted ? 'true' : undefined}
+      data-selected={isSelected ? 'true' : undefined}
+      data-muted={muted && !isSelected ? 'true' : undefined}
       data-row-anim={!transform ? rowAnim : undefined}
     >
       <button

@@ -6,11 +6,21 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --sl-select: #2563eb; /* edit-mode selection accent (blue-600) */
 }
 
 .dark {
   --background: #0a0a0a;
   --foreground: #ededed;
+  --sl-select: #60a5fa; /* blue-400 */
+}
+
+/* Edit-mode selected row — a bold, theme-aware accent ring that layers
+   on top of the per-item pastel tints (which set background/border with
+   !important in the decorative themes, otherwise hiding the selection). */
+[data-selected="true"] {
+  box-shadow: inset 0 0 0 2.5px var(--sl-select);
+  border-color: var(--sl-select) !important;
 }
 
 @theme inline {
@@ -69,6 +79,7 @@ body {
   --sl-orange:  #F97316;
   --sl-yellow:  #FACC15;
   --sl-blue:    #3B82F6;
+  --sl-select:  #2563EB;
   --background: #FFF7FB;
   --foreground: #1F1033;
 }
@@ -102,6 +113,11 @@ body {
 
 /* Shopped rows keep their tint but fade out */
 .shoplist [data-sl-color][data-muted="true"] { opacity: 0.5; }
+
+/* Selected row override: replace the pastel tint with a clear accent wash so
+   it stands out from neighbouring tinted rows (the ring alone reads weakly on
+   the busy gradient backdrop). */
+.shoplist [data-selected="true"] { background-color: color-mix(in oklab, var(--sl-select) 16%, white) !important; }
 
 /* Subtle occasional light-flare sweeping across list cards on /lists.
    Scoped to `.sl-tile` so only the lists-overview cards animate, not the
@@ -209,6 +225,7 @@ body {
   --pl-mid:    #4A8EB8;
   --pl-blue:   #2D5B7D;
   --pl-deep:   #1F3349;
+  --sl-select: #2D5B7D; /* --pl-blue */
   --background: #F3F9FC;
   --foreground: #1F3349;
 }
@@ -238,6 +255,7 @@ body {
 .polar [data-sl-color="3"] { background-color: color-mix(in oklab, var(--pl-blue)  14%, white) !important; border-color: color-mix(in oklab, var(--pl-blue)  45%, transparent) !important; }
 
 .polar [data-sl-color][data-muted="true"] { opacity: 0.5; }
+.polar [data-selected="true"] { background-color: color-mix(in oklab, var(--sl-select) 18%, white) !important; }
 
 /* Light-flare sweep on list cards (shared keyframe). White sheen reads as
    light catching ice — same effect as shoplist but on the polar backdrop. */
@@ -266,6 +284,7 @@ body {
   --dk-clay:   #C47B5E;
   --dk-brown:  #8A4A30;
   --dk-deep:   #4A3A31;
+  --sl-select: #8A4A30; /* --dk-brown */
   --background: #FDF6EE;
   --foreground: #4A3A31;
 }
@@ -295,6 +314,7 @@ body {
 .dusk [data-sl-color="3"] { background-color: color-mix(in oklab, var(--dk-brown) 14%, white) !important; border-color: color-mix(in oklab, var(--dk-brown) 38%, transparent) !important; }
 
 .dusk [data-sl-color][data-muted="true"] { opacity: 0.5; }
+.dusk [data-selected="true"] { background-color: color-mix(in oklab, var(--sl-select) 16%, white) !important; }
 
 /* Warm light sweep on list cards — same keyframe as shoplist/polar. */
 .dusk .sl-tile::after {
