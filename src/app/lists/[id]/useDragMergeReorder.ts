@@ -23,12 +23,33 @@ export function useDragMergeReorder({
 }) {
   const [pendingMerge, setPendingMerge] = useState<{ source: Item; target: Item } | null>(null)
 
+  // One-shot "drop on another item to merge" hint, shown on the first drag
+  // after entering edit mode (reset whenever edit mode is toggled).
+  const [showMergeHint, setShowMergeHint] = useState(false)
+  const mergeHintShownRef = useRef(false)
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Refs so handleDragEnd always reads the latest values even when dnd-kit
   // holds a stale callback (see CLAUDE.md "Edit mode" notes).
   const editModeRef = useRef(editMode)
   const itemsRef = useRef(items)
   useEffect(() => { editModeRef.current = editMode }, [editMode])
   useEffect(() => { itemsRef.current = items }, [items])
+
+  // Re-arm the hint each time edit mode is toggled, and clear any pending timer.
+  useEffect(() => {
+    mergeHintShownRef.current = false
+    setShowMergeHint(false)
+    if (hintTimerRef.current) { clearTimeout(hintTimerRef.current); hintTimerRef.current = null }
+  }, [editMode])
+  useEffect(() => () => { if (hintTimerRef.current) clearTimeout(hintTimerRef.current) }, [])
+
+  function handleDragStart() {
+    if (!editModeRef.current || mergeHintShownRef.current) return
+    mergeHintShownRef.current = true
+    setShowMergeHint(true)
+    hintTimerRef.current = setTimeout(() => setShowMergeHint(false), 3500)
+  }
 
   useEffect(() => {
     if (!pendingMerge) return
@@ -89,5 +110,5 @@ export function useDragMergeReorder({
     await muMergeItems(listId, source.id, target.id, mergedMeasurement, mergedQuantity)
   }
 
-  return { sensors, handleDragEnd, pendingMerge, setPendingMerge, handleMergeConfirm }
+  return { sensors, handleDragStart, handleDragEnd, pendingMerge, setPendingMerge, handleMergeConfirm, showMergeHint }
 }

@@ -107,7 +107,7 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
   const revealFx = useRevealFx(hasLoaded)
   const addItems = useAddItems({ listId, items, suggestions, isOffline })
   const { selectedIds, setSelectedIds, pickerMode, setPickerMode, pickerError, setPickerError, toggleSelect, handlePickTarget } = useItemSelection({ editMode, items, listId })
-  const { sensors, handleDragEnd, pendingMerge, setPendingMerge, handleMergeConfirm } = useDragMergeReorder({ listId, items, editMode })
+  const { sensors, handleDragStart, handleDragEnd, pendingMerge, setPendingMerge, handleMergeConfirm, showMergeHint } = useDragMergeReorder({ listId, items, editMode })
   const { ghosts, setGhosts, fwCanvasRef, spawnGhost } = useItemCelebrations({ itemTextClass, thumbSizeClass })
 
   const toShop = useMemo(() => items.filter(i => !i.is_checked).sort(sortItemsByOrder), [items])
@@ -225,7 +225,7 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
         />
       )}
 
-      <DndContext id="items-dnd" sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext id="items-dnd" sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {groupedToShop.length === 0 ? (
           // Don't flash the "empty" copy while Dexie is still hydrating on
           // first mount — only show EmptyState once we know the cache is empty.
@@ -273,6 +273,17 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
           />
         )}
       </DndContext>
+
+      {showMergeHint && (
+        <div role="status" className="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 pointer-events-none">
+          <div className="merge-hint-toast pointer-events-none flex items-center gap-2 rounded-full bg-gray-900/90 px-4 py-2 text-sm font-medium text-white shadow-lg backdrop-blur-sm dark:bg-gray-100/95 dark:text-gray-900">
+            <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7v8a2 2 0 0 0 2 2h6m0 0-3-3m3 3-3 3" />
+            </svg>
+            Släpp på en annan vara för att slå ihop dem
+          </div>
+        </div>
+      )}
 
       <ClearListControl
         isEmpty={isEmpty}

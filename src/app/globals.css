@@ -477,6 +477,15 @@ body {
   animation: none !important;
 }
 
+/* One-shot edit-mode merge hint toast — gentle rise + fade in. The keyframe
+   is killed automatically under .reduce-motion (rule above), leaving the
+   toast to simply appear. */
+.merge-hint-toast { animation: merge-hint-in 0.22s ease-out both; }
+@keyframes merge-hint-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ── Store mode: collapse page chrome and stretch items full-width ─────────── */
 body.store-mode header { display: none; }
 body.store-mode main {
