@@ -81,10 +81,13 @@ async function callGeminiOnce(
 }
 
 // Statuses worth retrying / failing over: 429 (rate limit), 503 (overloaded),
-// and 500 (INTERNAL — Gemini returns these transiently, and per Google's
-// guidance they should be retried). Backoff per same-model retry, in ms; the
-// array length sets the retry count per model. Kept short — we also fail over.
-const RETRYABLE_STATUSES = new Set([429, 500, 503])
+// 500 (INTERNAL — Gemini returns these transiently), and 404 (observed when
+// Google's backend briefly mis-routes a valid model request to a non-existent
+// internal model, e.g. "gemini-v4p1s-rev24-ajax-sentinel" — retrying the same
+// (correct) model name routes to a healthy backend). Backoff per same-model
+// retry, in ms; the array length sets the retry count. Kept short — we fail
+// over too.
+const RETRYABLE_STATUSES = new Set([404, 429, 500, 503])
 const RETRY_BACKOFFS_MS = [1200]
 
 async function callGeminiChain(
