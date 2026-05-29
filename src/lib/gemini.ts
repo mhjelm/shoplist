@@ -3,10 +3,11 @@ import { type CategorySlug, CATEGORIES, isValidCategorySlug } from './categories
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 // Tried in order. When the primary is overloaded (503) the wrapper fails over
-// to the next. flash-lite is the same 2.5 generation — identical request shape
-// (audio input, thinkingConfig, JSON response) — and usually has spare capacity
-// when flash is saturated.
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite']
+// to the next. Both are Gemini 3.x (same request shape: audio input,
+// thinkingConfig.thinkingLevel, JSON response). flash-lite handles list/recipe
+// extraction fine; gemini-3.5-flash is a higher-capability backstop for when
+// flash-lite is saturated.
+const GEMINI_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash']
 
 type GemResp = {
   candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]
@@ -27,8 +28,11 @@ async function callGeminiOnce(model: string, parts: GeminiPart[], options: { tem
       contents: [{ parts }],
       generationConfig: {
         temperature: options.temperature ?? 0.1,
-        maxOutputTokens: 4000,
-        thinkingConfig: { thinkingBudget: 0 },
+        // Headroom so a bit of low-level thinking can't starve the JSON output.
+        maxOutputTokens: 8192,
+        // Gemini 3.x uses thinkingLevel (not the 2.5-era thinkingBudget).
+        // "low" keeps these simple extraction calls fast and cheap.
+        thinkingConfig: { thinkingLevel: 'low' },
         responseMimeType: 'application/json',
       },
     }),
