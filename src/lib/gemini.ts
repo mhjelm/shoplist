@@ -32,8 +32,13 @@ async function callGeminiOnce(parts: GeminiPart[], options: { temperature?: numb
   if (!res.ok) {
     const body = await res.text().catch(() => '')
     console.error('[gemini] http error', res.status, body)
-    if (res.status === 429) throw Object.assign(new Error('Gemini API rate limit reached — wait a moment and try again'), { status: 429 })
-    throw new Error(`Gemini HTTP ${res.status}: ${body.slice(0, 200)}`)
+    const message = res.status === 429
+      ? 'Gemini API rate limit reached — wait a moment and try again'
+      : res.status === 503
+        ? 'Gemini är tillfälligt överbelastad — försök igen om en stund'
+        : `Gemini HTTP ${res.status}: ${body.slice(0, 200)}`
+    // Attach status so the retry wrapper can decide whether it's transient.
+    throw Object.assign(new Error(message), { status: res.status })
   }
 
   const data = (await res.json()) as GemResp
@@ -54,15 +59,24 @@ async function callGeminiOnce(parts: GeminiPart[], options: { temperature?: numb
   }
 }
 
+// Transient statuses worth retrying: 429 (rate limit) and 503 (model overloaded
+// / "high demand" — common on gemini-2.5-flash and not reflected on the status
+// page). Backoff per retry, in ms; the array length sets the retry count.
+const RETRYABLE_STATUSES = new Set([429, 503])
+const RETRY_BACKOFFS_MS = [800, 2500]
+
 async function callGeminiParts(parts: GeminiPart[], options: { temperature?: number }): Promise<unknown> {
-  try {
-    return await callGeminiOnce(parts, options)
-  } catch (e) {
-    if ((e as { status?: number }).status === 429) {
-      await new Promise(r => setTimeout(r, 5000))
-      return callGeminiOnce(parts, options)
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await callGeminiOnce(parts, options)
+    } catch (e) {
+      const status = (e as { status?: number }).status
+      if (status && RETRYABLE_STATUSES.has(status) && attempt < RETRY_BACKOFFS_MS.length) {
+        await new Promise(r => setTimeout(r, RETRY_BACKOFFS_MS[attempt]))
+        continue
+      }
+      throw e
     }
-    throw e
   }
 }
 
