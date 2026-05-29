@@ -31,6 +31,7 @@ import { EditModal } from './EditModal'
 import { GhostOverlay } from './GhostOverlay'
 import { FireworkCanvas } from './FireworkCanvas'
 import RecipeImportModal from './RecipeImportModal'
+import SpeechModal from './SpeechModal'
 import TargetListModal from './TargetListModal'
 import { DndContext, closestCenter } from '@dnd-kit/core'
 
@@ -49,6 +50,7 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
   const [editingItem, setEditingItem] = useState<Item | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const [showRecipe, setShowRecipe] = useState(false)
+  const [showSpeech, setShowSpeech] = useState(false)
   const [editMode, setEditMode] = useEditMode()
   const [storeMode, setStoreMode] = useStoreMode()
 
@@ -222,6 +224,7 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
           {...addItems}
           isOffline={isOffline}
           onOpenRecipe={() => setShowRecipe(true)}
+          onOpenSpeech={() => setShowSpeech(true)}
         />
       )}
 
@@ -344,6 +347,14 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
             localDB.items.bulkPut(incoming.map(itemToLocalItem))
               .catch(err => console.error('Failed to put recipe items in local db:', err))
           }}
+        />
+      )}
+
+      {showSpeech && (
+        <SpeechModal
+          listId={listId}
+          items={items}
+          onClose={() => setShowSpeech(false)}
         />
       )}
 

@@ -20,6 +20,7 @@ export {
 export {
   addItems,
   extractAddItems,
+  extractItemsFromAudio,
   extractRecipeItems,
   extractListItemsFromImage,
 } from './import'

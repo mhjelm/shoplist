@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { type CategorySlug, isValidCategorySlug } from '@/lib/categories'
-import { callGemini } from '@/lib/gemini'
+import { callGemini, callGeminiWithAudio } from '@/lib/gemini'
 
 // addItems: batch import entry point for RecipeImportModal and the Web Share Target route.
 // Do not call from add-item flows — those route through muAddItem (outbox) instead.
@@ -96,24 +96,22 @@ export async function addItems(listId: string, incoming: Array<{ name: string; c
   return { items: resultItems }
 }
 
-export async function extractAddItems(text: string) {
-  if (!text.trim()) return { error: 'No input' }
-  if (!process.env.GEMINI_API_KEY) return { error: 'GEMINI_API_KEY not configured' }
+const CATEGORY_LIST = `frukt-gront, mejeri, kott-fisk, brod, frys, skafferi, drycker, snacks, hushall, hygien, ovrigt`
 
-  const categoryList = `frukt-gront, mejeri, kott-fisk, brod, frys, skafferi, drycker, snacks, hushall, hygien, ovrigt`
-
+// Shared extraction instructions for both the typed (extractAddItems) and the
+// spoken (extractItemsFromAudio) flows. The `source` clause names where the
+// items come from; the rest is identical so both paths return the same shape.
+function buildExtractionPrompt(source: string) {
   const exampleInput = `2 mjölk\nbanan\npasta 500g\n3 burkar krossade tomater`
   const exampleOutput = `{"items":[{"name":"Mjölk","quantity":2,"measurement":null,"category":"mejeri"},{"name":"Banan","quantity":1,"measurement":null,"category":"frukt-gront"},{"name":"Pasta","quantity":1,"measurement":"500 g","category":"skafferi"},{"name":"Krossade tomater","quantity":3,"measurement":"3 burkar","category":"skafferi"}]}`
 
-  try {
-    const parsed = (await callGemini(
-      `Parse this user-typed shopping list into structured items. Each line or comma-separated segment is one item. For each, extract:
+  return `Parse ${source} into structured items. Each line, comma-separated segment, or spoken item is one item. For each, extract:
 - "name": the grocery item in Swedish (1-4 words, capitalize first word only)
 - "quantity": positive integer (default 1). Use when a clear count is stated, e.g. "2 mjölk" → 2, "3 burkar tonfisk" → 3.
-- "measurement": copy the unit/amount phrase VERBATIM from the input (e.g. "500 g", "3 burkar", "1,5 dl"). Set to null if none.
-- "category": one of these slugs: ${categoryList}
+- "measurement": copy the unit/amount phrase VERBATIM (e.g. "500 g", "3 burkar", "1,5 dl"). Set to null if none.
+- "category": one of these slugs: ${CATEGORY_LIST}
 
-CRITICAL: Never invent or modify measurements. Copy exactly as written, including fractions (½), approximations (ca), and Swedish decimal commas (1,5). When a number is a count of a named unit ("3 burkar tonfisk" → quantity 3, measurement "3 burkar"), include it in both. When a number is purely an amount ("500 g pasta" → quantity 1, measurement "500 g"). When uncertain, prefer quantity 1.
+CRITICAL: Never invent or modify measurements. Copy exactly as stated, including fractions (½), approximations (ca), and Swedish decimal commas (1,5). When a number is a count of a named unit ("3 burkar tonfisk" → quantity 3, measurement "3 burkar"), include it in both. When a number is purely an amount ("500 g pasta" → quantity 1, measurement "500 g"). When uncertain, prefer quantity 1.
 
 Example input:
 ${exampleInput}
@@ -121,30 +119,62 @@ ${exampleInput}
 Example output:
 ${exampleOutput}
 
-Return JSON only: {"items": [{"name": "...", "quantity": 1, "measurement": "..." or null, "category": "slug"}, ...]}
+Return JSON only: {"items": [{"name": "...", "quantity": 1, "measurement": "..." or null, "category": "slug"}, ...]}`
+}
+
+// Validate and normalise the raw Gemini `items` array into the strict shape the
+// add-item flows expect: trimmed name, quantity ≥ 1, valid category slug or null,
+// trimmed measurement or null. Drops anything without a usable name.
+function normalizeExtractedItems(parsed: { items?: unknown }) {
+  if (!Array.isArray(parsed.items)) return []
+  return (parsed.items as unknown[])
+    .filter((i): i is { name: string; quantity?: unknown; measurement?: unknown; category?: string } =>
+      typeof i === 'object' && i !== null && typeof (i as Record<string, unknown>).name === 'string'
+    )
+    .map(i => ({
+      name: i.name.trim(),
+      quantity: (typeof i.quantity === 'number' && i.quantity > 0) ? Math.max(1, Math.floor(i.quantity)) : 1,
+      category: (i.category && isValidCategorySlug(i.category)) ? i.category : null,
+      measurement: (typeof i.measurement === 'string' && i.measurement.trim()) ? i.measurement.trim() : null,
+    }))
+    .filter(i => i.name.length > 0)
+}
+
+export async function extractAddItems(text: string) {
+  if (!text.trim()) return { error: 'No input' }
+  if (!process.env.GEMINI_API_KEY) return { error: 'GEMINI_API_KEY not configured' }
+
+  try {
+    const parsed = (await callGemini(
+      `${buildExtractionPrompt('this user-typed shopping list')}
 
 Input:
 ${text}`,
       { temperature: 0 }
     )) as { items?: unknown }
 
-    if (!Array.isArray(parsed.items)) return { items: [] }
-
-    const items = (parsed.items as unknown[])
-      .filter((i): i is { name: string; quantity?: unknown; measurement?: unknown; category?: string } =>
-        typeof i === 'object' && i !== null && typeof (i as Record<string, unknown>).name === 'string'
-      )
-      .map(i => ({
-        name: i.name.trim(),
-        quantity: (typeof i.quantity === 'number' && i.quantity > 0) ? Math.max(1, Math.floor(i.quantity)) : 1,
-        category: (i.category && isValidCategorySlug(i.category)) ? i.category : null,
-        measurement: (typeof i.measurement === 'string' && i.measurement.trim()) ? i.measurement.trim() : null,
-      }))
-      .filter(i => i.name.length > 0)
-
-    return { items }
+    return { items: normalizeExtractedItems(parsed) }
   } catch (e) {
     console.error('[extractAddItems] failed', e)
+    return { error: e instanceof Error ? e.message : 'Could not parse Gemini response' }
+  }
+}
+
+export async function extractItemsFromAudio(audioBase64: string, mimeType: string) {
+  if (!audioBase64) return { error: 'No audio' }
+  if (!process.env.GEMINI_API_KEY) return { error: 'GEMINI_API_KEY not configured' }
+
+  try {
+    const parsed = (await callGeminiWithAudio(
+      buildExtractionPrompt('the spoken shopping list in the attached audio'),
+      audioBase64,
+      mimeType,
+      { temperature: 0 }
+    )) as { items?: unknown }
+
+    return { items: normalizeExtractedItems(parsed) }
+  } catch (e) {
+    console.error('[extractItemsFromAudio] failed', e)
     return { error: e instanceof Error ? e.message : 'Could not parse Gemini response' }
   }
 }

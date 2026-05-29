@@ -8,7 +8,10 @@ type GemResp = {
   promptFeedback?: { blockReason?: string }
 }
 
-async function callGeminiOnce(prompt: string, options: { temperature?: number }): Promise<unknown> {
+// A single Gemini request part: text, or inline binary (e.g. audio) as base64.
+type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } }
+
+async function callGeminiOnce(parts: GeminiPart[], options: { temperature?: number }): Promise<unknown> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured')
 
@@ -16,7 +19,7 @@ async function callGeminiOnce(prompt: string, options: { temperature?: number })
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
+      contents: [{ parts }],
       generationConfig: {
         temperature: options.temperature ?? 0.1,
         maxOutputTokens: 4000,
@@ -51,16 +54,32 @@ async function callGeminiOnce(prompt: string, options: { temperature?: number })
   }
 }
 
-export async function callGemini(prompt: string, options: { temperature?: number } = {}): Promise<unknown> {
+async function callGeminiParts(parts: GeminiPart[], options: { temperature?: number }): Promise<unknown> {
   try {
-    return await callGeminiOnce(prompt, options)
+    return await callGeminiOnce(parts, options)
   } catch (e) {
     if ((e as { status?: number }).status === 429) {
       await new Promise(r => setTimeout(r, 5000))
-      return callGeminiOnce(prompt, options)
+      return callGeminiOnce(parts, options)
     }
     throw e
   }
+}
+
+export async function callGemini(prompt: string, options: { temperature?: number } = {}): Promise<unknown> {
+  return callGeminiParts([{ text: prompt }], options)
+}
+
+export async function callGeminiWithAudio(
+  prompt: string,
+  audioBase64: string,
+  mimeType: string,
+  options: { temperature?: number } = {},
+): Promise<unknown> {
+  return callGeminiParts(
+    [{ text: prompt }, { inlineData: { mimeType, data: audioBase64 } }],
+    options,
+  )
 }
 
 const CATEGORY_LINES = CATEGORIES.map(c => `- ${c.slug} (${c.label})`).join('\n')

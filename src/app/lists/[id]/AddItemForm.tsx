@@ -1,7 +1,20 @@
 'use client'
 
 import type React from 'react'
+import { useSyncExternalStore } from 'react'
 import PictureInput from './PictureInput'
+
+// Client-only capability read: false during SSR/first paint (avoids a hydration
+// mismatch), then the real value once mounted. useSyncExternalStore is the
+// idiomatic way to surface this without a setState-in-effect.
+const noopSubscribe = () => () => {}
+function useSpeechSupported() {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => !!navigator.mediaDevices?.getUserMedia && typeof window.MediaRecorder !== 'undefined',
+    () => false,
+  )
+}
 
 interface Props {
   input: string
@@ -23,6 +36,7 @@ interface Props {
   setUrlInput: (v: string) => void
   isOffline: boolean
   onOpenRecipe: () => void
+  onOpenSpeech?: () => void
 }
 
 export function AddItemForm({
@@ -30,8 +44,10 @@ export function AddItemForm({
   showUrlInput, urlInput, inputRef,
   handleInputChange, selectSuggestion, handleDeleteSuggestion, handleAdd,
   setInput, setFiltered, setHighlightIdx, setShowUrlInput, setUrlInput,
-  isOffline, onOpenRecipe,
+  isOffline, onOpenRecipe, onOpenSpeech,
 }: Props) {
+  const speechSupported = useSpeechSupported()
+
   return (
     <div className="flex flex-col gap-2">
       <div className="relative">
@@ -130,6 +146,19 @@ export function AddItemForm({
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4" />
           </svg>
         </button>
+        {speechSupported && onOpenSpeech && (
+          <button
+            onClick={onOpenSpeech}
+            disabled={isOffline}
+            title={isOffline ? 'Kräver anslutning' : 'Tala för att lägga till varor'}
+            aria-label="Tala för att lägga till varor"
+            className="border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors disabled:opacity-30 shoplist:border-purple-300 shoplist:text-purple-500 shoplist:hover:text-purple-600"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {showUrlInput && (
