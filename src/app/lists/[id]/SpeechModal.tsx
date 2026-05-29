@@ -100,7 +100,11 @@ export default function SpeechModal({ listId, items, onClose }: Props) {
       setStage('processing')
       try {
         const base64 = await blobToBase64(blob)
-        const result = await extractItemsFromAudio(base64, blob.type)
+        // Gemini accepts base audio MIME types (audio/webm, audio/mp4, …) but
+        // NOT the ";codecs=opus" suffix MediaRecorder appends — that returns a
+        // 500. Send the bare type.
+        const mimeType = blob.type.split(';')[0] || 'audio/webm'
+        const result = await extractItemsFromAudio(base64, mimeType)
         if (result.error) {
           setError(result.error)
           setStage('error')
