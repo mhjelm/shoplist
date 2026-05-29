@@ -36,12 +36,21 @@ export function useDragMergeReorder({
   useEffect(() => { editModeRef.current = editMode }, [editMode])
   useEffect(() => { itemsRef.current = items }, [items])
 
-  // Re-arm the hint each time edit mode is toggled, and clear any pending timer.
+  // Re-arm the hint whenever edit mode is toggled. The visible-state reset is
+  // done during render (React's "adjust state when a prop changes" pattern) so
+  // it doesn't trip the set-state-in-effect rule; the ref/timer bookkeeping —
+  // which must not run during render — stays in an effect (refs only, no
+  // setState, so no cascade).
+  const [prevEditMode, setPrevEditMode] = useState(editMode)
+  if (editMode !== prevEditMode) {
+    setPrevEditMode(editMode)
+    setShowMergeHint(false)
+  }
   useEffect(() => {
     mergeHintShownRef.current = false
-    setShowMergeHint(false)
     if (hintTimerRef.current) { clearTimeout(hintTimerRef.current); hintTimerRef.current = null }
   }, [editMode])
+  // Clear any pending hint timer on unmount.
   useEffect(() => () => { if (hintTimerRef.current) clearTimeout(hintTimerRef.current) }, [])
 
   function handleDragStart() {

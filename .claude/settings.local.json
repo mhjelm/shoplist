@@ -54,7 +54,12 @@
       "Bash(git checkout *)",
       "Bash(xargs grep -l \"clearShoppedItems\\\\|clear.*shopped\")",
       "Bash(git restore *)",
-      "PowerShell(npm test *)"
+      "PowerShell(npm test *)",
+      "Bash(git show *)",
+      "Bash(grep *)",
+      "Bash(awk 'NR>=15 && NR<=47' CLAUDE.md)",
+      "Bash(awk 'NR>=48 && NR<=73' CLAUDE.md)",
+      "Bash(awk 'NR>=103 && NR<=292' CLAUDE.md)"
     ]
   }
 }
