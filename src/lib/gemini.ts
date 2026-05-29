@@ -1,7 +1,12 @@
 import { type CategorySlug, CATEGORIES, isValidCategorySlug } from './categories'
 
-const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
+
+// Tried in order. When the primary is overloaded (503) the wrapper fails over
+// to the next. flash-lite is the same 2.5 generation — identical request shape
+// (audio input, thinkingConfig, JSON response) — and usually has spare capacity
+// when flash is saturated.
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite']
 
 type GemResp = {
   candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]
@@ -11,11 +16,11 @@ type GemResp = {
 // A single Gemini request part: text, or inline binary (e.g. audio) as base64.
 type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } }
 
-async function callGeminiOnce(parts: GeminiPart[], options: { temperature?: number }): Promise<unknown> {
+async function callGeminiOnce(model: string, parts: GeminiPart[], options: { temperature?: number }): Promise<unknown> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured')
 
-  const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+  const res = await fetch(`${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -31,7 +36,7 @@ async function callGeminiOnce(parts: GeminiPart[], options: { temperature?: numb
 
   if (!res.ok) {
     const body = await res.text().catch(() => '')
-    console.error('[gemini] http error', res.status, body)
+    console.error('[gemini] http error', model, res.status, body)
     const message = res.status === 429
       ? 'Gemini API rate limit reached — wait a moment and try again'
       : res.status === 503
@@ -61,23 +66,38 @@ async function callGeminiOnce(parts: GeminiPart[], options: { temperature?: numb
 
 // Transient statuses worth retrying: 429 (rate limit) and 503 (model overloaded
 // / "high demand" — common on gemini-2.5-flash and not reflected on the status
-// page). Backoff per retry, in ms; the array length sets the retry count.
+// page). Backoff per same-model retry, in ms; the array length sets the retry
+// count per model. Kept short because we also fail over to the next model.
 const RETRYABLE_STATUSES = new Set([429, 503])
-const RETRY_BACKOFFS_MS = [800, 2500]
+const RETRY_BACKOFFS_MS = [1200]
 
 async function callGeminiParts(parts: GeminiPart[], options: { temperature?: number }): Promise<unknown> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await callGeminiOnce(parts, options)
-    } catch (e) {
-      const status = (e as { status?: number }).status
-      if (status && RETRYABLE_STATUSES.has(status) && attempt < RETRY_BACKOFFS_MS.length) {
-        await new Promise(r => setTimeout(r, RETRY_BACKOFFS_MS[attempt]))
-        continue
+  let lastErr: unknown
+  for (let m = 0; m < GEMINI_MODELS.length; m++) {
+    const model = GEMINI_MODELS[m]
+    const hasFallback = m < GEMINI_MODELS.length - 1
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await callGeminiOnce(model, parts, options)
+      } catch (e) {
+        lastErr = e
+        const status = (e as { status?: number }).status
+        const retryable = !!status && RETRYABLE_STATUSES.has(status)
+        if (retryable && attempt < RETRY_BACKOFFS_MS.length) {
+          await new Promise(r => setTimeout(r, RETRY_BACKOFFS_MS[attempt]))
+          continue
+        }
+        // Same-model retries exhausted. If it's a transient/overload status and
+        // another model is available, fail over to it; otherwise give up.
+        if (retryable && hasFallback) {
+          console.warn(`[gemini] ${model} unavailable (${status}); falling back to ${GEMINI_MODELS[m + 1]}`)
+          break
+        }
+        throw e
       }
-      throw e
     }
   }
+  throw lastErr
 }
 
 export async function callGemini(prompt: string, options: { temperature?: number } = {}): Promise<unknown> {
