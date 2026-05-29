@@ -2,12 +2,21 @@ import { type CategorySlug, CATEGORIES, isValidCategorySlug } from './categories
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
-// Tried in order. When the primary is overloaded (503) the wrapper fails over
-// to the next. Both are Gemini 3.x (same request shape: audio input,
-// thinkingConfig.thinkingLevel, JSON response). flash-lite handles list/recipe
-// extraction fine; gemini-3.5-flash is a higher-capability backstop for when
-// flash-lite is saturated.
-const GEMINI_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash']
+// Text/recipe/categorize calls. flash-lite is cheap and handles these fine;
+// gemini-3.5-flash is the overload backstop. Tried in order.
+const TEXT_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash']
+
+// Audio (speech-to-list) calls. Verified via tools/test-gemini-audio.mjs:
+// gemini-3.5-flash returns 200 on inline audio; gemini-3.1-flash-lite returns
+// 500 INTERNAL (can't do inline audio); the 2.5 models work but are frequently
+// 503-overloaded. So 3.5-flash is the audio primary, 2.5-flash the fallback.
+const AUDIO_MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash']
+
+// 3.x uses thinkingConfig.thinkingLevel; 2.x uses thinkingConfig.thinkingBudget.
+// Derive per model so a chain can mix generations.
+function thinkingConfigFor(model: string): Record<string, unknown> {
+  return model.startsWith('gemini-3') ? { thinkingLevel: 'low' } : { thinkingBudget: 0 }
+}
 
 type GemResp = {
   candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]
@@ -15,9 +24,14 @@ type GemResp = {
 }
 
 // A single Gemini request part: text, or inline binary (e.g. audio) as base64.
-type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } }
+// snake_case (inline_data/mime_type) matches the working image-import request.
+type GeminiPart = { text: string } | { inline_data: { mime_type: string; data: string } }
 
-async function callGeminiOnce(model: string, parts: GeminiPart[], options: { temperature?: number }): Promise<unknown> {
+async function callGeminiOnce(
+  model: string,
+  parts: GeminiPart[],
+  options: { temperature?: number },
+): Promise<unknown> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured')
 
@@ -28,11 +42,9 @@ async function callGeminiOnce(model: string, parts: GeminiPart[], options: { tem
       contents: [{ parts }],
       generationConfig: {
         temperature: options.temperature ?? 0.1,
-        // Headroom so a bit of low-level thinking can't starve the JSON output.
+        // Headroom so any thinking can't starve the JSON output.
         maxOutputTokens: 8192,
-        // Gemini 3.x uses thinkingLevel (not the 2.5-era thinkingBudget).
-        // "low" keeps these simple extraction calls fast and cheap.
-        thinkingConfig: { thinkingLevel: 'low' },
+        thinkingConfig: thinkingConfigFor(model),
         responseMimeType: 'application/json',
       },
     }),
@@ -68,18 +80,22 @@ async function callGeminiOnce(model: string, parts: GeminiPart[], options: { tem
   }
 }
 
-// Transient statuses worth retrying: 429 (rate limit) and 503 (model overloaded
-// / "high demand" — common on gemini-2.5-flash and not reflected on the status
-// page). Backoff per same-model retry, in ms; the array length sets the retry
-// count per model. Kept short because we also fail over to the next model.
-const RETRYABLE_STATUSES = new Set([429, 503])
+// Statuses worth retrying / failing over: 429 (rate limit), 503 (overloaded),
+// and 500 (INTERNAL — Gemini returns these transiently, and per Google's
+// guidance they should be retried). Backoff per same-model retry, in ms; the
+// array length sets the retry count per model. Kept short — we also fail over.
+const RETRYABLE_STATUSES = new Set([429, 500, 503])
 const RETRY_BACKOFFS_MS = [1200]
 
-async function callGeminiParts(parts: GeminiPart[], options: { temperature?: number }): Promise<unknown> {
+async function callGeminiChain(
+  models: string[],
+  parts: GeminiPart[],
+  options: { temperature?: number },
+): Promise<unknown> {
   let lastErr: unknown
-  for (let m = 0; m < GEMINI_MODELS.length; m++) {
-    const model = GEMINI_MODELS[m]
-    const hasFallback = m < GEMINI_MODELS.length - 1
+  for (let m = 0; m < models.length; m++) {
+    const model = models[m]
+    const hasFallback = m < models.length - 1
     for (let attempt = 0; ; attempt++) {
       try {
         return await callGeminiOnce(model, parts, options)
@@ -91,10 +107,10 @@ async function callGeminiParts(parts: GeminiPart[], options: { temperature?: num
           await new Promise(r => setTimeout(r, RETRY_BACKOFFS_MS[attempt]))
           continue
         }
-        // Same-model retries exhausted. If it's a transient/overload status and
-        // another model is available, fail over to it; otherwise give up.
+        // Same-model retries exhausted. If it's a transient status and another
+        // model is available, fail over to it; otherwise give up.
         if (retryable && hasFallback) {
-          console.warn(`[gemini] ${model} unavailable (${status}); falling back to ${GEMINI_MODELS[m + 1]}`)
+          console.warn(`[gemini] ${model} unavailable (${status}); falling back to ${models[m + 1]}`)
           break
         }
         throw e
@@ -105,7 +121,7 @@ async function callGeminiParts(parts: GeminiPart[], options: { temperature?: num
 }
 
 export async function callGemini(prompt: string, options: { temperature?: number } = {}): Promise<unknown> {
-  return callGeminiParts([{ text: prompt }], options)
+  return callGeminiChain(TEXT_MODELS, [{ text: prompt }], options)
 }
 
 export async function callGeminiWithAudio(
@@ -114,8 +130,9 @@ export async function callGeminiWithAudio(
   mimeType: string,
   options: { temperature?: number } = {},
 ): Promise<unknown> {
-  return callGeminiParts(
-    [{ text: prompt }, { inlineData: { mimeType, data: audioBase64 } }],
+  return callGeminiChain(
+    AUDIO_MODELS,
+    [{ inline_data: { mime_type: mimeType, data: audioBase64 } }, { text: prompt }],
     options,
   )
 }
