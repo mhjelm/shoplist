@@ -1,4 +1,4 @@
-import type { List } from '@/lib/types'
+import type { Item, List } from '@/lib/types'
 
 /**
  * Compute which lists should show a "NEW" marker on /lists for a given user.
@@ -37,4 +37,23 @@ export function computeUnread({
     unread[list.id] = !seen || act > seen
   }
   return unread
+}
+
+/**
+ * Per-item analogue of {@link computeUnread}: is this item one that another user
+ * ADDED since the viewer last opened the list? Used for the in-list "NEW" dot.
+ *
+ * `baselineViewedAt` is the viewer's last_viewed_at frozen at page entry (before
+ * the mount effect bumps it). `null` means never visited → any item by another
+ * user counts as new. Optimistic local inserts (added_by === '') and the
+ * viewer's own adds are never marked.
+ */
+export function isNewSinceVisit(
+  item: Pick<Item, 'added_by' | 'created_at'>,
+  currentUserId: string,
+  baselineViewedAt: string | null,
+): boolean {
+  if (!item.added_by || item.added_by === currentUserId) return false
+  if (!baselineViewedAt) return true
+  return item.created_at > baselineViewedAt
 }

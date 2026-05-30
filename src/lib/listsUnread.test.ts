@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { computeUnread } from './listsUnread'
-import type { List } from '@/lib/types'
+import { computeUnread, isNewSinceVisit } from './listsUnread'
+import type { Item, List } from '@/lib/types'
 
 const ME = 'user-me'
 const THEM = 'user-them'
@@ -198,5 +198,38 @@ describe('computeUnread', () => {
       currentUserId: ME,
     })
     expect(result).toEqual({})
+  })
+})
+
+describe('isNewSinceVisit', () => {
+  const mkItem = (over: Partial<Pick<Item, 'added_by' | 'created_at'>>): Pick<Item, 'added_by' | 'created_at'> => ({
+    added_by: THEM,
+    created_at: '2026-05-18T12:00:00Z',
+    ...over,
+  })
+
+  it('marks an item another user added after the baseline', () => {
+    expect(isNewSinceVisit(mkItem({}), ME, '2026-05-18T10:00:00Z')).toBe(true)
+  })
+
+  it('does not mark an item the viewer added themselves', () => {
+    expect(isNewSinceVisit(mkItem({ added_by: ME }), ME, '2026-05-18T10:00:00Z')).toBe(false)
+  })
+
+  it('does not mark optimistic local inserts (added_by empty)', () => {
+    expect(isNewSinceVisit(mkItem({ added_by: '' }), ME, '2026-05-18T10:00:00Z')).toBe(false)
+  })
+
+  it('does not mark an item created at/before the baseline', () => {
+    expect(isNewSinceVisit(mkItem({ created_at: '2026-05-18T10:00:00Z' }), ME, '2026-05-18T10:00:00Z')).toBe(false)
+    expect(isNewSinceVisit(mkItem({ created_at: '2026-05-18T09:00:00Z' }), ME, '2026-05-18T10:00:00Z')).toBe(false)
+  })
+
+  it('marks any other-user item when never visited (null baseline)', () => {
+    expect(isNewSinceVisit(mkItem({}), ME, null)).toBe(true)
+  })
+
+  it('still suppresses self-adds even when never visited', () => {
+    expect(isNewSinceVisit(mkItem({ added_by: ME }), ME, null)).toBe(false)
   })
 })

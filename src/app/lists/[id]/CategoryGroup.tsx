@@ -17,6 +17,7 @@ interface Props {
   selectedIds: Set<string>
   recentlyAdded?: Set<string>
   recentlyUnchecked?: Set<string>
+  newItemIds?: Set<string>
   onToggle: (item: Item, rect: DOMRect) => void
   onEdit: (item: Item) => void
   onDelete: (item: Item) => void
@@ -30,7 +31,7 @@ const EMPTY_SET: Set<string> = new Set()
 export function CategoryGroup({
   category, items, itemTextClass, thumbSizeClass,
   editMode, storeMode, theme, selectedIds,
-  recentlyAdded = EMPTY_SET, recentlyUnchecked = EMPTY_SET,
+  recentlyAdded = EMPTY_SET, recentlyUnchecked = EMPTY_SET, newItemIds = EMPTY_SET,
   onToggle, onEdit, onDelete, onToggleSelect, onPicture, onCombine,
 }: Props) {
   return (
@@ -59,6 +60,7 @@ export function CategoryGroup({
               onToggleSelect={() => onToggleSelect(item.id)}
               slColor={hasDecorativeTheme(theme) ? slColorFor(item.id) : undefined}
               rowAnim={recentlyUnchecked.has(item.id) ? 'uncheck' : recentlyAdded.has(item.id) ? 'new' : undefined}
+              isNew={newItemIds.has(item.id)}
             />
           ))}
         </ul>

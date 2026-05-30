@@ -38,6 +38,16 @@ export default async function ListPage({ params }: Props) {
     .neq('id', id)
     .order('created_at', { ascending: false })
 
+  // Pre-visit last_viewed_at, read BEFORE the client mount effect bumps it via
+  // touchListView — the baseline for the in-list "NEW" dot (items added by
+  // others since this timestamp). null = never opened this list.
+  const { data: view } = await supabase
+    .from('list_views')
+    .select('last_viewed_at')
+    .eq('user_id', user.id)
+    .eq('list_id', id)
+    .maybeSingle()
+
   const suggestions = history?.map(h => h.name) ?? []
   const isOwner = list.owner_id === user.id
   const { list_text_size, category_order, theme } = await getUserPreferences()
@@ -64,6 +74,7 @@ export default async function ListPage({ params }: Props) {
           categoryOrder={category_order}
           availableLists={otherLists ?? []}
           currentUserId={user.id}
+          lastViewedAt={view?.last_viewed_at ?? null}
         />
 
       </main>

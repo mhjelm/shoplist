@@ -158,6 +158,7 @@ function renderItemList(items: Item[] = []) {
           categoryOrder={DEFAULT_CATEGORY_ORDER}
           availableLists={[]}
           currentUserId="user-1"
+          lastViewedAt={null}
         />
       </StoreModeProvider>
     </EditModeProvider>

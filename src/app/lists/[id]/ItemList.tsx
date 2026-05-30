@@ -10,6 +10,7 @@ import { itemToLocalItem, sortItemsByOrder, groupByCategory } from './itemHelper
 import { touchListView, clearShoppedItems } from './actions'
 import { muUpdateItem, muDeleteItem, muBulkDelete } from '@/lib/sync/mutations'
 import { hasDecorativeTheme, FIREWORK_PALETTES } from '@/lib/sl-theme'
+import { isNewSinceVisit } from '@/lib/listsUnread'
 import { useRevealFx } from '@/lib/useRevealFx'
 import { useSyncState } from '@/lib/sync/engine'
 import { useEditMode } from './EditModeContext'
@@ -44,9 +45,10 @@ interface Props {
   categoryOrder: CategorySlug[]
   availableLists: Pick<List, 'id' | 'name' | 'owner_id'>[]
   currentUserId: string
+  lastViewedAt: string | null
 }
 
-export default function ItemList({ list, listId, suggestions, textSize, theme, categoryOrder, availableLists, currentUserId }: Props) {
+export default function ItemList({ list, listId, suggestions, textSize, theme, categoryOrder, availableLists, currentUserId, lastViewedAt }: Props) {
   const [editingItem, setEditingItem] = useState<Item | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const [showRecipe, setShowRecipe] = useState(false)
@@ -115,6 +117,18 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
   const toShop = useMemo(() => items.filter(i => !i.is_checked).sort(sortItemsByOrder), [items])
   const shopped = useMemo(() => items.filter(i => i.is_checked).sort(sortItemsByOrder), [items])
   const groupedToShop = useMemo(() => groupByCategory(toShop, categoryOrder), [toShop, categoryOrder])
+
+  // "NEW" dot: items another user added since this visit started. Freeze the
+  // last-viewed baseline on first render so it can't move as the mount effect's
+  // touchListView / realtime echoes fire during the visit (show-once semantics).
+  const [baselineViewedAt] = useState(lastViewedAt)
+  const newItemIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const i of items) {
+      if (isNewSinceVisit(i, currentUserId, baselineViewedAt)) ids.add(i.id)
+    }
+    return ids
+  }, [items, currentUserId, baselineViewedAt])
 
   // Entrance + undo animations: track row ids that should briefly carry a
   // data-row-anim attribute. The set self-clears after the animation duration.
@@ -248,6 +262,7 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
                 selectedIds={selectedIds}
                 recentlyAdded={recentlyAdded}
                 recentlyUnchecked={recentlyUnchecked}
+                newItemIds={newItemIds}
                 onToggle={(item, rect) => handleToggle(item, rect)}
                 onEdit={item => setEditingItem(item)}
                 onDelete={item => handleDelete(item)}

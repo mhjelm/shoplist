@@ -8,7 +8,7 @@ import { MeasurementBadge } from './MeasurementBadge'
 import { useStoreModeSwipe } from './useStoreModeSwipe'
 
 export function SortableRow({
-  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onPicture, onCombine, editMode, storeMode, onDelete, muted, selected, onToggleSelect, slColor, rowAnim,
+  item, itemTextClass, thumbSizeClass, onToggle, onEdit, onPicture, onCombine, editMode, storeMode, onDelete, muted, selected, onToggleSelect, slColor, rowAnim, isNew,
 }: {
   item: Item
   itemTextClass: string
@@ -25,6 +25,7 @@ export function SortableRow({
   onToggleSelect?: () => void
   slColor?: 0 | 1 | 2 | 3
   rowAnim?: 'new' | 'uncheck'
+  isNew?: boolean
 }) {
   const [showHint, setShowHint] = useState(false)
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -69,6 +70,15 @@ export function SortableRow({
       ? 'text-blue-800 dark:text-blue-100 font-medium'
       : muted ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'
 
+  // Small dot marking an item another user added since this visit (show-once).
+  const newDot = isNew ? (
+    <span
+      aria-label="Tillagd sedan ditt senaste besök"
+      title="Tillagd sedan ditt senaste besök"
+      className="inline-block h-2 w-2 rounded-full bg-[#EC4899] shrink-0"
+    />
+  ) : null
+
   if (storeMode) {
     return (
       <li
@@ -104,6 +114,7 @@ export function SortableRow({
               className={`${thumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
             />
           )}
+          {newDot}
           <span className={`${itemTextClass} flex-1 min-w-0 break-words ${nameClass}`}>{item.name}</span>
           <MeasurementBadge item={item} muted={muted} onCombine={onCombine} />
           {showHint && (
@@ -147,6 +158,7 @@ export function SortableRow({
           className={`${thumbSizeClass} rounded object-cover cursor-pointer flex-shrink-0 ${muted ? 'opacity-60' : ''}`}
         />
       )}
+      {newDot}
       <span className={`${itemTextClass} flex-1 min-w-0 break-words ${nameClass}`}>
         {item.name}
       </span>
