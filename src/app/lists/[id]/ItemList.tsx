@@ -15,6 +15,7 @@ import { useRevealFx } from '@/lib/useRevealFx'
 import { useSyncState } from '@/lib/sync/engine'
 import { useEditMode } from './EditModeContext'
 import { useStoreMode } from './StoreModeContext'
+import { useStoreModeScroll } from './useStoreModeScroll'
 import { useListItemsSync } from './useListItemsSync'
 import { useItemSelection } from './useItemSelection'
 import { useAddItems } from './useAddItems'
@@ -107,6 +108,8 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
   }, [listId, router])
 
   const { items, hasLoaded } = useListItemsSync(list, listId)
+  // Restore scroll position after a store-mode reload, once the list has height.
+  useStoreModeScroll({ listId, storeMode, hasLoaded })
   // Random one-of-six reveal animation once Dexie has loaded the list.
   const revealFx = useRevealFx(hasLoaded)
   const addItems = useAddItems({ listId, items, suggestions, isOffline })
