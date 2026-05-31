@@ -13,6 +13,15 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // Item pictures are small, user-uploaded, and served from a third-party
+      // host (ImgBB). next/image would need every upload origin whitelisted and
+      // would proxy each thumbnail through Vercel's paid image optimizer for no
+      // real benefit at these sizes — so we intentionally use raw <img>.
+      "@next/next/no-img-element": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;
