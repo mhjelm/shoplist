@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import type { Theme, ListTextSize } from '@/lib/types'
-import { type CategorySlug, CATEGORIES, categoryLabel } from '@/lib/categories'
+import { type CategorySlug, categoryLabel } from '@/lib/categories'
 import { updateSettings, updateCategoryOrder } from './actions'
 import { useSyncState } from '@/lib/sync/engine'
 import {
