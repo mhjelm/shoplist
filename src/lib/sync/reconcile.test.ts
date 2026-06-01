@@ -160,3 +160,59 @@ describe('reconcileList — own in-flight push must not look like a server confl
     expect(itemsStore.find(i => i.id === 'X')).toBeUndefined()
   })
 })
+
+describe('reconcileList — watermark uses the server clock, not the client clock', () => {
+  // The precheck compares the server's last_activity (server clock) against the
+  // stored watermark. Writing the watermark from the *browser* clock means a
+  // device whose clock runs ahead (extremely common on phones) stamps a
+  // future watermark and then skips every real server change until the server
+  // clock catches up — which is exactly how a Move into a shared list "didn't
+  // show up" for the receiving user, who then re-added the items by hand and
+  // ended up with duplicates once a later write finally forced a refetch.
+  beforeEach(() => {
+    vi.clearAllMocks()
+    itemsStore = []
+    outboxStore = []
+    syncMeta = {}
+    serverRows = []
+    serverActivity = null
+  })
+
+  it('stores the server last_activity as the watermark after a refetch', async () => {
+    const { reconcileList } = await import('./reconcile')
+    serverActivity = { last_activity: '2020-12-01T00:00:00.000Z' }
+    serverRows = [makeItem({ id: 'A' })]
+
+    await reconcileList('list-1')
+
+    expect(syncMeta['list-1'].last_sync_at).toBe('2020-12-01T00:00:00.000Z')
+  })
+
+  it('refetches when server activity advances past the stored watermark', async () => {
+    const { reconcileList } = await import('./reconcile')
+
+    serverActivity = { last_activity: '2020-12-01T00:00:00.000Z' }
+    serverRows = [makeItem({ id: 'A', name: 'Old' })]
+    await reconcileList('list-1')
+    expect(itemsStore.find(i => i.id === 'A')!.name).toBe('Old')
+
+    // A later server write (e.g. items moved into this list) bumps activity.
+    serverActivity = { last_activity: '2020-12-02T00:00:00.000Z' }
+    serverRows = [makeItem({ id: 'A', name: 'New' })]
+    await reconcileList('list-1')
+    expect(itemsStore.find(i => i.id === 'A')!.name).toBe('New')
+  })
+
+  it('skips the refetch when server activity has not advanced', async () => {
+    const { reconcileList } = await import('./reconcile')
+
+    serverActivity = { last_activity: '2020-12-01T00:00:00.000Z' }
+    serverRows = [makeItem({ id: 'A', name: 'Old' })]
+    await reconcileList('list-1')
+
+    // Server unchanged → precheck must short-circuit and NOT pull this row.
+    serverRows = [makeItem({ id: 'A', name: 'ShouldNotAppear' })]
+    await reconcileList('list-1')
+    expect(itemsStore.find(i => i.id === 'A')!.name).toBe('Old')
+  })
+})

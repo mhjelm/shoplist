@@ -97,7 +97,20 @@ export async function reconcileList(listId: string): Promise<void> {
       // Else: our edit is newer (or in-flight) — keep Dexie state, outbox syncs it.
     }
 
-    await localDB.sync_meta.put({ list_id: listId, last_sync_at: new Date().toISOString() })
+    // Store the SERVER's last_activity as the watermark — never the client
+    // wall clock. The precheck above compares this against the server's
+    // last_activity (server clock), so a client-stamped value breaks the moment
+    // the device clock drifts ahead of the server (common on phones): the
+    // watermark looks "in the future", every real change is skipped, and e.g.
+    // items moved into a shared list never appear for the receiving user. Using
+    // the same server timestamp keeps the comparison clock-consistent and
+    // monotonic. Fall back to client time only when the list has no activity
+    // row yet (a brand-new, never-written list) — harmless, since an empty list
+    // has nothing to skip.
+    await localDB.sync_meta.put({
+      list_id: listId,
+      last_sync_at: activity?.last_activity ?? new Date().toISOString(),
+    })
   })
 
   if (conflicts.length > 0) addConflicts(conflicts)

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { localDB } from '@/lib/db/local'
 import { copyItemsToList, moveItemsToList, shareItemsToList } from './actions'
 import type { Item } from '@/lib/types'
+import type { LocalItem } from '@/lib/db/types'
 
 export function useItemSelection({
   editMode,
@@ -59,6 +60,13 @@ export function useItemSelection({
         throw new Error(res.error)
       }
       await localDB.items.bulkDelete(ids)
+      // Seed the *target* list's Dexie cache with the server rows the move
+      // returned. Without this the receiving user opens the target list and may
+      // see nothing — the reconcile precheck can skip the refetch — assumes the
+      // move failed, re-adds by hand, and ends up with duplicates.
+      if ('items' in res && res.items) {
+        await localDB.items.bulkPut(res.items as LocalItem[])
+      }
     } else if (mode === 'share') {
       // Sharing stamps a shared_group_id on the source row (server-side) and
       // creates a linked sibling in the target list. No local Dexie mutation
@@ -75,6 +83,10 @@ export function useItemSelection({
       if (res?.error) {
         setPickerError(res.error)
         throw new Error(res.error)
+      }
+      // Seed the target list's Dexie cache (same rationale as move above).
+      if ('items' in res && res.items) {
+        await localDB.items.bulkPut(res.items as LocalItem[])
       }
     }
     setSelectedIds(new Set())

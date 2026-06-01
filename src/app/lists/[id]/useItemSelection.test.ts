@@ -9,7 +9,12 @@ vi.mock('./actions', () => ({
   shareItemsToList: vi.fn(),
 }))
 vi.mock('@/lib/db/local', () => ({
-  localDB: { items: { bulkDelete: vi.fn().mockResolvedValue(undefined) } },
+  localDB: {
+    items: {
+      bulkDelete: vi.fn().mockResolvedValue(undefined),
+      bulkPut: vi.fn().mockResolvedValue(undefined),
+    },
+  },
 }))
 
 function makeItem(id: string, overrides: Partial<Item> = {}): Item {
@@ -177,6 +182,43 @@ describe('useItemSelection', () => {
     expect(vi.mocked(moveItemsToList)).toHaveBeenCalledWith('list-1', 'list-2', ['a'], expect.any(Array))
     expect(vi.mocked(localDB.items.bulkDelete)).toHaveBeenCalledWith(['a'])
     expect(result.current.selectedIds.size).toBe(0)
+  })
+
+  it('handlePickTarget move seeds the destination Dexie cache with the returned rows', async () => {
+    const { moveItemsToList } = await import('./actions')
+    const { localDB } = await import('@/lib/db/local')
+    // Server rows for the *target* list. Without seeding these, the receiving
+    // user opens the target list and sees nothing (the precheck may skip the
+    // refetch), assumes the move failed, and re-adds by hand → duplicates.
+    const movedRows = [{ id: 'srv-a', list_id: 'list-2', name: 'Item a' }]
+    vi.mocked(moveItemsToList).mockResolvedValue({ items: movedRows })
+
+    const { result } = renderHook(() => useItemSelection(defaultProps))
+    act(() => {
+      result.current.toggleSelect('a')
+      result.current.setPickerMode('move')
+    })
+
+    await act(async () => { await result.current.handlePickTarget('list-2') })
+
+    expect(vi.mocked(localDB.items.bulkPut)).toHaveBeenCalledWith(movedRows)
+  })
+
+  it('handlePickTarget copy seeds the destination Dexie cache with the returned rows', async () => {
+    const { copyItemsToList } = await import('./actions')
+    const { localDB } = await import('@/lib/db/local')
+    const copiedRows = [{ id: 'srv-a', list_id: 'list-2', name: 'Item a' }]
+    vi.mocked(copyItemsToList).mockResolvedValue({ items: copiedRows })
+
+    const { result } = renderHook(() => useItemSelection(defaultProps))
+    act(() => {
+      result.current.toggleSelect('a')
+      result.current.setPickerMode('copy')
+    })
+
+    await act(async () => { await result.current.handlePickTarget('list-2') })
+
+    expect(vi.mocked(localDB.items.bulkPut)).toHaveBeenCalledWith(copiedRows)
   })
 
   it('handlePickTarget is a no-op when nothing is selected', async () => {
