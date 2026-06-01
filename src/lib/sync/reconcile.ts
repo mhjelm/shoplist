@@ -174,17 +174,17 @@ export async function reconcileListsOverview(): Promise<void> {
 
     const [listsResult, activityResult, viewsResult] = await Promise.all([
       supabase.from('lists').select('id, name, owner_id, created_at, list_members(count)'),
-      supabase.from('list_activity').select('list_id, last_activity, last_activity_by'),
+      supabase.from('list_activity').select('list_id, last_add_at, last_add_by'),
       supabase.from('list_views').select('list_id, last_viewed_at').eq('user_id', user.id),
     ])
 
     if (listsResult.error || !listsResult.data) return
 
-    const activityMap = new Map<string, { last_activity: string; last_activity_by: string | null }>()
+    const activityMap = new Map<string, { last_add_at: string | null; last_add_by: string | null }>()
     for (const r of activityResult.data ?? []) {
       activityMap.set(r.list_id as string, {
-        last_activity: r.last_activity as string,
-        last_activity_by: (r.last_activity_by as string | null) ?? null,
+        last_add_at: (r.last_add_at as string | null) ?? null,
+        last_add_by: (r.last_add_by as string | null) ?? null,
       })
     }
     const viewsMap = new Map<string, string>(
@@ -200,8 +200,8 @@ export async function reconcileListsOverview(): Promise<void> {
         owner_id: rest.owner_id,
         created_at: rest.created_at,
         has_members: (list_members?.[0]?.count ?? 0) > 0,
-        last_activity: act?.last_activity ?? null,
-        last_activity_by: act?.last_activity_by ?? null,
+        last_add_at: act?.last_add_at ?? null,
+        last_add_by: act?.last_add_by ?? null,
       }
     })
 

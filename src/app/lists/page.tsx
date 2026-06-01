@@ -29,18 +29,19 @@ export default async function ListsPage() {
     memberCounts[rest.id] = (list_members?.[0]?.count ?? 0) > 0
   }
 
-  // "Unread" indicator: a list shows a dot when its most recent item activity
-  // is newer than the user's last_viewed_at (or they've never opened it).
+  // "Unread" indicator: a list shows a dot when an item was ADDED to it
+  // (add-only last_add_at, migration 0024) more recently than the user's
+  // last_viewed_at — or they've never opened it. Deletes/edits don't count.
   const [{ data: activityRows }, { data: viewRows }] = await Promise.all([
-    supabase.from('list_activity').select('list_id, last_activity, last_activity_by'),
+    supabase.from('list_activity').select('list_id, last_add_at, last_add_by'),
     supabase.from('list_views').select('list_id, last_viewed_at').eq('user_id', user.id),
   ])
   // Convert to plain Records for RSC serialization (Map can't cross the boundary)
-  const lastActivity: Record<string, string> = {}
-  const lastActivityBy: Record<string, string | null> = {}
+  const lastAdd: Record<string, string> = {}
+  const lastAddBy: Record<string, string | null> = {}
   for (const r of activityRows ?? []) {
-    lastActivity[r.list_id as string] = r.last_activity as string
-    lastActivityBy[r.list_id as string] = (r.last_activity_by as string | null) ?? null
+    if (r.last_add_at) lastAdd[r.list_id as string] = r.last_add_at as string
+    lastAddBy[r.list_id as string] = (r.last_add_by as string | null) ?? null
   }
   const lastViewed: Record<string, string> = {}
   for (const r of viewRows ?? []) lastViewed[r.list_id as string] = r.last_viewed_at as string
@@ -62,7 +63,7 @@ export default async function ListsPage() {
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-8">
         <CreateListForm />
-        <ListsView initialLists={lists} memberCounts={memberCounts} lastActivity={lastActivity} lastActivityBy={lastActivityBy} lastViewed={lastViewed} theme={theme} currentUserId={user.id} />
+        <ListsView initialLists={lists} memberCounts={memberCounts} lastAdd={lastAdd} lastAddBy={lastAddBy} lastViewed={lastViewed} theme={theme} currentUserId={user.id} />
       </main>
     </div>
   )

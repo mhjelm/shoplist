@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Pending manual tasks
 
-- Apply `supabase/migrations/0020_clear_shopped_rpc.sql` against the Supabase project (Dashboard → SQL Editor, or `supabase db push`). The `clearShoppedItems` server action calls `rpc('clear_shopped_items', ...)` and will return an error at runtime until this function exists.
+- _None._ (Migrations `0020_clear_shopped_rpc.sql` and `0024_list_add_activity.sql` have both been applied.)
 
 > Signup is now invitation-only (done 2026-05-17). See `docs/how-to-add-new-user.html` for the invite flow and how to re-enable public signup if ever needed.
 
@@ -198,7 +198,7 @@ A separate UI mode toggled from the page header that swaps the per-row pencil fo
 
 Six tables. Initial schema in `supabase/migrations/0001_init.sql`; subsequent migrations add columns and tables:
 
-- `lists` (id, name, owner_id, created_at, last_activity) — `is_shared` was dropped in migration 0012; shared status is now derived from `list_members` having rows. `last_activity` (added in 0017) is a monotonic timestamp bumped by a trigger on every items INSERT/UPDATE/DELETE; powers the `list_activity` view used by sync precheck and the NEW marker.
+- `lists` (id, name, owner_id, created_at, last_activity, last_add_at, last_add_by) — `is_shared` was dropped in migration 0012; shared status is now derived from `list_members` having rows. `last_activity` (added in 0017) is a monotonic timestamp bumped by a trigger on every items INSERT/UPDATE/DELETE; it powers the `list_activity` view's sync precheck and **must stay monotonic across deletes**. `last_add_at`/`last_add_by` (added in 0024) are the **add-only** signal for the `/lists` NEW marker — bumped by an INSERT-only trigger (`bump_list_add_activity`), so deletes, edits, clear-shopped, and move-from never raise the marker; only a genuine add (including a move/copy *into* the list) does. `computeUnread` (`src/lib/listsUnread.ts`) reads `last_add_*`, not `last_activity`. Don't conflate the two: `last_activity` = "did anything change?" (sync), `last_add_*` = "was something added?" (marker).
 - `list_members` (list_id, user_id, added_at) — join table for sharing
 - `items` (id, list_id, added_by, name, is_checked, created_at, picture_url, sort_order, quantity, category, measurement)
 - `user_item_history` (user_id, name, last_used_at, use_count, category) — autocomplete source

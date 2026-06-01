@@ -18,14 +18,14 @@ import ListEditPanel from './ListEditPanel'
 interface Props {
   initialLists: List[]
   memberCounts: Record<string, boolean>
-  lastActivity: Record<string, string>
-  lastActivityBy: Record<string, string | null>
+  lastAdd: Record<string, string>
+  lastAddBy: Record<string, string | null>
   lastViewed: Record<string, string>
   theme: Theme
   currentUserId: string
 }
 
-export default function ListsView({ initialLists, memberCounts, lastActivity, lastActivityBy, lastViewed, theme, currentUserId }: Props) {
+export default function ListsView({ initialLists, memberCounts, lastAdd, lastAddBy, lastViewed, theme, currentUserId }: Props) {
   const { isOffline } = useSyncState()
   // Random one-of-six reveal animation on mount (incl. after back-nav overlay).
   const revealFx = useRevealFx(true)
@@ -47,8 +47,8 @@ export default function ListsView({ initialLists, memberCounts, lastActivity, la
       owner_id: list.owner_id,
       created_at: list.created_at,
       has_members: memberCounts[list.id] ?? false,
-      last_activity: lastActivity[list.id] ?? null,
-      last_activity_by: lastActivityBy[list.id] ?? null,
+      last_add_at: lastAdd[list.id] ?? null,
+      last_add_by: lastAddBy[list.id] ?? null,
     }))
     const viewRows: LocalListView[] = Object.entries(lastViewed).map(([list_id, last_viewed_at]) => ({
       list_id,
@@ -61,7 +61,7 @@ export default function ListsView({ initialLists, memberCounts, lastActivity, la
 
   // Subscribe to realtime changes on lists/list_members/items.
   // Reconcile on subscribe (heals SSR drift) and on reconnect (heals missed events).
-  // Item events are handled optimistically inside the subscription (bump last_activity).
+  // Item INSERTs are handled optimistically inside the subscription (bump last_add_*).
   useEffect(() => {
     return subscribeToListsOverview(currentUserId, () => {
       reconcileListsOverview().catch(console.error)
@@ -91,16 +91,16 @@ export default function ListsView({ initialLists, memberCounts, lastActivity, la
       owner_id: l.owner_id,
       created_at: l.created_at,
       has_members: memberCounts[l.id] ?? false,
-      last_activity: lastActivity[l.id] ?? null,
-      last_activity_by: lastActivityBy[l.id] ?? null,
+      last_add_at: lastAdd[l.id] ?? null,
+      last_add_by: lastAddBy[l.id] ?? null,
     }))
     const views: LocalListView[] = liveViews ?? Object.entries(lastViewed).map(([list_id, last_viewed_at]) => ({ list_id, last_viewed_at }))
 
-    const activityMap = new Map<string, string>()
-    const activityByMap = new Map<string, string | null>()
+    const addMap = new Map<string, string>()
+    const addByMap = new Map<string, string | null>()
     for (const c of catalog) {
-      if (c.last_activity) activityMap.set(c.id, c.last_activity)
-      activityByMap.set(c.id, c.last_activity_by)
+      if (c.last_add_at) addMap.set(c.id, c.last_add_at)
+      addByMap.set(c.id, c.last_add_by)
     }
     const viewMap = new Map<string, string>()
     for (const v of views) viewMap.set(v.list_id, v.last_viewed_at)
@@ -120,8 +120,8 @@ export default function ListsView({ initialLists, memberCounts, lastActivity, la
     const unread = computeUnread({
       lists: sorted,
       memberCounts: mc,
-      lastActivity: activityMap,
-      lastActivityBy: activityByMap,
+      lastAdd: addMap,
+      lastAddBy: addByMap,
       lastViewed: viewMap,
       currentUserId,
     })
@@ -132,7 +132,7 @@ export default function ListsView({ initialLists, memberCounts, lastActivity, la
       computedMemberCounts: mc,
       computedUnread: unread,
     }
-  }, [liveCatalog, liveViews, initialLists, memberCounts, lastActivity, lastActivityBy, lastViewed, renamedLists, currentUserId])
+  }, [liveCatalog, liveViews, initialLists, memberCounts, lastAdd, lastAddBy, lastViewed, renamedLists, currentUserId])
 
   const toggleEdit = (listId: string) => {
     setOpenEditListId(current => current === listId ? null : listId)

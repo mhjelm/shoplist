@@ -3,24 +3,27 @@ import type { Item, List } from '@/lib/types'
 /**
  * Compute which lists should show a "NEW" marker on /lists for a given user.
  *
- * A list is unread when there is item activity newer than the user's last
- * viewed timestamp (or they've never opened it). Two cases are always skipped:
- * - Personal lists (you own, zero members) — no other actor can change them.
- * - Any shared list whose last activity was caused by the viewing user
- *   themselves — including trigger-propagated writes from sibling shared items.
+ * A list is unread when an item was ADDED to it (the add-only `last_add_*`
+ * signal from migration 0024) more recently than the user last opened it — or
+ * they've never opened it. Deletes, clear-shopped, move-from, and edits do NOT
+ * raise the marker; only genuine adds (including a move/copy INTO the list) do.
+ * Two cases are always skipped:
+ * - Personal lists (you own, zero members) — no other actor can add to them.
+ * - Any shared list whose last add was caused by the viewing user themselves —
+ *   including trigger-propagated writes from sibling shared items.
  */
 export function computeUnread({
   lists,
   memberCounts,
-  lastActivity,
-  lastActivityBy,
+  lastAdd,
+  lastAddBy,
   lastViewed,
   currentUserId,
 }: {
   lists: Pick<List, 'id' | 'owner_id'>[]
   memberCounts: Record<string, boolean>
-  lastActivity: Map<string, string>
-  lastActivityBy: Map<string, string | null>
+  lastAdd: Map<string, string>
+  lastAddBy: Map<string, string | null>
   lastViewed: Map<string, string>
   currentUserId: string
 }): Record<string, boolean> {
@@ -28,13 +31,13 @@ export function computeUnread({
   for (const list of lists) {
     const isShared = list.owner_id !== currentUserId || memberCounts[list.id]
     if (!isShared) continue
-    const act = lastActivity.get(list.id)
-    if (!act) continue
-    // Suppress NEW when the last activity was caused by the viewing user,
+    const add = lastAdd.get(list.id)
+    if (!add) continue
+    // Suppress NEW when the last add was caused by the viewing user,
     // including actions that propagated via shared-item triggers.
-    if (lastActivityBy.get(list.id) === currentUserId) continue
+    if (lastAddBy.get(list.id) === currentUserId) continue
     const seen = lastViewed.get(list.id)
-    unread[list.id] = !seen || act > seen
+    unread[list.id] = !seen || add > seen
   }
   return unread
 }

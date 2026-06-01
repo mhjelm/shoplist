@@ -32,6 +32,10 @@ class LocalDB extends Dexie {
     this.version(3).stores({})
     // v4: list_catalog gains `last_activity_by` (no new index needed).
     this.version(4).stores({})
+    // v5: list_catalog swaps `last_activity`/`last_activity_by` for the add-only
+    // `last_add_at`/`last_add_by` signal (migration 0024). Non-indexed fields, so
+    // no schema change — old rows are harmlessly overwritten on the next seed.
+    this.version(5).stores({})
   }
 }
 

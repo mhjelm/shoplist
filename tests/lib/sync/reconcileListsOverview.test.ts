@@ -91,56 +91,56 @@ beforeEach(() => {
   serverTables.set('list_views', [])
 })
 
-describe('reconcileListsOverview — last_activity_by plumbing', () => {
-  it('persists last_activity_by from list_activity into Dexie list_catalog', async () => {
+describe('reconcileListsOverview — last_add_* plumbing', () => {
+  it('persists last_add_at / last_add_by from list_activity into Dexie list_catalog', async () => {
     serverTables.set('lists', [makeListRow('list-1')])
     serverTables.set('list_activity', [
-      { list_id: 'list-1', last_activity: '2026-05-18T12:00:00Z', last_activity_by: 'user-abc' },
+      { list_id: 'list-1', last_add_at: '2026-05-18T12:00:00Z', last_add_by: 'user-abc' },
     ])
 
     await reconcileListsOverview()
 
     expect(catalog).toHaveLength(1)
-    expect(catalog[0].last_activity_by).toBe('user-abc')
-    expect(catalog[0].last_activity).toBe('2026-05-18T12:00:00Z')
+    expect(catalog[0].last_add_by).toBe('user-abc')
+    expect(catalog[0].last_add_at).toBe('2026-05-18T12:00:00Z')
   })
 
-  it('stores null last_activity_by when the column is null (pre-migration row)', async () => {
+  it('stores null last_add_by when the column is null (pre-migration row)', async () => {
     serverTables.set('lists', [makeListRow('list-1')])
     serverTables.set('list_activity', [
-      { list_id: 'list-1', last_activity: '2026-05-18T12:00:00Z', last_activity_by: null },
+      { list_id: 'list-1', last_add_at: '2026-05-18T12:00:00Z', last_add_by: null },
     ])
 
     await reconcileListsOverview()
 
-    expect(catalog[0].last_activity_by).toBeNull()
+    expect(catalog[0].last_add_by).toBeNull()
   })
 
-  it('overwrites a stale last_activity_by on follow-up reconcile', async () => {
+  it('overwrites a stale last_add_by on follow-up reconcile', async () => {
     serverTables.set('lists', [makeListRow('list-1')])
     serverTables.set('list_activity', [
-      { list_id: 'list-1', last_activity: '2026-05-18T10:00:00Z', last_activity_by: 'user-old' },
+      { list_id: 'list-1', last_add_at: '2026-05-18T10:00:00Z', last_add_by: 'user-old' },
     ])
     await reconcileListsOverview()
-    expect(catalog[0].last_activity_by).toBe('user-old')
+    expect(catalog[0].last_add_by).toBe('user-old')
 
     // Second reconcile with a fresh actor
     serverTables.set('list_activity', [
-      { list_id: 'list-1', last_activity: '2026-05-18T12:00:00Z', last_activity_by: 'user-new' },
+      { list_id: 'list-1', last_add_at: '2026-05-18T12:00:00Z', last_add_by: 'user-new' },
     ])
     await reconcileListsOverview()
 
-    expect(catalog[0].last_activity_by).toBe('user-new')
+    expect(catalog[0].last_add_by).toBe('user-new')
     expect(catalog).toHaveLength(1) // no duplicate rows
   })
 
-  it('stores null last_activity_by when list has no activity row', async () => {
+  it('stores null last_add_* when list has no activity row', async () => {
     serverTables.set('lists', [makeListRow('list-1')])
     // list_activity table is empty
 
     await reconcileListsOverview()
 
-    expect(catalog[0].last_activity).toBeNull()
-    expect(catalog[0].last_activity_by).toBeNull()
+    expect(catalog[0].last_add_at).toBeNull()
+    expect(catalog[0].last_add_by).toBeNull()
   })
 })

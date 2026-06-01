@@ -14,8 +14,8 @@ describe('computeUnread', () => {
     const result = computeUnread({
       lists: [mkList('a', THEM)],
       memberCounts: {},
-      lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
-      lastActivityBy: new Map(),
+      lastAdd: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastAddBy: new Map(),
       lastViewed: new Map([['a', '2026-05-18T10:00:00Z']]),
       currentUserId: ME,
     })
@@ -26,8 +26,8 @@ describe('computeUnread', () => {
     const result = computeUnread({
       lists: [mkList('a', ME)],
       memberCounts: { a: true },
-      lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
-      lastActivityBy: new Map(),
+      lastAdd: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastAddBy: new Map(),
       lastViewed: new Map([['a', '2026-05-18T10:00:00Z']]),
       currentUserId: ME,
     })
@@ -38,8 +38,8 @@ describe('computeUnread', () => {
     const result = computeUnread({
       lists: [mkList('a', ME)],
       memberCounts: { a: false },
-      lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
-      lastActivityBy: new Map(),
+      lastAdd: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastAddBy: new Map(),
       lastViewed: new Map([['a', '2026-05-18T10:00:00Z']]),
       currentUserId: ME,
     })
@@ -50,8 +50,8 @@ describe('computeUnread', () => {
     const result = computeUnread({
       lists: [mkList('a', ME)],
       memberCounts: {},
-      lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
-      lastActivityBy: new Map(),
+      lastAdd: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastAddBy: new Map(),
       lastViewed: new Map(),
       currentUserId: ME,
     })
@@ -62,8 +62,8 @@ describe('computeUnread', () => {
     const result = computeUnread({
       lists: [mkList('a', THEM)],
       memberCounts: {},
-      lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
-      lastActivityBy: new Map(),
+      lastAdd: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastAddBy: new Map(),
       lastViewed: new Map(),
       currentUserId: ME,
     })
@@ -74,8 +74,8 @@ describe('computeUnread', () => {
     const result = computeUnread({
       lists: [mkList('a', THEM)],
       memberCounts: {},
-      lastActivity: new Map(),
-      lastActivityBy: new Map(),
+      lastAdd: new Map(),
+      lastAddBy: new Map(),
       lastViewed: new Map(),
       currentUserId: ME,
     })
@@ -86,8 +86,8 @@ describe('computeUnread', () => {
     const result = computeUnread({
       lists: [mkList('a', THEM)],
       memberCounts: {},
-      lastActivity: new Map([['a', '2026-05-18T10:00:00Z']]),
-      lastActivityBy: new Map(),
+      lastAdd: new Map([['a', '2026-05-18T10:00:00Z']]),
+      lastAddBy: new Map(),
       lastViewed: new Map([['a', '2026-05-18T12:00:00Z']]),
       currentUserId: ME,
     })
@@ -103,12 +103,12 @@ describe('computeUnread', () => {
         mkList('quiet-shared', THEM),         // shared but no activity
       ],
       memberCounts: { 'owned-shared': true, personal: false },
-      lastActivity: new Map([
+      lastAdd: new Map([
         ['personal', '2026-05-18T12:00:00Z'],
         ['owned-shared', '2026-05-18T12:00:00Z'],
         ['joined', '2026-05-18T12:00:00Z'],
       ]),
-      lastActivityBy: new Map(),
+      lastAddBy: new Map(),
       lastViewed: new Map([
         ['owned-shared', '2026-05-18T10:00:00Z'],
         ['joined', '2026-05-18T13:00:00Z'],
@@ -125,48 +125,48 @@ describe('computeUnread', () => {
   // same-user suppression (bugs 1, 3, 4)
   // ---------------------------------------------------------------------------
 
-  it('suppresses NEW when lastActivityBy matches currentUserId (bug #1 — shared to own list)', () => {
+  it('suppresses NEW when lastAddBy matches currentUserId (bug #1 — shared to own list)', () => {
     const result = computeUnread({
       lists: [mkList('a', THEM)],
       memberCounts: {},
-      lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
-      lastActivityBy: new Map([['a', ME]]),
+      lastAdd: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastAddBy: new Map([['a', ME]]),
       lastViewed: new Map([['a', '2026-05-18T10:00:00Z']]),
       currentUserId: ME,
     })
     expect(result).toEqual({})
   })
 
-  it('still surfaces NEW when lastActivityBy is a different user', () => {
+  it('still surfaces NEW when lastAddBy is a different user', () => {
     const result = computeUnread({
       lists: [mkList('a', THEM)],
       memberCounts: {},
-      lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
-      lastActivityBy: new Map([['a', THEM]]),
+      lastAdd: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastAddBy: new Map([['a', THEM]]),
       lastViewed: new Map([['a', '2026-05-18T10:00:00Z']]),
       currentUserId: ME,
     })
     expect(result).toEqual({ a: true })
   })
 
-  it('does not auto-suppress when lastActivityBy is null (pre-migration row)', () => {
+  it('does not auto-suppress when lastAddBy is null (pre-migration row)', () => {
     const result = computeUnread({
       lists: [mkList('a', THEM)],
       memberCounts: {},
-      lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
-      lastActivityBy: new Map<string, string | null>([['a', null]]),
+      lastAdd: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastAddBy: new Map<string, string | null>([['a', null]]),
       lastViewed: new Map([['a', '2026-05-18T10:00:00Z']]),
       currentUserId: ME,
     })
     expect(result).toEqual({ a: true })
   })
 
-  it('personal-list suppression wins regardless of lastActivityBy', () => {
+  it('personal-list suppression wins regardless of lastAddBy', () => {
     const result = computeUnread({
       lists: [mkList('a', ME)],
       memberCounts: { a: false },
-      lastActivity: new Map([['a', '2026-05-18T12:00:00Z']]),
-      lastActivityBy: new Map([['a', THEM]]),
+      lastAdd: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastAddBy: new Map([['a', THEM]]),
       lastViewed: new Map([['a', '2026-05-18T10:00:00Z']]),
       currentUserId: ME,
     })
@@ -178,8 +178,8 @@ describe('computeUnread', () => {
     const result = computeUnread({
       lists: [mkList('source', ME)],
       memberCounts: { source: true },
-      lastActivity: new Map([['source', '2026-05-18T12:00:00Z']]),
-      lastActivityBy: new Map([['source', ME]]),
+      lastAdd: new Map([['source', '2026-05-18T12:00:00Z']]),
+      lastAddBy: new Map([['source', ME]]),
       lastViewed: new Map([['source', '2026-05-18T10:00:00Z']]),
       currentUserId: ME,
     })
@@ -187,14 +187,59 @@ describe('computeUnread', () => {
   })
 
   it('does not mark NEW for previously-unviewed list whose activity was caused by me (bug #4)', () => {
-    // I shared an item; the source list last_activity was bumped by my session,
+    // I shared an item; the source list last_add was bumped by my session,
     // but I have never explicitly navigated to this list
     const result = computeUnread({
       lists: [mkList('source', ME)],
       memberCounts: { source: true },
-      lastActivity: new Map([['source', '2026-05-18T12:00:00Z']]),
-      lastActivityBy: new Map([['source', ME]]),
+      lastAdd: new Map([['source', '2026-05-18T12:00:00Z']]),
+      lastAddBy: new Map([['source', ME]]),
       lastViewed: new Map(), // no last_viewed_at entry
+      currentUserId: ME,
+    })
+    expect(result).toEqual({})
+  })
+
+  // ---------------------------------------------------------------------------
+  // add-only semantics: deletes / move-from / edits must NOT raise the marker.
+  // These never bump last_add (migration 0024), so the signal stays at the last
+  // genuine add — which the viewer has already seen.
+  // ---------------------------------------------------------------------------
+
+  it('does NOT mark a shared list when only a delete/edit happened since last view', () => {
+    // last_add is older than last_viewed: the only thing that changed afterwards
+    // was a delete (or edit), which left last_add untouched.
+    const result = computeUnread({
+      lists: [mkList('a', THEM)],
+      memberCounts: {},
+      lastAdd: new Map([['a', '2026-05-18T09:00:00Z']]),
+      lastAddBy: new Map([['a', THEM]]),
+      lastViewed: new Map([['a', '2026-05-18T11:00:00Z']]),
+      currentUserId: ME,
+    })
+    expect(result).toEqual({ a: false })
+  })
+
+  it('marks a shared list when another user moved/copied an item INTO it', () => {
+    // A move-in is an INSERT on the target, so last_add IS bumped (by the mover).
+    const result = computeUnread({
+      lists: [mkList('a', THEM)],
+      memberCounts: {},
+      lastAdd: new Map([['a', '2026-05-18T12:00:00Z']]),
+      lastAddBy: new Map([['a', THEM]]),
+      lastViewed: new Map([['a', '2026-05-18T11:00:00Z']]),
+      currentUserId: ME,
+    })
+    expect(result).toEqual({ a: true })
+  })
+
+  it('does NOT mark a list that never had an add (no last_add), even with member activity', () => {
+    const result = computeUnread({
+      lists: [mkList('a', THEM)],
+      memberCounts: {},
+      lastAdd: new Map(), // nothing was ever added
+      lastAddBy: new Map([['a', THEM]]),
+      lastViewed: new Map(),
       currentUserId: ME,
     })
     expect(result).toEqual({})

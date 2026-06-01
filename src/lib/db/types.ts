@@ -77,8 +77,11 @@ export interface LocalListCatalog {
   owner_id: string
   created_at: string
   has_members: boolean
-  last_activity: string | null
-  last_activity_by: string | null
+  // Add-only activity signal that drives the /lists NEW marker: the timestamp
+  // and actor of the most recent item INSERT (migration 0024). Deletes, edits,
+  // and move-from do NOT bump these, so the marker only fires on genuine adds.
+  last_add_at: string | null
+  last_add_by: string | null
 }
 
 export interface LocalListView {

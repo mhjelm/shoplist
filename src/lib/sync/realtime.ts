@@ -50,9 +50,9 @@ export function subscribeToList(
 }
 
 // Subscribes to lists/list_members/items for the /lists overview page.
-// Handles item events optimistically (bump last_activity in Dexie).
-// Calls onReconcile() for structural changes (new/deleted lists, member changes)
-// and on reconnect to heal any missed events.
+// Handles item INSERTs optimistically (bump last_add_* in Dexie for the NEW
+// marker). Calls onReconcile() for structural changes (new/deleted lists,
+// member changes) and on reconnect to heal any missed events.
 export function subscribeToListsOverview(
   userId: string,
   onReconcile: () => void,
@@ -81,32 +81,38 @@ export function subscribeToListsOverview(
             return
           }
           if (payload.eventType === 'UPDATE') {
-            // last_activity / last_activity_by updates are produced by the
-            // items trigger (migration 0017 + 0019). The items handler below
-            // already bumps Dexie's catalog optimistically; for the actor
-            // field we pull it straight from the lists payload so Dexie
-            // converges within one realtime round-trip.
+            // last_activity* / last_add_* updates are produced by the items
+            // triggers (migrations 0017, 0019, 0024). When the lists row exposes
+            // its full old image (replica identity full) we can resolve these
+            // optimistically and skip a reconcile; otherwise oldRow holds only
+            // the PK, every key looks "changed", and we fall through to reconcile
+            // (which refetches last_add_* anyway — still correct, just heavier).
             const newRow = payload.new as Record<string, unknown>
             const oldRow = payload.old as Record<string, unknown>
             const changedKeys = Object.keys(newRow).filter(
               k => newRow[k] !== oldRow[k],
             )
-            const activityOnlyChange = changedKeys.every(
-              k => k === 'last_activity' || k === 'last_activity_by',
+            const activityOnlyChange = changedKeys.length > 0 && changedKeys.every(
+              k => k === 'last_activity' || k === 'last_activity_by'
+                || k === 'last_add_at' || k === 'last_add_by',
             )
             if (activityOnlyChange) {
-              // Bump last_activity_by in Dexie so computeUnread can suppress
-              // same-user NEW markers without waiting for a full reconcile.
-              const listId = newRow.id as string
-              const activityBy = (newRow.last_activity_by as string | null) ?? null
-              await localDB.list_catalog
-                .where('id').equals(listId)
-                .modify((c: LocalListCatalog) => { c.last_activity_by = activityBy })
-                .catch(() => { /* row not in catalog yet */ })
+              // Only an add (last_add_*) moves the NEW marker; reflect it straight
+              // from the payload so Dexie converges within one realtime round-trip.
+              // A pure last_activity bump (delete/edit) needs no catalog change.
+              if (changedKeys.includes('last_add_at') || changedKeys.includes('last_add_by')) {
+                const listId = newRow.id as string
+                const lastAddAt = (newRow.last_add_at as string | null) ?? null
+                const lastAddBy = (newRow.last_add_by as string | null) ?? null
+                await localDB.list_catalog
+                  .where('id').equals(listId)
+                  .modify((c: LocalListCatalog) => { c.last_add_at = lastAddAt; c.last_add_by = lastAddBy })
+                  .catch(() => { /* row not in catalog yet */ })
+              }
               return
             }
           }
-          // INSERT or structural UPDATE: reconcile for fresh has_members + activity
+          // INSERT or structural UPDATE: reconcile for fresh has_members + add signal
           onReconcile()
         },
       )
@@ -122,13 +128,17 @@ export function subscribeToListsOverview(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'items' },
         async (payload) => {
-          const row = (payload.eventType !== 'DELETE' ? payload.new : payload.old) as { list_id?: string; updated_at?: string }
+          // Only INSERTs move the NEW marker. Deletes/updates are deliberately
+          // ignored here (they bump last_activity for sync, not last_add).
+          if (payload.eventType !== 'INSERT') return
+          const row = payload.new as { list_id?: string; created_at?: string; added_by?: string }
           if (!row?.list_id) return
-          const lastActivity = row.updated_at ?? new Date().toISOString()
+          const lastAddAt = row.created_at ?? new Date().toISOString()
+          const lastAddBy = row.added_by ?? null
           // Only bump if the catalog row exists; reconcile will fix it if not.
           await localDB.list_catalog
             .where('id').equals(row.list_id)
-            .modify((c: LocalListCatalog) => { c.last_activity = lastActivity })
+            .modify((c: LocalListCatalog) => { c.last_add_at = lastAddAt; c.last_add_by = lastAddBy })
             .catch(() => { /* row not in catalog yet */ })
         },
       )
