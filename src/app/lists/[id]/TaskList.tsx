@@ -8,7 +8,7 @@ import { isNewSinceVisit } from '@/lib/listsUnread'
 import { useRevealFx } from '@/lib/useRevealFx'
 import { useListItemsSync } from './useListItemsSync'
 import { buildLocalItem } from './itemHelpers'
-import { muAddItem, muUpdateItem, muDeleteItem } from '@/lib/sync/mutations'
+import { muAddItem, muUpdateItem, muDeleteItem, muBulkDelete } from '@/lib/sync/mutations'
 import { touchListView } from './actions'
 import { TaskRow } from './TaskRow'
 import { TaskEditModal } from './TaskEditModal'
@@ -25,6 +25,7 @@ export default function TaskList({ list, listId, people, currentUserId, lastView
   const router = useRouter()
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState<Item | null>(null)
+  const [confirmingClear, setConfirmingClear] = useState(false)
   const { items, hasLoaded } = useListItemsSync(list, listId)
   const revealFx = useRevealFx(hasLoaded)
 
@@ -69,6 +70,11 @@ export default function TaskList({ list, listId, people, currentUserId, lastView
     setEditing(null)
   }
 
+  async function handleClearDone() {
+    await muBulkDelete(listId, done.map(i => i.id))
+    setConfirmingClear(false)
+  }
+
   return (
     <div className={`space-y-6${revealFx ? ' ' + revealFx : ''}`}>
       <form onSubmit={handleAdd} className="flex gap-2">
@@ -89,7 +95,7 @@ export default function TaskList({ list, listId, people, currentUserId, lastView
       </form>
 
       {hasLoaded && todo.length === 0 && done.length === 0 && (
-        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">
+        <p className="task-muted text-sm text-gray-500 dark:text-gray-400 text-center py-8">
           No tasks yet. Add one above.
         </p>
       )}
@@ -111,9 +117,37 @@ export default function TaskList({ list, listId, people, currentUserId, lastView
 
       {done.length > 0 && (
         <div className="space-y-2">
-          <span className="block px-1 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-            Done ({done.length})
-          </span>
+          <div className="flex items-center justify-between px-1">
+            <span className="task-muted text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Done ({done.length})
+            </span>
+            {confirmingClear ? (
+              <span className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleClearDone}
+                  className="text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingClear(false)}
+                  className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmingClear(true)}
+                className="text-xs text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+              >
+                Clear done
+              </button>
+            )}
+          </div>
           <ul className="space-y-2">
             {done.map(item => (
               <TaskRow

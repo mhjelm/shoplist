@@ -367,6 +367,14 @@ body {
 .dusk     .empty-state-headline { color: var(--dk-brown); font-style: italic; }
 .dusk     .empty-state-subline  { color: var(--dk-clay); font-style: italic; }
 .dusk     .loading-label        { color: var(--dk-brown) !important; font-style: italic; font-family: "Fraunces", "Georgia", serif; font-weight: 500; letter-spacing: 0.05em; text-transform: none; }
+
+/* ── Task list: muted labels/done-row text adapt to the decorative themes ──
+   On shoplist/polar/dusk the explicit Tailwind grays wash out against the
+   gradient background; key the muted text off each theme's --foreground so it
+   stays legible and on-palette. Light/dark themes use the Tailwind grays. */
+.shoplist .task-muted,
+.polar    .task-muted,
+.dusk     .task-muted { color: color-mix(in oklab, var(--foreground) 72%, transparent); }
 /* Full-screen nav loading overlay. Two failure modes to satisfy at once:
    - Desktop: needs all four sides anchored (`inset: 0`) so the top↔bottom gap
      sizes the box to the full viewport. Dropping the bottom anchor (top-only +

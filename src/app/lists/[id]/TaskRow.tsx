@@ -61,7 +61,7 @@ export function TaskRow({
 
       <span
         className={`flex-1 min-w-0 break-words text-sm ${
-          done ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-800 dark:text-gray-200'
+          done ? 'task-muted text-gray-500 dark:text-gray-400 line-through' : 'text-gray-800 dark:text-gray-200'
         }`}
       >
         {item.name}

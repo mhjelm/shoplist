@@ -14,6 +14,7 @@ vi.mock('@/lib/sync/mutations', () => ({
   muAddItem: vi.fn().mockResolvedValue(undefined),
   muUpdateItem: vi.fn().mockResolvedValue(undefined),
   muDeleteItem: vi.fn().mockResolvedValue(undefined),
+  muBulkDelete: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock('@/app/lists/[id]/actions', () => ({
   touchListView: vi.fn().mockResolvedValue(undefined),
@@ -22,9 +23,10 @@ vi.mock('@/lib/useRevealFx', () => ({ useRevealFx: () => '' }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 
 import TaskList from '@/app/lists/[id]/TaskList'
-const { muAddItem, muUpdateItem } = await import('@/lib/sync/mutations')
+const { muAddItem, muUpdateItem, muBulkDelete } = await import('@/lib/sync/mutations')
 const mockAdd = vi.mocked(muAddItem)
 const mockUpdate = vi.mocked(muUpdateItem)
+const mockBulkDelete = vi.mocked(muBulkDelete)
 
 const LIST: List = { id: 'l1', name: 'Chores', owner_id: 'u-anna', created_at: '2026-06-01T00:00:00Z', kind: 'task' }
 const PEOPLE: ListPerson[] = [{ user_id: 'u-anna', email: 'anna@example.com' }]
@@ -88,5 +90,38 @@ describe('TaskList', () => {
     renderList()
     fireEvent.click(screen.getByRole('checkbox', { name: /mark mow lawn done/i }))
     expect(mockUpdate).toHaveBeenCalledWith('l1', 't1', { is_checked: true })
+  })
+
+  it('Clear done bulk-deletes only the checked tasks, after confirm', () => {
+    state.items = [
+      makeTask({ id: 't1', name: 'Mow lawn' }),
+      makeTask({ id: 'd1', name: 'Buy stamps', is_checked: true }),
+      makeTask({ id: 'd2', name: 'Book dentist', is_checked: true }),
+    ]
+    renderList()
+    fireEvent.click(screen.getByRole('button', { name: /clear done/i }))
+    // First click only asks for confirmation — no delete yet.
+    expect(mockBulkDelete).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /^clear$/i }))
+    expect(mockBulkDelete).toHaveBeenCalledTimes(1)
+    const [listId, ids] = mockBulkDelete.mock.calls[0]
+    expect(listId).toBe('l1')
+    expect([...ids].sort()).toEqual(['d1', 'd2'])
+  })
+
+  it('Cancel aborts the clear without deleting', () => {
+    state.items = [makeTask({ id: 'd1', name: 'Buy stamps', is_checked: true })]
+    renderList()
+    fireEvent.click(screen.getByRole('button', { name: /clear done/i }))
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+    expect(mockBulkDelete).not.toHaveBeenCalled()
+    // Back to the idle affordance.
+    expect(screen.getByRole('button', { name: /clear done/i })).toBeInTheDocument()
+  })
+
+  it('shows no clear control when there are no done tasks', () => {
+    state.items = [makeTask({ id: 't1', name: 'Mow lawn' })]
+    renderList()
+    expect(screen.queryByRole('button', { name: /clear done/i })).not.toBeInTheDocument()
   })
 })
