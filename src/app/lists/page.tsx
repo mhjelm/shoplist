@@ -17,7 +17,7 @@ export default async function ListsPage() {
   // dropped is_shared column. head:true returns just the count, not rows.
   const { data: rawLists } = await supabase
     .from('lists')
-    .select('id, name, owner_id, created_at, list_members(count)')
+    .select('id, name, owner_id, created_at, kind, list_members(count)')
     .order('created_at', { ascending: false })
 
   // Flatten into List shape + a hasMembers boolean for the badge.

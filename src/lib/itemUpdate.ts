@@ -11,6 +11,9 @@ export interface ItemUpdatePatch {
   quantity?: number
   measurement?: string | null
   is_checked?: boolean
+  // Task-list fields (migration 0025). Explicit null clears the column.
+  assignee_id?: string | null
+  due_date?: string | null
 }
 
 export function buildItemUpdatePayload(patch: ItemUpdatePatch): Record<string, unknown> {
@@ -20,5 +23,8 @@ export function buildItemUpdatePayload(patch: ItemUpdatePatch): Record<string, u
   if (patch.quantity !== undefined) update.quantity = Math.max(1, patch.quantity)
   if ('measurement' in patch) update.measurement = patch.measurement?.trim() || null
   if (patch.is_checked !== undefined) update.is_checked = patch.is_checked
+  // Empty string → null so "Unassigned" / "no due date" clears the column.
+  if ('assignee_id' in patch) update.assignee_id = patch.assignee_id || null
+  if ('due_date' in patch) update.due_date = patch.due_date || null
   return update
 }

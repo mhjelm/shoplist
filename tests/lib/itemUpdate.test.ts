@@ -32,6 +32,24 @@ describe('buildItemUpdatePayload', () => {
     expect(buildItemUpdatePayload({})).toEqual({})
   })
 
+  it('forwards task fields assignee_id and due_date', () => {
+    expect(buildItemUpdatePayload({ assignee_id: 'u-1' })).toEqual({ assignee_id: 'u-1' })
+    expect(buildItemUpdatePayload({ due_date: '2026-06-09' })).toEqual({ due_date: '2026-06-09' })
+  })
+
+  it('clears task fields on explicit null or empty string (Unassigned / no due date)', () => {
+    expect(buildItemUpdatePayload({ assignee_id: null })).toEqual({ assignee_id: null })
+    expect(buildItemUpdatePayload({ assignee_id: '' })).toEqual({ assignee_id: null })
+    expect(buildItemUpdatePayload({ due_date: null })).toEqual({ due_date: null })
+    expect(buildItemUpdatePayload({ due_date: '' })).toEqual({ due_date: null })
+  })
+
+  it('omits task fields entirely when not present in the patch', () => {
+    const payload = buildItemUpdatePayload({ name: 'Mow lawn' })
+    expect('assignee_id' in payload).toBe(false)
+    expect('due_date' in payload).toBe(false)
+  })
+
   it('composes multiple fields including is_checked', () => {
     expect(buildItemUpdatePayload({
       name: 'Bröd',

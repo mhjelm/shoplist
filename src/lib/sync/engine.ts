@@ -136,7 +136,7 @@ async function dispatch(entry: OutboxEntry) {
       // user_item_history, classify in the background and patch Dexie when
       // it returns. Skip for merged adds (existing item, already categorized).
       const r = result as { item?: { id: string; category: string | null }; merged?: boolean }
-      if (r.item && !r.item.category && !r.merged) {
+      if (r.item && !r.item.category && !r.merged && !p.skip_categorize) {
         const itemId = r.item.id
         categorizeItem(itemId).then(res => {
           if (res?.category) {

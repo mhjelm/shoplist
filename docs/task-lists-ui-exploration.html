@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Task lists — UI exploration</title>
+<style>
+  :root{
+    --bg:#f9fafb; --card:#ffffff; --line:#e5e7eb; --line2:#eef0f2;
+    --ink:#111827; --ink2:#6b7280; --ink3:#9ca3af;
+    --pink:#EC4899; --blue:#2563eb;
+    --shop:#10b981; --shop-bg:#ecfdf5; --shop-line:#a7f3d0;
+    --task:#6366f1; --task-bg:#eef2ff; --task-line:#c7d2fe;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:#eceef1; color:var(--ink);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:32px 16px 80px;
+  }
+  .intro{max-width:1180px;margin:0 auto 28px}
+  .intro h1{font-size:22px;margin:0 0 6px}
+  .intro p{margin:0;color:#4b5563;max-width:70ch}
+  .grid{
+    max-width:1180px;margin:0 auto;
+    display:grid;grid-template-columns:repeat(2,1fr);gap:26px;
+  }
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+
+  .variant{
+    background:#fff;border:1px solid #dfe3e8;border-radius:20px;
+    overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px -16px rgba(0,0,0,.25);
+  }
+  .variant > header{
+    padding:14px 18px;border-bottom:1px solid var(--line);
+    display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+    background:linear-gradient(#fff,#fcfcfd);
+  }
+  .variant h2{font-size:14px;margin:0;font-weight:650;letter-spacing:.01em}
+  .variant .tag{font-size:11px;color:#fff;background:#111827;border-radius:999px;padding:2px 8px;font-weight:600}
+  .variant .note{font-size:12px;color:var(--ink2);padding:10px 18px 0}
+  .variant .stage{padding:18px}
+
+  /* ---- the phone frame replicating /lists ---- */
+  .phone{
+    background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .topbar{
+    background:#fff;border-bottom:1px solid var(--line);
+    padding:11px 14px;display:flex;align-items:center;justify-content:space-between;
+  }
+  .topbar .title{font-weight:650;font-size:15px}
+  .topbar .right{font-size:12px;color:var(--ink2);display:flex;gap:12px}
+  .body{padding:16px 14px 20px}
+
+  .create{
+    display:flex;gap:8px;margin-bottom:18px;
+  }
+  .create input{
+    flex:1;border:1px solid var(--line);border-radius:10px;padding:9px 12px;
+    font-size:14px;color:var(--ink2);background:#fff;
+  }
+  .create .seg{
+    display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;
+  }
+  .create .seg button{
+    border:0;background:#fff;padding:0 11px;font-size:14px;cursor:pointer;color:var(--ink2);
+  }
+  .create .seg button.on[data-k="shop"]{background:var(--shop-bg);color:#047857}
+  .create .seg button.on[data-k="task"]{background:var(--task-bg);color:#4338ca}
+  .create .add{border:0;background:var(--ink);color:#fff;border-radius:10px;padding:0 14px;font-weight:600;cursor:pointer}
+
+  .sec-label{
+    font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--ink3);margin:0 2px 9px;display:flex;align-items:center;gap:8px;
+  }
+  .sec-label .count{
+    background:#eef0f2;color:var(--ink2);border-radius:999px;padding:1px 7px;font-size:10px;letter-spacing:.02em;
+  }
+  section + section{margin-top:22px}
+
+  ul.rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+  li.row{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:11px 13px;display:flex;align-items:center;gap:10px;position:relative;
+  }
+  li.row .ic{
+    width:30px;height:30px;border-radius:9px;flex:none;
+    display:grid;place-items:center;font-size:15px;
+  }
+  .ic.shop{background:var(--shop-bg);border:1px solid var(--shop-line)}
+  .ic.task{background:var(--task-bg);border:1px solid var(--task-line)}
+  li.row .name{font-weight:550;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  li.row .meta{font-size:11px;color:var(--ink3);flex:none}
+  li.row .chev{color:#d1d5db;font-size:16px;flex:none}
+
+  /* type pill (mixed-pill variant) */
+  .pill{font-size:10px;font-weight:650;letter-spacing:.04em;border-radius:999px;padding:2px 7px;flex:none}
+  .pill.shop{background:var(--shop-bg);color:#047857;border:1px solid var(--shop-line)}
+  .pill.task{background:var(--task-bg);color:#4338ca;border:1px solid var(--task-line)}
+
+  /* left accent bar (mixed-accent variant) */
+  li.row.accent{padding-left:13px}
+  li.row.accent::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:999px}
+  li.row.accent.shop::before{background:var(--shop)}
+  li.row.accent.task::before{background:var(--task)}
+
+  .new{
+    font:800 9px/1 -apple-system,sans-serif;color:#fff;background:var(--pink);
+    border-radius:5px;padding:3px 5px;letter-spacing:.04em;transform:rotate(-8deg);flex:none;
+    box-shadow:0 1px 2px rgba(236,72,153,.4);
+  }
+  /* task progress mini */
+  .prog{display:flex;align-items:center;gap:6px;flex:none}
+  .prog .bar{width:46px;height:5px;border-radius:999px;background:#eef0f2;overflow:hidden}
+  .prog .bar i{display:block;height:100%;background:var(--task)}
+  .prog .txt{font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums}
+  .prog.shopc i{background:var(--shop)}
+
+  /* tabs (separated-tabs variant) */
+  .tabs{display:flex;gap:6px;margin-bottom:16px;background:#eef0f2;border-radius:11px;padding:4px}
+  .tabs button{
+    flex:1;border:0;background:transparent;border-radius:8px;padding:8px 0;font-size:13px;font-weight:600;
+    color:var(--ink2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;
+  }
+  .tabs button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .tabs button .dot{width:7px;height:7px;border-radius:999px}
+  .tabs button .dot.s{background:var(--shop)} .tabs button .dot.t{background:var(--task)}
+
+  .takeaways{max-width:1180px;margin:30px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:900px){.takeaways{grid-template-columns:1fr}}
+  .takeaways .box{background:#fff;border:1px solid #dfe3e8;border-radius:16px;padding:16px 18px}
+  .takeaways h3{margin:0 0 8px;font-size:14px}
+  .takeaways ul{margin:0;padding-left:18px;color:#4b5563;font-size:13px}
+  .takeaways li{margin:4px 0}
+  .pro{color:#047857} .con{color:#b91c1c}
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>Task lists alongside shopping lists — UI exploration</h1>
+  <p>Four mockups on the real <code>/lists</code> chrome. Top row = <strong>mixed</strong> (both kinds in one stream, distinguished visually). Bottom row = <strong>separated</strong> (kinds kept apart). Shopping&nbsp;= 🛒 emerald, Tasks&nbsp;= ✓ indigo throughout.</p>
+</div>
+
+<div class="grid">
+
+  <!-- ============ MIXED A: icon + pill ============ -->
+  <div class="variant">
+    <header><h2>Mixed · A — icon + type pill</h2><span class="tag">mixed</span></header>
+    <div class="note">One stream, sorted by recency. A leading icon tile and a small pill name the kind. Lowest-friction: list stays one place.</div>
+    <div class="stage">
+      <div class="phone">
+        <div class="topbar"><span class="title">Lists</span><span class="right"><span>Settings</span><span>Sign out</span></span></div>
+        <div class="body">
+          <div class="create">
+            <input placeholder="New list…" />
+            <div class="seg"><button class="on" data-k="shop">🛒</button><button data-k="task">✓</button></div>
+            <button class="add">Add</button>
+          </div>
+
+          <section>
+            <div class="sec-label">My lists</div>
+            <ul class="rows">
+              <li class="row"><span class="ic task">✓</span><span class="name">Weekend chores</span><span class="pill task">TASK</span><span class="new">NEW</span><span class="chev">›</span></li>
+              <li class="row"><span class="ic shop">🛒</span><span class="name">ICA Maxi</span><span class="pill shop">SHOP</span><span class="chev">›</span></li>
+              <li class="row"><span class="ic task">✓</span><span class="name">Trip packing</span><span class="pill task">TASK</span><span class="chev">›</span></li>
+              <li class="row"><span class="ic shop">🛒</span><span class="name">Weekday dinners</span><span class="pill shop">SHOP</span><span class="chev">›</span></li>
+            </ul>
+          </section>
+
+          <section>
+            <div class="sec-label">Shared with me</div>
+            <ul class="rows">
+              <li class="row"><span class="ic task">✓</span><span class="name">House renovation</span><span class="pill task">TASK</span><span class="meta">shared</span><span class="chev">›</span></li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MIXED B: accent bar + progress ============ -->
+  <div class="variant">
+    <header><h2>Mixed · B — accent bar + progress</h2><span class="tag">mixed</span></header>
+    <div class="note">Quieter: thin colored spine on the left instead of a pill. Tasks show a done/total mini-bar; shopping shows item count. More information, calmer surface.</div>
+    <div class="stage">
+      <div class="phone">
+        <div class="topbar"><span class="title">Lists</span><span class="right"><span>Settings</span><span>Sign out</span></span></div>
+        <div class="body">
+          <div class="create">
+            <input placeholder="New list…" />
+            <div class="seg"><button data-k="shop">🛒</button><button class="on" data-k="task">✓</button></div>
+            <button class="add">Add</button>
+          </div>
+
+          <section>
+            <div class="sec-label">My lists</div>
+            <ul class="rows">
+              <li class="row accent task"><span class="ic task">✓</span><span class="name">Weekend chores</span><span class="prog"><span class="bar"><i style="width:40%"></i></span><span class="txt">2/5</span></span><span class="new">NEW</span><span class="chev">›</span></li>
+              <li class="row accent shop"><span class="ic shop">🛒</span><span class="name">ICA Maxi</span><span class="prog shopc"><span class="bar"><i style="width:25%"></i></span><span class="txt">12</span></span><span class="chev">›</span></li>
+              <li class="row accent task"><span class="ic task">✓</span><span class="name">Trip packing</span><span class="prog"><span class="bar"><i style="width:80%"></i></span><span class="txt">8/10</span></span><span class="chev">›</span></li>
+              <li class="row accent shop"><span class="ic shop">🛒</span><span class="name">Weekday dinners</span><span class="prog shopc"><span class="bar"><i style="width:15%"></i></span><span class="txt">6</span></span><span class="chev">›</span></li>
+            </ul>
+          </section>
+
+          <section>
+            <div class="sec-label">Shared with me</div>
+            <ul class="rows">
+              <li class="row accent task"><span class="ic task">✓</span><span class="name">House renovation</span><span class="prog"><span class="bar"><i style="width:55%"></i></span><span class="txt">11/20</span></span><span class="meta">shared</span><span class="chev">›</span></li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SEPARATED A: grouped sections ============ -->
+  <div class="variant">
+    <header><h2>Separated · A — grouped sections</h2><span class="tag">separated</span></header>
+    <div class="note">Same single scroll, but kinds never interleave: a Shopping block then a Tasks block, each with its own header. "Shared with me" sits at the bottom as today. Smallest UX change, clearest mental split.</div>
+    <div class="stage">
+      <div class="phone">
+        <div class="topbar"><span class="title">Lists</span><span class="right"><span>Settings</span><span>Sign out</span></span></div>
+        <div class="body">
+          <div class="create">
+            <input placeholder="New list…" />
+            <div class="seg"><button class="on" data-k="shop">🛒</button><button data-k="task">✓</button></div>
+            <button class="add">Add</button>
+          </div>
+
+          <section>
+            <div class="sec-label"><span class="ic shop" style="width:18px;height:18px;border-radius:6px;font-size:11px">🛒</span> Shopping <span class="count">2</span></div>
+            <ul class="rows">
+              <li class="row"><span class="name">ICA Maxi</span><span class="meta">12 items</span><span class="chev">›</span></li>
+              <li class="row"><span class="name">Weekday dinners</span><span class="meta">6 items</span><span class="chev">›</span></li>
+            </ul>
+          </section>
+
+          <section>
+            <div class="sec-label"><span class="ic task" style="width:18px;height:18px;border-radius:6px;font-size:11px">✓</span> Tasks <span class="count">2</span></div>
+            <ul class="rows">
+              <li class="row"><span class="name">Weekend chores</span><span class="prog"><span class="bar"><i style="width:40%"></i></span><span class="txt">2/5</span></span><span class="new">NEW</span><span class="chev">›</span></li>
+              <li class="row"><span class="name">Trip packing</span><span class="prog"><span class="bar"><i style="width:80%"></i></span><span class="txt">8/10</span></span><span class="chev">›</span></li>
+            </ul>
+          </section>
+
+          <section>
+            <div class="sec-label">Shared with me</div>
+            <ul class="rows">
+              <li class="row"><span class="ic task">✓</span><span class="name">House renovation</span><span class="meta">shared · task</span><span class="chev">›</span></li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SEPARATED B: tabs ============ -->
+  <div class="variant">
+    <header><h2>Separated · B — top tabs</h2><span class="tag">separated</span></header>
+    <div class="note">A hard switch. Each kind owns the whole screen; the other is out of sight. Best if either list grows long, or if shopping and tasks feel like genuinely different jobs. Costs a tap to cross over + a remembered "current tab".</div>
+    <div class="stage">
+      <div class="phone">
+        <div class="topbar"><span class="title">Lists</span><span class="right"><span>Settings</span><span>Sign out</span></span></div>
+        <div class="body">
+          <div class="tabs">
+            <button class="on"><span class="dot s"></span> Shopping</button>
+            <button><span class="dot t"></span> Tasks <span class="new" style="transform:rotate(0);padding:2px 4px">1</span></button>
+          </div>
+
+          <div class="create">
+            <input placeholder="New shopping list…" />
+            <button class="add">Add</button>
+          </div>
+
+          <section>
+            <div class="sec-label">My lists</div>
+            <ul class="rows">
+              <li class="row"><span class="ic shop">🛒</span><span class="name">ICA Maxi</span><span class="meta">12 items</span><span class="chev">›</span></li>
+              <li class="row"><span class="ic shop">🛒</span><span class="name">Weekday dinners</span><span class="meta">6 items</span><span class="chev">›</span></li>
+            </ul>
+          </section>
+
+          <section>
+            <div class="sec-label">Shared with me</div>
+            <ul class="rows">
+              <li class="row"><span class="ic shop">🛒</span><span class="name">Sommarstuga handla</span><span class="meta">shared</span><span class="chev">›</span></li>
+            </ul>
+          </section>
+
+          <div style="margin-top:18px;text-align:center;font-size:11px;color:#c0c4cb">— switch to <b style="color:#6366f1">Tasks</b> tab to see chores/packing —</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="takeaways">
+  <div class="box">
+    <h3>Mixed (A / B)</h3>
+    <ul>
+      <li class="pro">One place — no tab to remember, recency sort just works.</li>
+      <li class="pro">Tiny code delta: today's two sections stay; rows gain an icon + kind marker.</li>
+      <li class="con">Visual noise — every row must declare its kind or it's ambiguous.</li>
+      <li class="con">"Shared with me" already adds a section; a third axis (kind) competing for the same rows can feel busy once lists pile up.</li>
+    </ul>
+  </div>
+  <div class="box">
+    <h3>Separated (A / B)</h3>
+    <ul>
+      <li class="pro">Clean mental model — groceries and chores never blur together.</li>
+      <li class="pro">Create field + add-flow can be kind-specific (no mode toggle in the input).</li>
+      <li class="con">Tabs (B) hide one kind and need remembered state + a cross-over NEW signal.</li>
+      <li class="con">Sections (A) push shopping down once you have several task lists, or vice-versa.</li>
+    </ul>
+  </div>
+</div>
+
+<p style="max-width:1180px;margin:26px auto 0;color:#6b7280;font-size:13px">
+  My lean: <b>Separated · A (grouped sections)</b> for v1 — closest to today's structure, no hidden state, and the create field can default its kind by which section you're nearest. Revisit tabs only if one kind routinely grows past a screenful.
+</p>
+
+</body>
+</html>

@@ -36,6 +36,10 @@ class LocalDB extends Dexie {
     // `last_add_at`/`last_add_by` signal (migration 0024). Non-indexed fields, so
     // no schema change — old rows are harmlessly overwritten on the next seed.
     this.version(5).stores({})
+    // v6: task lists (migration 0025) — list_catalog gains `kind`, items gain
+    // `assignee_id`/`due_date`. All non-indexed, so no index change; rows are
+    // overwritten on the next seed/reconcile.
+    this.version(6).stores({})
   }
 }
 

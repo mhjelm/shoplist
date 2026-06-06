@@ -21,6 +21,8 @@ export function itemToLocalItem(item: Item): LocalItem {
     category: item.category,
     measurement: item.measurement,
     shared_group_id: item.shared_group_id,
+    assignee_id: item.assignee_id,
+    due_date: item.due_date,
   }
 }
 
@@ -38,6 +40,8 @@ export function localItemToItem(li: LocalItem): Item {
     category: li.category,
     measurement: li.measurement,
     shared_group_id: li.shared_group_id,
+    assignee_id: li.assignee_id,
+    due_date: li.due_date,
   }
 }
 
@@ -87,6 +91,8 @@ export interface BuildLocalItemOpts {
   pictureUrl?: string | null
   category?: CategorySlug | null
   measurement?: string | null
+  assigneeId?: string | null
+  dueDate?: string | null
 }
 
 export function buildLocalItem(
@@ -109,6 +115,8 @@ export function buildLocalItem(
     category: opts.category ?? null,
     measurement: opts.measurement ?? null,
     shared_group_id: null,
+    assignee_id: opts.assigneeId ?? null,
+    due_date: opts.dueDate ?? null,
   }
 }
 

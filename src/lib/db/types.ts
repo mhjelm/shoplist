@@ -1,4 +1,5 @@
 import type { CategorySlug } from '@/lib/categories'
+import type { ListKind } from '@/lib/types'
 
 export interface LocalList {
   id: string
@@ -21,6 +22,9 @@ export interface LocalItem {
   category: CategorySlug | null
   measurement: string | null
   shared_group_id: string | null
+  // Task-list fields (null/ignored for shopping items). See migration 0025.
+  assignee_id: string | null
+  due_date: string | null
   _pending_local_updated_at?: number
 }
 
@@ -76,6 +80,7 @@ export interface LocalListCatalog {
   name: string
   owner_id: string
   created_at: string
+  kind: ListKind
   has_members: boolean
   // Add-only activity signal that drives the /lists NEW marker: the timestamp
   // and actor of the most recent item INSERT (migration 0024). Deletes, edits,

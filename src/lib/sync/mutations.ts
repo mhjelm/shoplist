@@ -19,7 +19,10 @@ function baseEntry(
   }
 }
 
-export async function muAddItem(item: LocalItem): Promise<void> {
+export async function muAddItem(
+  item: LocalItem,
+  opts: { skipCategorize?: boolean } = {},
+): Promise<void> {
   await localDB.transaction('rw', [localDB.items, localDB.outbox], async () => {
     await localDB.items.put(item)
     await localDB.outbox.add(baseEntry(item.list_id, 'item.insert', {
@@ -30,6 +33,10 @@ export async function muAddItem(item: LocalItem): Promise<void> {
       quantity: item.quantity,
       measurement: item.measurement,
       category: item.category,
+      // Task adds opt out of the background Gemini categorize fallback — tasks
+      // aren't groceries. Omitted (not false) for shopping so payloads are
+      // byte-for-byte unchanged there.
+      ...(opts.skipCategorize ? { skip_categorize: true } : {}),
     }))
   })
   flushOutbox()

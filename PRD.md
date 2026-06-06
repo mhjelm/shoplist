@@ -35,11 +35,21 @@ A web app for family members to manage personal and shared grocery lists with re
 - Session persistence across page reloads and app restarts
 
 ### Lists
+- Two kinds of list, chosen at creation (🛒 Shopping / ✓ Tasks): the `kind` column on `lists`
 - Create, rename, and delete lists (delete: owner only)
 - Share a list by inviting family members by email
 - Sharing is derived from `list_members` rows — no `is_shared` flag
 - Members can leave a shared list
 - Previously-invited emails appear as quick-pick chips in the share UI
+- `/lists` shows both kinds in one recency-sorted stream, each row tagged with a 🛒/✓ icon + `SHOP`/`TASK` pill
+
+### Task lists
+- A shared family checklist for chores / things-to-do (not groceries) — reuses the same sharing, realtime, and offline stack
+- Plain text tasks (no AI parsing, measurements, categories, photos, or store mode)
+- Each task can carry an optional **assignee** (any owner/member, picked from `get_list_people`) and an optional **due date**
+- Due dates are visual + sort only (amber = due soon/today, red = overdue, grey = future); the to-do list sorts by due date, undated last. **No reminders or notifications.**
+- Tap the checkbox to complete; done tasks drop to a struck-through "Done" section
+- Edited via a dedicated task modal (name · assignee · due date · delete)
 
 ### Items
 
@@ -115,10 +125,11 @@ A web app for family members to manage personal and shared grocery lists with re
 
 ## Non-goals
 
-- Push notifications
+- Push notifications / task reminders (due dates are visual + sort only)
 - Barcode / QR scanning
 - Purchase history or spend tracking
 - Recurring / template lists
+- Sub-tasks, notes, or priorities on tasks (task lists stay a flat shared checklist)
 - Admin roles or permissions beyond creator vs. member
 - iOS Web Share Target (Safari does not support it)
 - Multi-language UI (Swedish labels are hardcoded in category slugs)
@@ -129,9 +140,9 @@ A web app for family members to manage personal and shared grocery lists with re
 
 | Table | Key columns |
 |---|---|
-| `lists` | id, name, owner_id, created_at |
+| `lists` | id, name, owner_id, created_at, kind |
 | `list_members` | list_id, user_id, added_at |
-| `items` | id, list_id, added_by, name, is_checked, sort_order, quantity, measurement, category, picture_url |
+| `items` | id, list_id, added_by, name, is_checked, sort_order, quantity, measurement, category, picture_url, assignee_id, due_date |
 | `user_item_history` | user_id, name, use_count, last_used_at, category |
 | `user_preferences` | user_id, theme, list_text_size, category_order, high_contrast |
 | `pending_imports` | id, user_id, items (jsonb), created_at |

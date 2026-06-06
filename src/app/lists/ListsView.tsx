@@ -46,6 +46,7 @@ export default function ListsView({ initialLists, memberCounts, lastAdd, lastAdd
       name: list.name,
       owner_id: list.owner_id,
       created_at: list.created_at,
+      kind: list.kind,
       has_members: memberCounts[list.id] ?? false,
       last_add_at: lastAdd[list.id] ?? null,
       last_add_by: lastAddBy[list.id] ?? null,
@@ -90,6 +91,7 @@ export default function ListsView({ initialLists, memberCounts, lastAdd, lastAdd
       name: l.name,
       owner_id: l.owner_id,
       created_at: l.created_at,
+      kind: l.kind,
       has_members: memberCounts[l.id] ?? false,
       last_add_at: lastAdd[l.id] ?? null,
       last_add_by: lastAddBy[l.id] ?? null,
@@ -115,6 +117,7 @@ export default function ListsView({ initialLists, memberCounts, lastAdd, lastAdd
       name: renamedLists[c.id] ?? c.name,
       owner_id: c.owner_id,
       created_at: c.created_at,
+      kind: c.kind ?? 'shopping',
     }))
 
     const unread = computeUnread({
@@ -141,6 +144,12 @@ export default function ListsView({ initialLists, memberCounts, lastAdd, lastAdd
     setRenamedLists(prev => ({ ...prev, [listId]: name }))
   }
 
+  // Which kind is being opened — so the nav loading overlay shows a task glyph
+  // instead of the shopping cart when entering a task list.
+  const navIsTask = navigatingToListId
+    ? (myLists.find(l => l.id === navigatingToListId) ?? sharedLists.find(l => l.id === navigatingToListId))?.kind === 'task'
+    : false
+
   return (
     // revealFx is one of six subtle entrance animations, chosen at random on
     // mount (including after the back-nav overlay is removed); '' otherwise.
@@ -153,8 +162,15 @@ export default function ListsView({ initialLists, memberCounts, lastAdd, lastAdd
         >
           {theme === 'polar' || theme === 'dusk' ? (
             <div className={`loading-plate ${theme === 'polar' ? 'loading-plate-polar' : 'loading-plate-dusk'} w-64 h-64 sm:w-80 sm:h-80 loading-cart`} aria-hidden>
-              <span className="text-[7rem] sm:text-[9rem] leading-none select-none">🛒</span>
+              <span className="text-[7rem] sm:text-[9rem] leading-none select-none">{navIsTask ? '📋' : '🛒'}</span>
             </div>
+          ) : navIsTask ? (
+            <span
+              aria-hidden
+              className="w-64 h-64 sm:w-80 sm:h-80 loading-cart select-none flex items-center justify-center text-[7rem] sm:text-[9rem] leading-none"
+            >
+              📋
+            </span>
           ) : (
             <>
               <img
@@ -265,6 +281,7 @@ function ListRow({ list, hasMembers, unread, theme, cached, isOffline, onNavigat
                                <UnreadBadge />
       )}
       <span className="truncate">{list.name}</span>
+      {list.kind === 'task' && <TaskMarker />}
       {hasMembers && <span className="text-xs text-gray-400 dark:text-gray-500">shared</span>}
     </>
   )
@@ -335,6 +352,17 @@ function ListRow({ list, hasMembers, unread, theme, cached, isOffline, onNavigat
         />
       )}
     </li>
+  )
+}
+
+// Mixed-stream kind marker: shopping lists (the common case) stay unmarked; a
+// task list carries a single ✓ TASK chip so the exception stands out without
+// adding noise to every shopping row.
+function TaskMarker() {
+  return (
+    <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold tracking-wide rounded-full px-2 py-0.5 border text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800">
+      <span aria-hidden>✓</span>TASK
+    </span>
   )
 }
 

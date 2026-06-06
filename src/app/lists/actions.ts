@@ -12,9 +12,12 @@ export async function createList(formData: FormData) {
   const name = (formData.get('name') as string)?.trim()
   if (!name) return { error: 'Name is required' }
 
+  const kind = formData.get('kind') === 'task' ? 'task' : 'shopping'
+
   const { data: list, error } = await supabase.from('lists').insert({
     name,
     owner_id: user.id,
+    kind,
   }).select().single()
 
   if (error) return { error: error.message }

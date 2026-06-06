@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Task list detail — UI exploration</title>
+<style>
+  :root{
+    --bg:#f9fafb; --card:#ffffff; --line:#e5e7eb; --line2:#eef0f2;
+    --ink:#111827; --ink2:#6b7280; --ink3:#9ca3af;
+    --pink:#EC4899; --blue:#2563eb; --task:#6366f1; --task-bg:#eef2ff; --task-line:#c7d2fe;
+    --due-soon:#b45309; --due-soon-bg:#fffbeb; --due-soon-line:#fde68a;
+    --due-over:#b91c1c; --due-over-bg:#fef2f2; --due-over-line:#fecaca;
+    --done:#10b981;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:#eceef1; color:var(--ink);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:32px 16px 80px;
+  }
+  .intro{max-width:1180px;margin:0 auto 28px}
+  .intro h1{font-size:22px;margin:0 0 6px}
+  .intro p{margin:0;color:#4b5563;max-width:74ch}
+  .grid{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:repeat(2,1fr);gap:26px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+
+  .variant{background:#fff;border:1px solid #dfe3e8;border-radius:20px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px -16px rgba(0,0,0,.25)}
+  .variant > header{padding:14px 18px;border-bottom:1px solid var(--line);
+    display:flex;align-items:baseline;justify-content:space-between;gap:10px;background:linear-gradient(#fff,#fcfcfd)}
+  .variant h2{font-size:14px;margin:0;font-weight:650}
+  .variant .tag{font-size:11px;color:#fff;background:var(--task);border-radius:999px;padding:2px 8px;font-weight:600}
+  .variant .note{font-size:12px;color:var(--ink2);padding:10px 18px 0}
+  .variant .stage{padding:18px}
+
+  .phone{background:var(--bg);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .topbar{background:#fff;border-bottom:1px solid var(--line);padding:11px 14px;display:flex;align-items:center;gap:11px}
+  .topbar .back{color:var(--ink3);font-size:19px;line-height:1}
+  .topbar .title{font-weight:650;font-size:15px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .topbar .edit{color:var(--ink3);font-size:13px}
+  .body{padding:16px 14px 20px}
+
+  .add{display:flex;gap:8px;margin-bottom:18px}
+  .add input{flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--ink2);background:#fff}
+  .add .btn{border:0;background:var(--task);color:#fff;border-radius:10px;padding:0 15px;font-weight:600;cursor:pointer}
+
+  ul.rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+  li.row{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 13px;
+    display:flex;align-items:center;gap:11px;position:relative}
+
+  .cb{width:21px;height:21px;border-radius:7px;border:2px solid #cbd0d8;flex:none;display:grid;place-items:center;background:#fff}
+  .cb.done{background:var(--done);border-color:var(--done)}
+  .cb.done::after{content:"✓";color:#fff;font-size:13px;font-weight:800;line-height:1}
+  .name{font-weight:550;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .grip{color:#d6dae0;font-size:15px;flex:none;margin-left:-2px}
+  .pencil{color:#d1d5db;font-size:14px;flex:none}
+
+  /* avatars */
+  .ava{width:24px;height:24px;border-radius:999px;flex:none;display:grid;place-items:center;
+    font-size:11px;font-weight:700;color:#fff;letter-spacing:.02em}
+  .ava.a{background:#0ea5e9} .ava.e{background:#f59e0b} .ava.m{background:#ec4899} .ava.un{background:#cbd5e1;color:#64748b}
+
+  /* due pills */
+  .due{font-size:11px;font-weight:600;border-radius:999px;padding:3px 8px;flex:none;white-space:nowrap}
+  .due.soon{background:var(--due-soon-bg);color:var(--due-soon);border:1px solid var(--due-soon-line)}
+  .due.over{background:var(--due-over-bg);color:var(--due-over);border:1px solid var(--due-over-line)}
+  .due.plain{background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb}
+
+  .new{font:800 9px/1 sans-serif;color:#fff;background:var(--pink);border-radius:5px;padding:3px 5px;
+    transform:rotate(-8deg);flex:none;box-shadow:0 1px 2px rgba(236,72,153,.4)}
+
+  /* priority accent spine */
+  li.row.pri{padding-left:13px}
+  li.row.pri::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:999px}
+  li.row.pri.hi::before{background:#ef4444} li.row.pri.med::before{background:#f59e0b} li.row.pri.lo::before{background:#cbd5e1}
+
+  /* note / subline */
+  .stack{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .stack .name{flex:none}
+  .sub{font-size:12px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sub .chip{color:var(--task);font-weight:600}
+
+  /* swimlane group label */
+  .lane{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);
+    margin:0 2px 9px;display:flex;align-items:center;gap:8px}
+  .lane .count{background:#eef0f2;color:var(--ink2);border-radius:999px;padding:1px 7px;font-size:10px}
+  section + section{margin-top:20px}
+
+  /* done section */
+  .donehead{font-size:12px;color:var(--ink3);margin:22px 2px 9px;display:flex;align-items:center;gap:7px}
+  li.row.is-done{background:#fafbfc;border-color:var(--line2)}
+  li.row.is-done .name{color:var(--ink3);text-decoration:line-through;font-weight:450}
+  li.row.is-done .ava{opacity:.5}
+
+  .takeaways{max-width:1180px;margin:30px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:900px){.takeaways{grid-template-columns:1fr}}
+  .takeaways .box{background:#fff;border:1px solid #dfe3e8;border-radius:16px;padding:16px 18px}
+  .takeaways h3{margin:0 0 8px;font-size:14px}
+  .takeaways ul{margin:0;padding-left:18px;color:#4b5563;font-size:13px}
+  .takeaways li{margin:4px 0}
+  .pro{color:#047857}.con{color:#b91c1c}
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>Inside a task list — UI exploration</h1>
+  <p>Four takes on the task <em>detail</em> view, on the real list-detail chrome (back arrow, title, add field, rounded rows, struck-through done section). They escalate left→right, top→bottom: from a bare shared checklist to assignment, due dates, and grouping. Pick how much machinery is worth it for "family tasks".</p>
+</div>
+
+<div class="grid">
+
+  <!-- ===== A: bare checklist ===== -->
+  <div class="variant">
+    <header><h2>A — bare shared checklist</h2><span class="tag">minimal</span></header>
+    <div class="note">Shopping's model with an explicit checkbox instead of tap-to-check. No assignment, no dates. Anyone checks anything; done drops to the bottom struck through. Almost zero new concepts.</div>
+    <div class="stage">
+      <div class="phone">
+        <div class="topbar"><span class="back">‹</span><span class="title">Weekend chores</span><span class="edit">Edit</span></div>
+        <div class="body">
+          <div class="add"><input placeholder="Add a task…" /><button class="btn">Add</button></div>
+          <ul class="rows">
+            <li class="row"><span class="grip">⋮⋮</span><span class="cb"></span><span class="name">Mow the lawn</span><span class="new">NEW</span><span class="pencil">✎</span></li>
+            <li class="row"><span class="grip">⋮⋮</span><span class="cb"></span><span class="name">Call the plumber about the leak</span><span class="pencil">✎</span></li>
+            <li class="row"><span class="grip">⋮⋮</span><span class="cb"></span><span class="name">Take out recycling</span><span class="pencil">✎</span></li>
+          </ul>
+          <div class="donehead">▾ Done (2)</div>
+          <ul class="rows">
+            <li class="row is-done"><span class="cb done"></span><span class="name">Buy stamps</span></li>
+            <li class="row is-done"><span class="cb done"></span><span class="name">Book dentist</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== B: assignee + due ===== -->
+  <div class="variant">
+    <header><h2>B — assignee + optional due date</h2><span class="tag">assignment</span></header>
+    <div class="note">The real "family" value: each task can carry an assignee avatar and a due-date pill (amber = soon, red = overdue, grey = future). Both optional — unassigned shows a hollow avatar. Sorted by due date.</div>
+    <div class="stage">
+      <div class="phone">
+        <div class="topbar"><span class="back">‹</span><span class="title">Weekend chores</span><span class="edit">Edit</span></div>
+        <div class="body">
+          <div class="add"><input placeholder="Add a task…" /><button class="btn">Add</button></div>
+          <ul class="rows">
+            <li class="row"><span class="cb"></span><span class="name">Call the plumber</span><span class="due over">Mon</span><span class="ava e">E</span><span class="new">NEW</span></li>
+            <li class="row"><span class="cb"></span><span class="name">Mow the lawn</span><span class="due soon">Today</span><span class="ava a">A</span></li>
+            <li class="row"><span class="cb"></span><span class="name">Take out recycling</span><span class="due plain">Sat</span><span class="ava m">M</span></li>
+            <li class="row"><span class="cb"></span><span class="name">Wash the car</span><span class="ava un">?</span></li>
+          </ul>
+          <div class="donehead">▾ Done (1)</div>
+          <ul class="rows">
+            <li class="row is-done"><span class="cb done"></span><span class="name">Book dentist</span><span class="ava a">A</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== C: grouped by assignee ===== -->
+  <div class="variant">
+    <header><h2>C — grouped by person (swimlanes)</h2><span class="tag">assignment</span></header>
+    <div class="note">Reframes the list around "who does what". Each family member is a section; an Unassigned bucket sits on top to grab from. Great when the point is dividing labour; heavier if most tasks are shared/anyone's.</div>
+    <div class="stage">
+      <div class="phone">
+        <div class="topbar"><span class="back">‹</span><span class="title">Weekend chores</span><span class="edit">Edit</span></div>
+        <div class="body">
+          <div class="add"><input placeholder="Add a task…" /><button class="btn">Add</button></div>
+
+          <section>
+            <div class="lane"><span class="ava un" style="width:18px;height:18px;font-size:10px">?</span> Unassigned <span class="count">1</span></div>
+            <ul class="rows">
+              <li class="row"><span class="cb"></span><span class="name">Wash the car</span><span class="due plain">Sun</span></li>
+            </ul>
+          </section>
+
+          <section>
+            <div class="lane"><span class="ava a" style="width:18px;height:18px;font-size:10px">A</span> Anna <span class="count">2</span></div>
+            <ul class="rows">
+              <li class="row"><span class="cb"></span><span class="name">Mow the lawn</span><span class="due soon">Today</span></li>
+              <li class="row"><span class="cb"></span><span class="name">Grocery run</span><span class="due plain">Sat</span></li>
+            </ul>
+          </section>
+
+          <section>
+            <div class="lane"><span class="ava e" style="width:18px;height:18px;font-size:10px">E</span> Erik <span class="count">1</span></div>
+            <ul class="rows">
+              <li class="row"><span class="cb"></span><span class="name">Call the plumber</span><span class="due over">Mon</span><span class="new">NEW</span></li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== D: rich card (note + priority) ===== -->
+  <div class="variant">
+    <header><h2>D — rich rows: note + priority</h2><span class="tag">heaviest</span></header>
+    <div class="note">Each task can hold a one-line note/sub-detail and a priority spine (red/amber/grey on the left edge). Most expressive, closest to a real task manager — and the most scope-creep risk. Shown as the "if we go big" end of the range.</div>
+    <div class="stage">
+      <div class="phone">
+        <div class="topbar"><span class="back">‹</span><span class="title">House renovation</span><span class="edit">Edit</span></div>
+        <div class="body">
+          <div class="add"><input placeholder="Add a task…" /><button class="btn">Add</button></div>
+          <ul class="rows">
+            <li class="row pri hi"><span class="cb"></span><span class="stack"><span class="name">Get quotes for kitchen</span><span class="sub">3 contractors · <span class="chip">@Erik</span> · due Fri</span></span><span class="ava e">E</span></li>
+            <li class="row pri med"><span class="cb"></span><span class="stack"><span class="name">Pick paint colours</span><span class="sub">Living room + hall</span></span><span class="ava m">M</span></li>
+            <li class="row pri lo"><span class="cb"></span><span class="stack"><span class="name">Return packaging to store</span><span class="sub">No rush</span></span><span class="ava un">?</span></li>
+          </ul>
+          <div class="donehead">▾ Done (1)</div>
+          <ul class="rows">
+            <li class="row is-done"><span class="cb done"></span><span class="stack"><span class="name">Measure windows</span><span class="sub">Done last weekend</span></span><span class="ava a">A</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="takeaways">
+  <div class="box">
+    <h3>Reading the range</h3>
+    <ul>
+      <li><b>A</b> ships in days — it's the shopping list minus groceries plus a checkbox. Validates "do we even use this?" cheaply.</li>
+      <li><b>B</b> is the sweet spot for "family tasks": assignment + due answers <i>who</i> and <i>when</i> without a real scheduler.</li>
+      <li><b>C</b> is B's data re-grouped — a view toggle, not new fields. Could be a sort option on top of B rather than its own build.</li>
+      <li><b>D</b> opens the door to notes/priority/sub-tasks — powerful but this is where "todo app" scope-creep starts.</li>
+    </ul>
+  </div>
+  <div class="box">
+    <h3>Cost vs. payoff</h3>
+    <ul>
+      <li class="pro">A reuses items table as-is (name + is_checked). New columns only from B onward (assignee_id, due_date).</li>
+      <li class="pro">B/C share one schema; C is purely a client-side grouping of B.</li>
+      <li class="con">Due dates imply expectations: sorting, "overdue" styling, maybe reminders. Decide if you're OK stopping at visual-only.</li>
+      <li class="con">D's note/priority touch the edit modal, add-flow, and sorting — biggest surface, least certain payoff for a family chore list.</li>
+    </ul>
+  </div>
+</div>
+
+<p style="max-width:1180px;margin:26px auto 0;color:#6b7280;font-size:13px">
+  My lean: build <b>B</b> as the target, ship <b>A</b> first if you want to de-risk usage. Treat <b>C</b> as a later sort/group toggle over B's data, and hold <b>D</b> unless the family explicitly wants notes. Due dates = visual + sort only for v1 — no reminders/notifications.
+</p>
+
+</body>
+</html>

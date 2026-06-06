@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import ItemList from './ItemList'
+import TaskList from './TaskList'
 import LeaveListButton from './LeaveListButton'
 import { getUserPreferences } from '@/lib/preferences'
 import { EditModeProvider, EditModeToggle } from './EditModeContext'
@@ -31,10 +32,11 @@ export default async function ListPage({ params }: Props) {
     .order('use_count', { ascending: false })
     .limit(200)
 
-  // RLS filters to lists the user owns or is a member of.
+  // RLS filters to lists the user owns or is a member of. Only shopping lists
+  // are valid copy/move targets, so task lists are filtered out below.
   const { data: otherLists } = await supabase
     .from('lists')
-    .select('id, name, owner_id, created_at')
+    .select('id, name, owner_id, created_at, kind')
     .neq('id', id)
     .order('created_at', { ascending: false })
 
@@ -51,6 +53,35 @@ export default async function ListPage({ params }: Props) {
   const suggestions = history?.map(h => h.name) ?? []
   const isOwner = list.owner_id === user.id
   const { list_text_size, category_order, theme } = await getUserPreferences()
+
+  // Task lists get a separate, simpler view (no store mode / edit-merge / AI).
+  if (list.kind === 'task') {
+    const { data: peopleData } = await supabase.rpc('get_list_people', { p_list_id: id })
+    const people = (peopleData ?? []) as Array<{ user_id: string; email: string }>
+    return (
+      <div data-route-root className="min-h-screen bg-gray-50 dark:bg-gray-950">
+        <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center gap-3">
+          <BackLink theme={theme} />
+          <h1 className="font-semibold text-gray-900 dark:text-gray-100 flex-1 min-w-0 truncate">{list.name}</h1>
+          <OfflineBadge />
+          {!isOwner && <LeaveListButton listId={id} />}
+        </header>
+
+        <main className="w-full max-w-lg mx-auto px-4 py-6">
+          <TaskList
+            list={list}
+            listId={id}
+            people={people}
+            currentUserId={user.id}
+            lastViewedAt={view?.last_viewed_at ?? null}
+          />
+        </main>
+      </div>
+    )
+  }
+
+  // Shopping lists can only copy/move into other shopping lists.
+  const shoppingLists = (otherLists ?? []).filter(l => l.kind !== 'task')
 
   return (
     <StoreModeProvider listId={id}>
@@ -72,7 +103,7 @@ export default async function ListPage({ params }: Props) {
           textSize={list_text_size}
           theme={theme}
           categoryOrder={category_order}
-          availableLists={otherLists ?? []}
+          availableLists={shoppingLists}
           currentUserId={user.id}
           lastViewedAt={view?.last_viewed_at ?? null}
         />

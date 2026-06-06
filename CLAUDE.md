@@ -4,7 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Pending manual tasks
 
-- _None._ (Migrations `0020_clear_shopped_rpc.sql` and `0024_list_add_activity.sql` have both been applied.)
+- **Apply migration `0025_task_lists.sql`** — adds `lists.kind`, `items.assignee_id` + `items.due_date`, and the `get_list_people` RPC. Required for the task-lists feature.
+- **Apply migration `0026_skip_task_history.sql`** — guards `bump_item_history` so task-list items don't pollute the grocery autocomplete history.
 
 > Signup is now invitation-only (done 2026-05-17). See `docs/how-to-add-new-user.html` for the invite flow and how to re-enable public signup if ever needed.
 
@@ -20,7 +21,7 @@ See `REFACTOR.md` — the single source of truth for architectural smells worth 
 
 ## Active plan
 
-**Fix outbox sync stalling + false offline-conflict banner on rapid edits** (started 2026-05-28) — see `PLAN.md`. Rapid check/uncheck leaves `Syncar N…` stuck and sometimes shows a bogus "uppdaterades på servern medan du var offline" banner. Both trace to `flushOutbox`'s `isFlushing` early-return in `src/lib/sync/engine.ts`: (1) lost-wakeup — a flush triggered while one is running is dropped and entries committed after the pending-snapshot are stranded; (2) `triggerSync`'s `await flushOutbox()` returns instantly mid-flush so `reconcileList` runs concurrently and mistakes the user's own in-flight push for a server change. Fix: single-flight promise + rerun-flag drain loop (drops no signals, honest await) + reconcile skips the conflict branch for `in_flight` entries. TDD. No DB changes.
+**Task lists alongside shopping lists** (started 2026-06-07) — see `PLAN.md`. Add a second list `kind` (`'shopping' | 'task'`) so families can share chores/tasks, reusing the existing sharing/realtime/offline stack. `/lists` stays one stream with a 🛒/✓ icon + `SHOP`/`TASK` pill per row (Mixed·A); task lists open into a simpler checklist view (variant B) with optional assignee + due date (visual + sort only, no reminders), edited via `TaskEditModal`. New migration `0025` adds `lists.kind`, `items.assignee_id`/`due_date`, and a `get_list_people` RPC. Implemented as a page-level `kind` branch rendering a separate `TaskList` tree (not threaded through `ItemList`). **Gotcha:** new item columns must be added to the `ItemUpdatePatch` whitelist in `src/lib/itemUpdate.ts` or their server writes silently no-op.
 
   Completed-plan history → **`docs/PLAN-ARCHIVE.md`**.
 
@@ -108,6 +109,17 @@ Server Components re-render with fresh data on the next navigation; the client t
 | Recipe import / Web Share Target | Direct `addItems` batch action | Inherently bulk + server-AI; scoped to import flows only |
 
 The `addItems` batch action (`src/app/lists/[id]/actions.ts`) is used exclusively by `RecipeImportModal` and the share-target route — do not call it from the add-item UI flow.
+
+### Task lists (`lists.kind`)
+
+A list is either a grocery `'shopping'` list (default) or a `'task'` list — the `kind` column on `lists` (migration `0025`). Task lists are a shared checklist for chores, with optional per-task **assignee** (`items.assignee_id`) and **due date** (`items.due_date`), both added in `0025`. They reuse the entire sync substrate (outbox mutations, `useListItemsSync`, `reconcileList`, realtime, Dexie) unchanged — only the *presentation* differs.
+
+- **Page-level branch, not in-component flags.** `src/app/lists/[id]/page.tsx` renders a separate, simpler `TaskList` tree for `kind === 'task'` (no `StoreModeProvider`/`EditModeProvider`, no AI/measurement/category/store-mode). Don't thread `kind` conditionals through `ItemList` and its hooks. Task UI lives in `TaskList.tsx` / `TaskRow.tsx` / `TaskEditModal.tsx` / `TaskAvatar.tsx`; pure date logic (pill bucket + due sort) is in `src/lib/taskView.ts` (`dueStatus`, `formatDueLabel`, `sortTasks`).
+- **GOTCHA — new item columns need the `itemUpdate.ts` whitelist.** Any column the outbox forwards through `item.update` must be added to `ItemUpdatePatch` + `buildItemUpdatePayload` in `src/lib/itemUpdate.ts`, or the local Dexie write succeeds while the server write silently no-ops. `assignee_id`/`due_date` are already there; future task fields must follow suit. (Reads need nothing — `reconcileList` does `select('*')` + raw `put`.)
+- **No Gemini / no history for tasks.** Task adds call `muAddItem(item, { skipCategorize: true })`, which sets `skip_categorize` on the `item.insert` outbox payload so the dispatcher's background `categorizeItem` fallback (`engine.ts`) is skipped. Server-side, the `bump_item_history` trigger is guarded (migration `0026`) to skip task lists, so task names don't leak into the grocery autocomplete. Both gates are because tasks aren't groceries.
+- **Assignees** come from the `get_list_people(p_list_id)` RPC (owner ∪ members with emails; the existing `get_list_members` excludes the owner), fetched server-side in `page.tsx` and passed to `TaskList`.
+- **`/lists` (Mixed·A):** both kinds share one recency-sorted stream; `ListsView`'s `ListRow` renders a 🛒/✓ `KindIcon` + `SHOP`/`TASK` `KindPill` from `list.kind`. `kind` rides along on `LocalListCatalog` (seeded in `page.tsx`, refreshed by `reconcileListsOverview`). The NEW marker / `last_add_*` logic is kind-agnostic and unchanged.
+- Copy/move is shopping-only: `page.tsx` filters the `availableLists` passed to `ItemList` to `kind !== 'task'`.
 
 ### Optimistic UI + Realtime
 
@@ -198,9 +210,9 @@ A separate UI mode toggled from the page header that swaps the per-row pencil fo
 
 Six tables. Initial schema in `supabase/migrations/0001_init.sql`; subsequent migrations add columns and tables:
 
-- `lists` (id, name, owner_id, created_at, last_activity, last_add_at, last_add_by) — `is_shared` was dropped in migration 0012; shared status is now derived from `list_members` having rows. `last_activity` (added in 0017) is a monotonic timestamp bumped by a trigger on every items INSERT/UPDATE/DELETE; it powers the `list_activity` view's sync precheck and **must stay monotonic across deletes**. `last_add_at`/`last_add_by` (added in 0024) are the **add-only** signal for the `/lists` NEW marker — bumped by an INSERT-only trigger (`bump_list_add_activity`), so deletes, edits, clear-shopped, and move-from never raise the marker; only a genuine add (including a move/copy *into* the list) does. `computeUnread` (`src/lib/listsUnread.ts`) reads `last_add_*`, not `last_activity`. Don't conflate the two: `last_activity` = "did anything change?" (sync), `last_add_*` = "was something added?" (marker).
+- `lists` (id, name, owner_id, created_at, kind, last_activity, last_add_at, last_add_by) — `kind` (`'shopping' | 'task'`, default `'shopping'`, migration 0025) discriminates grocery vs. task lists (see "Task lists" above). `is_shared` was dropped in migration 0012; shared status is now derived from `list_members` having rows. `last_activity` (added in 0017) is a monotonic timestamp bumped by a trigger on every items INSERT/UPDATE/DELETE; it powers the `list_activity` view's sync precheck and **must stay monotonic across deletes**. `last_add_at`/`last_add_by` (added in 0024) are the **add-only** signal for the `/lists` NEW marker — bumped by an INSERT-only trigger (`bump_list_add_activity`), so deletes, edits, clear-shopped, and move-from never raise the marker; only a genuine add (including a move/copy *into* the list) does. `computeUnread` (`src/lib/listsUnread.ts`) reads `last_add_*`, not `last_activity`. Don't conflate the two: `last_activity` = "did anything change?" (sync), `last_add_*` = "was something added?" (marker).
 - `list_members` (list_id, user_id, added_at) — join table for sharing
-- `items` (id, list_id, added_by, name, is_checked, created_at, picture_url, sort_order, quantity, category, measurement)
+- `items` (id, list_id, added_by, name, is_checked, created_at, picture_url, sort_order, quantity, category, measurement, shared_group_id, assignee_id, due_date) — `assignee_id`/`due_date` (migration 0025) are task-list-only (null/ignored for shopping items)
 - `user_item_history` (user_id, name, last_used_at, use_count, category) — autocomplete source
 - `user_preferences` (user_id, theme, list_text_size, category_order, high_contrast, reduce_motion, updated_at) — `theme` is `'light' | 'dark' | 'shoplist' | 'polar' | 'dusk'`
 - `pending_imports` (id, user_id, items jsonb, created_at) — transient store for Web Share Target payloads
@@ -231,4 +243,4 @@ Realtime publication includes `items`, `lists`, and `list_members`. `items` uses
 
 - **`@/...` imports** resolve to `src/...` (Next.js default).
 - **Tailwind v4** — uses `@tailwindcss/postcss`; no `tailwind.config.js`.
-- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0024_`.
+- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0027_`.

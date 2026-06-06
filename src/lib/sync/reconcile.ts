@@ -173,7 +173,7 @@ export async function reconcileListsOverview(): Promise<void> {
     if (!user) return
 
     const [listsResult, activityResult, viewsResult] = await Promise.all([
-      supabase.from('lists').select('id, name, owner_id, created_at, list_members(count)'),
+      supabase.from('lists').select('id, name, owner_id, created_at, kind, list_members(count)'),
       supabase.from('list_activity').select('list_id, last_add_at, last_add_by'),
       supabase.from('list_views').select('list_id, last_viewed_at').eq('user_id', user.id),
     ])
@@ -199,6 +199,7 @@ export async function reconcileListsOverview(): Promise<void> {
         name: rest.name,
         owner_id: rest.owner_id,
         created_at: rest.created_at,
+        kind: (rest.kind as LocalListCatalog['kind']) ?? 'shopping',
         has_members: (list_members?.[0]?.count ?? 0) > 0,
         last_add_at: act?.last_add_at ?? null,
         last_add_by: act?.last_add_by ?? null,
