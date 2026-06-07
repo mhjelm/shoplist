@@ -12,6 +12,7 @@ import { useSyncState } from '@/lib/sync/engine'
 import type { List, Theme } from '@/lib/types'
 import { slColorFor, slFlareDelay } from '@/lib/sl-theme'
 import { useRevealFx } from '@/lib/useRevealFx'
+import { log } from '@/lib/log'
 import DeleteListButton from './DeleteListButton'
 import ListEditPanel from './ListEditPanel'
 
@@ -55,8 +56,12 @@ export default function ListsView({ initialLists, memberCounts, lastAdd, lastAdd
       list_id,
       last_viewed_at,
     }))
-    localDB.list_catalog.bulkPut(catalogRows).catch(console.error)
-    if (viewRows.length > 0) localDB.list_views.bulkPut(viewRows).catch(console.error)
+    localDB.list_catalog.bulkPut(catalogRows).catch(err => {
+      log.error('idb.write_failed', { table: 'list_catalog', op: 'bulkPut', error: String(err?.message ?? err) })
+    })
+    if (viewRows.length > 0) localDB.list_views.bulkPut(viewRows).catch(err => {
+      log.error('idb.write_failed', { table: 'list_views', op: 'bulkPut', error: String(err?.message ?? err) })
+    })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // intentionally only seeds from first-mount SSR values; realtime keeps Dexie fresh after
 
@@ -65,7 +70,9 @@ export default function ListsView({ initialLists, memberCounts, lastAdd, lastAdd
   // Item INSERTs are handled optimistically inside the subscription (bump last_add_*).
   useEffect(() => {
     return subscribeToListsOverview(currentUserId, () => {
-      reconcileListsOverview().catch(console.error)
+      reconcileListsOverview().catch(err => {
+        log.warn('reconcile.overview_failed', { error: String(err?.message ?? err) })
+      })
     })
   }, [currentUserId])
 

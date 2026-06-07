@@ -1,5 +1,7 @@
 'use server'
 
+import { log } from '@/lib/log'
+
 export async function suggestItemName(formData: FormData) {
   const file = formData.get('image')
   if (!(file instanceof File) || file.size === 0) return { error: 'No image' }
@@ -32,13 +34,12 @@ export async function suggestItemName(formData: FormData) {
   )
   if (!res.ok) {
     const body = await res.text().catch(() => '')
-    console.error('[gemini] suggestItemName error', res.status, body)
+    log.error('gemini.suggest_name_error', { status: res.status, error: body.slice(0, 200) })
     if (res.status === 429) return { error: 'Gemini API rate limit reached — wait a moment and try again' }
     return { error: `Gemini failed (${res.status})` }
   }
   type GemResp = { candidates?: { content?: { parts?: { text?: string }[] } }[] }
   const data = (await res.json()) as GemResp
-  console.log('[gemini] response:', JSON.stringify(data).slice(0, 500))
   const text = data.candidates?.[0]?.content?.parts?.map(p => p.text ?? '').join('').trim() ?? ''
   if (!text || text.toLowerCase() === 'unknown') return {}
   return { name: text.replace(/^["']|["']$/g, '') }

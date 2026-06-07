@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { extractRecipeItems, extractListItemsFromImage } from '@/app/lists/[id]/actions'
+import { log } from '@/lib/log'
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (extractError) {
-    console.error('[share] extraction failed:', extractError)
+    log.warn('share.extract_failed', { source, error: extractError })
     return NextResponse.redirect(new URL('/lists?shareError=extract', req.url), 303)
   }
 
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (insertError || !row) {
-    console.error('[share] insert pending_imports failed:', insertError)
+    log.error('share.insert_failed', { code: insertError?.code, error: insertError?.message })
     return NextResponse.redirect(new URL('/lists?shareError=db', req.url), 303)
   }
 

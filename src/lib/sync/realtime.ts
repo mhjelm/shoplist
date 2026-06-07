@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client'
 import { localDB } from '@/lib/db/local'
 import type { LocalItem, LocalListCatalog } from '@/lib/db/types'
+import { log } from '@/lib/log'
 
 export function subscribeToList(
   listId: string,
@@ -32,7 +33,7 @@ export function subscribeToList(
         },
       )
       .subscribe((status, err) => {
-        if (err) console.error('[realtime] subscribe error', err)
+        if (err) log.warn('realtime.subscribe_error', { scope: 'list', status, error: String(err?.message ?? err) })
         if (status === 'SUBSCRIBED') {
           if (everSubscribed) {
             onReconnect()
@@ -143,7 +144,7 @@ export function subscribeToListsOverview(
         },
       )
       .subscribe((status, err) => {
-        if (err) console.error('[realtime] lists-overview subscribe error', err)
+        if (err) log.warn('realtime.subscribe_error', { scope: 'lists-overview', status, error: String(err?.message ?? err) })
         if (status === 'SUBSCRIBED') {
           onReconcile()
         }

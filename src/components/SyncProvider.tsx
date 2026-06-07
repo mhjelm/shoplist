@@ -3,13 +3,19 @@
 import { useEffect } from 'react'
 import { localDB } from '@/lib/db/local'
 import { triggerSync, markOffline, markOnlineIfBrowserAgrees } from '@/lib/sync/engine'
+import { log } from '@/lib/log'
 
 export default function SyncProvider() {
   useEffect(() => {
     // Open the Dexie database and kick off the first sync cycle.
     localDB.open()
       .then(() => triggerSync())
-      .catch(err => console.error('LocalDB open failed:', err))
+      .catch(err => {
+        // The single most important client error to capture: if Dexie won't
+        // open, the whole local-first app is dead (blocked upgrade, quota,
+        // private-mode storage block, corruption). name = Dexie error class.
+        log.error('idb.open_failed', { name: err?.name, error: String(err?.message ?? err) })
+      })
 
     const handleOnline = () => {
       markOnlineIfBrowserAgrees()

@@ -11,6 +11,7 @@ import { touchListView, clearShoppedItems } from './actions'
 import { muUpdateItem, muDeleteItem, muBulkDelete } from '@/lib/sync/mutations'
 import { hasDecorativeTheme, FIREWORK_PALETTES } from '@/lib/sl-theme'
 import { isNewSinceVisit } from '@/lib/listsUnread'
+import { log } from '@/lib/log'
 import { useRevealFx } from '@/lib/useRevealFx'
 import { useSyncState } from '@/lib/sync/engine'
 import { useEditMode } from './EditModeContext'
@@ -363,7 +364,7 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
           onClose={() => setShowRecipe(false)}
           onItemsAdded={incoming => {
             localDB.items.bulkPut(incoming.map(itemToLocalItem))
-              .catch(err => console.error('Failed to put recipe items in local db:', err))
+              .catch(err => log.error('idb.write_failed', { table: 'items', op: 'recipe_bulkPut', error: String(err?.message ?? err) }))
           }}
         />
       )}

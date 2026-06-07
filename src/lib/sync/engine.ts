@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { localDB } from '@/lib/db/local'
 import type { OutboxEntry } from '@/lib/db/types'
 import type { CategorySlug } from '@/lib/categories'
+import { log } from '@/lib/log'
 
 // ---------------------------------------------------------------------------
 // Sync state store — tiny pub/sub, no external dependency
@@ -142,7 +143,10 @@ async function dispatch(entry: OutboxEntry) {
           if (res?.category) {
             return localDB.items.update(itemId, { category: res.category })
           }
-        }).catch(() => { /* swallow — UI stays in 'ovrigt' until next attempt */ })
+        }).catch(err => {
+          // Swallow — UI stays in 'ovrigt' until next attempt — but count it.
+          log.fallback('categorize.background_failed', { error: String(err?.message ?? err) })
+        })
       }
       break
     }
@@ -224,11 +228,11 @@ async function drainLoop(): Promise<void> {
         markOnlineIfBrowserAgrees()
       } catch (err) {
         const errMsg = String(err)
-        console.error('[outbox] dispatch failed', {
+        // Note: no payload (PII) — type + attempt count + error message only.
+        log.error('outbox.dispatch_failed', {
           type: entry.type,
           seq: entry.seq,
           attempts: entry.attempts + 1,
-          payload: entry.payload,
           error: errMsg,
         })
         await localDB.outbox.update(entry.seq!, {

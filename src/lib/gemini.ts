@@ -1,4 +1,5 @@
 import { type CategorySlug, CATEGORIES, isValidCategorySlug } from './categories'
+import { log } from './log'
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
@@ -52,7 +53,7 @@ async function callGeminiOnce(
 
   if (!res.ok) {
     const body = await res.text().catch(() => '')
-    console.error('[gemini] http error', model, res.status, body)
+    log.error('gemini.http_error', { model, status: res.status, error: body.slice(0, 200) })
     const message = res.status === 429
       ? 'Gemini API rate limit reached — wait a moment and try again'
       : res.status === 503
@@ -67,15 +68,17 @@ async function callGeminiOnce(
   const text = candidate?.content?.parts?.map(p => p.text ?? '').join('').trim() ?? ''
 
   if (!text) {
-    console.error('[gemini] empty response', JSON.stringify(data).slice(0, 1000))
     const reason = candidate?.finishReason ?? data.promptFeedback?.blockReason ?? 'unknown'
+    // Don't dump `data` — it can carry extracted content. Reason is enough.
+    log.error('gemini.empty_response', { model, reason })
     throw new Error(`Gemini returned no text (finishReason: ${reason})`)
   }
 
   try {
     return JSON.parse(text)
   } catch (e) {
-    console.error('[gemini] JSON parse failed. text:', text.slice(0, 500))
+    // Don't dump `text` — it's the model's (user-derived) output. Length only.
+    log.error('gemini.parse_failed', { model, len: text.length })
     throw new Error(`Gemini returned invalid JSON: ${e instanceof Error ? e.message : String(e)}`)
   }
 }
@@ -113,7 +116,7 @@ async function callGeminiChain(
         // Same-model retries exhausted. If it's a transient status and another
         // model is available, fail over to it; otherwise give up.
         if (retryable && hasFallback) {
-          console.warn(`[gemini] ${model} unavailable (${status}); falling back to ${models[m + 1]}`)
+          log.warn('gemini.failover', { from: model, to: models[m + 1], status })
           break
         }
         throw e
@@ -161,7 +164,9 @@ Svara med JSON: {"results": [{"name": "<vara>", "category": "<slug>"}]}`
       }
     }
     return out
-  } catch {
+  } catch (e) {
+    // Silent give-up — items fall back to 'ovrigt' — but count it.
+    log.warn('categorize.gave_up', { count: names.length, error: String((e as Error)?.message ?? e) })
     return {}
   }
 }

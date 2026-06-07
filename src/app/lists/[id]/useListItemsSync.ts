@@ -6,6 +6,7 @@ import { subscribeToList } from '@/lib/sync/realtime'
 import { setActiveList } from '@/lib/sync/engine'
 import type { Item, List } from '@/lib/types'
 import { localItemToItem } from './itemHelpers'
+import { log } from '@/lib/log'
 
 export function useListItemsSync(
   list: List,
@@ -21,14 +22,18 @@ export function useListItemsSync(
   // Mirror the list row into Dexie so loading.tsx-less navigation can still
   // paint the header from cache on the next visit.
   useEffect(() => {
-    localDB.lists.put(list).catch(() => {})
+    localDB.lists.put(list).catch(err => {
+      log.error('idb.write_failed', { table: 'lists', op: 'put', error: String(err?.message ?? err) })
+    })
   }, [list])
 
   // Background reconcile on mount — keeps Dexie fresh. Items come from the
   // live query below; we no longer accept SSR items, so this is the only
   // path that pulls server state into the cache.
   useEffect(() => {
-    reconcileList(listId).catch(err => console.error('reconcile failed:', err))
+    reconcileList(listId).catch(err => {
+      log.warn('reconcile.list_failed', { error: String(err?.message ?? err) })
+    })
   }, [listId])
 
   // Subscribe to Realtime; on reconnect, reconcile to catch missed events.

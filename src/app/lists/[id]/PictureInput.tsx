@@ -3,6 +3,7 @@
 import { useId, useState } from 'react'
 import { suggestItemName, uploadImage } from './actions'
 import { resizeImage } from '@/lib/resize-image'
+import { log } from '@/lib/log'
 
 interface Props {
   value: string
@@ -20,7 +21,6 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
   const [pickerNonce, setPickerNonce] = useState(0)
 
   async function handleFile(file: File, resizePromise?: Promise<Blob>) {
-    console.log('[picture] handleFile start, file:', file.name, file.size, 'bytes, onSuggestName:', !!onSuggestName)
     setError(null)
     setUploading(true)
     try {
@@ -36,8 +36,6 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
           ? suggestItemName(buildFd())
           : Promise.resolve({} as { name?: string; error?: string }),
       ])
-      console.log('[picture] upload:', uploadResult)
-      console.log('[picture] suggest:', suggestResult)
       if (uploadResult.error) {
         setError(uploadResult.error)
       } else {
@@ -49,6 +47,7 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
         }
       }
     } catch (e) {
+      log.warn('picture.upload_failed', { error: e instanceof Error ? e.message : String(e) })
       setError(e instanceof Error ? e.message : 'Upload failed')
     } finally {
       setUploading(false)

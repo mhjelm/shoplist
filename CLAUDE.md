@@ -206,6 +206,10 @@ A separate UI mode toggled from the page header that swaps the per-row pencil fo
 
 `user_item_history` is filled by an `AFTER INSERT` trigger on `items` (`bump_item_history`) — never written directly by app code. The trigger also persists `category` (using `coalesce` to keep an existing user override when the new insert has no category). The list page fetches the user's top ~200 items by `use_count` and passes them as `suggestions` to `ItemList`; filtering happens client-side. Dedupe is case-insensitive via a unique index on `(user_id, lower(name))`.
 
+### Logging & observability
+
+All diagnostic logging goes through **`src/lib/log.ts`** — `log.error / warn / info / fallback(event, detail?)`. Do **not** add raw `console.*` (the only legitimate ones are the sinks inside `log.ts` and `src/app/api/log/route.ts`). It's isomorphic: server-side it writes one compact, level-gated JSON line to console (captured by Vercel); client-side it also forwards events to **`POST /api/log`**, which re-emits them so browser/IndexedDB failures reach Vercel at all (tagged `src:'client'`). `event` is a stable key (`area.thing`); `detail` is **PII-safe — ids/counts/status/error-message only**, never item/list names (enforced by `sanitizeDetail`). Errors/warns are unsampled; a 10 s/key throttle + per-key sampling protect the transport. **Convention: a new swallowed `catch {}` / `.catch(() => {})` should add a `log.*` event key instead of silently discarding.** Full reference + event-key catalogue: **`docs/logging.md`**. On Hobby, retention is ~1 h (durable drain deferred — `PLAN.md` Phase 4).
+
 ## Data Model
 
 Six tables. Initial schema in `supabase/migrations/0001_init.sql`; subsequent migrations add columns and tables:

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/client'
 import { localDB } from '@/lib/db/local'
 import type { LocalItem, LocalList, LocalListCatalog, LocalListView, OutboxEntry } from '@/lib/db/types'
 import { addConflicts } from './engine'
+import { log } from '@/lib/log'
 
 export async function reconcileList(listId: string): Promise<void> {
   const supabase = createClient()
@@ -31,6 +32,9 @@ export async function reconcileList(listId: string): Promise<void> {
     localMeta?.last_sync_at &&
     activity.last_activity <= localMeta.last_sync_at
   ) {
+    // Healthy fast path — local cache already fresh, items refetch skipped.
+    // High-volume, so sampled (~5%) just to confirm the precheck is firing.
+    log.fallback('reconcile.precheck_skip')
     return
   }
 
@@ -38,7 +42,10 @@ export async function reconcileList(listId: string): Promise<void> {
     .from('items')
     .select('*')
     .eq('list_id', listId)
-  if (error || !rows) return
+  if (error || !rows) {
+    if (error) log.warn('reconcile.items_fetch_failed', { code: error.code, error: error.message })
+    return
+  }
 
   // Pending outbox entries protect local optimistic state from being overwritten.
   // 'failed' counts too — those are queued retries (e.g. while offline) and
@@ -113,7 +120,10 @@ export async function reconcileList(listId: string): Promise<void> {
     })
   })
 
-  if (conflicts.length > 0) addConflicts(conflicts)
+  if (conflicts.length > 0) {
+    addConflicts(conflicts)
+    log.info('reconcile.conflict', { count: conflicts.length })
+  }
 }
 
 // Mirrors reconcileList but for the lists table. Drives the offline "which
@@ -130,9 +140,11 @@ export async function reconcileLists(): Promise<void> {
     const result = await supabase.from('lists').select('*')
     if (result.error || !result.data) return
     rows = result.data
-  } catch {
-    // Network errors here are expected (e.g. just-went-offline). Stay quiet
-    // and leave Dexie untouched — the next reconcile will refresh it.
+  } catch (err) {
+    // Network errors here are expected (e.g. just-went-offline). Stay quiet and
+    // leave Dexie untouched — the next reconcile will refresh it — but record it
+    // so a *real* Dexie/PostgREST fault isn't forever hidden as "offline".
+    log.warn('reconcile.network_or_idb', { scope: 'lists', error: String((err as Error)?.message ?? err) })
     return
   }
 
@@ -224,7 +236,9 @@ export async function reconcileListsOverview(): Promise<void> {
       await localDB.list_catalog.bulkPut(catalogRows)
       if (viewRows.length > 0) await localDB.list_views.bulkPut(viewRows)
     })
-  } catch {
-    // Network errors expected when offline; leave Dexie untouched.
+  } catch (err) {
+    // Network errors expected when offline; leave Dexie untouched — but record
+    // it so a real Dexie/PostgREST fault isn't forever hidden as "offline".
+    log.warn('reconcile.network_or_idb', { scope: 'overview', error: String((err as Error)?.message ?? err) })
   }
 }

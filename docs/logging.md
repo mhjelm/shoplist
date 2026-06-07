@@ -1,18 +1,74 @@
-# Logging — current state, Vercel model, and what reaches where
+# Logging — the `log` module, Vercel model, and what reaches where
 
-_Reference written 2026-06-07. The **plan** to improve logging is `PLAN.md`; this file is the standing description of how logging works today._
+_Reference written 2026-06-07; logging module implemented 2026-06-07 (see `PLAN.md`). This file is the standing description of how logging works._
 
 ## TL;DR
 
-- Server-side `console.*` (Server Components, Server Actions, Route Handlers, `proxy.ts`) is **captured automatically by Vercel** as Runtime Logs. No config, no opt-in.
-- Client-side `console.*` (everything under the `'use client'` boundary — the whole sync/Dexie/realtime substrate) logs **only to the user's browser console** and **never reaches Vercel**. This is the blind spot.
-- You **cannot** clear runtime logs manually; they expire by plan-tier retention. You **cannot** set server-side log levels — Vercel captures all stdout/stderr. The only real control is in-code gating and (Pro/Enterprise) **Log Drains** to an external service.
+- **Use `src/lib/log.ts` for everything** — `log.error / warn / info / fallback(event, detail?)`. Never add a raw `console.*` (the only two legitimate `console.*` in the app are the sinks inside `log.ts` and `src/app/api/log/route.ts`).
+- Server-side `log.*` → one compact JSON line to `console`, captured automatically by Vercel Runtime Logs (info/fallback suppressed in production).
+- Client-side `log.*` → `console` in dev **plus** a fire-and-forget `POST /api/log`, which re-emits each event server-side so **browser/IndexedDB failures reach Vercel** (tagged `src:'client'`). This closes the old blind spot where client `console.*` never left the device.
+- You **cannot** clear runtime logs manually; they expire by plan-tier retention (**Hobby ≈ 1 hour**). You **cannot** set server-side log levels — Vercel captures all stdout/stderr.
+
+---
+
+## The `log` module (`src/lib/log.ts`)
+
+Tiny isomorphic logger; the single entry point for errors and off-happy-path fallbacks on both tiers.
+
+```ts
+import { log } from '@/lib/log'
+
+log.error('idb.open_failed', { name: err.name, error: String(err.message) })
+log.warn('gemini.failover', { from, to, status })
+log.info('reconcile.conflict', { count })
+log.fallback('reconcile.precheck_skip')   // healthy degraded/alt path — counted
+```
+
+Rules baked in:
+- **`event` is a stable string key** (`area.thing_happened`) — greppable/aggregatable, never free text.
+- **PII boundary (D3):** `detail` carries **ids, counts, status codes, event keys, error `.message` only** — never item/list names or payload contents. `sanitizeDetail` defensively drops non-primitives (records their *type*, e.g. `[object]`) and clamps strings to 300 chars.
+- **Never throws** into app code; a logging failure is swallowed.
+- **Server:** compact JSON `console` line; `info`/`fallback` suppressed when `NODE_ENV==='production'`.
+- **Client sampling/throttle (D4):** errors+warns 100%; a **10 s/key/session throttle** on everything (guards IndexedDB error loops); `reconcile.precheck_skip` sampled at **~5%** (`SAMPLE_RATES` map). Events are batched and flushed on a 2 s timer / 20-event batch / `pagehide` (`sendBeacon`).
+
+### Transport route (`src/app/api/log/route.ts`)
+
+`POST /api/log` accepts `{ events: [...] }`, clamps to 50 events / 2 KB per line, and re-emits each as a `console` line prefixed `{"src":"client",…}` so it surfaces in Vercel. Auth-gated by the edge middleware like everything else (a logged-out POST is redirected and dropped — the events we care about happen while authed). Never throws; always returns 204.
+
+### Viewing client logs
+
+Client events appear in the **same Vercel Runtime Logs** as server logs, attributed to the `POST /api/log` request, each line carrying `"src":"client"` and the `ev` key. So to find e.g. IndexedDB failures: tail logs (`vercel logs https://shoplist-eta.vercel.app`) and look for `idb.open_failed` / `idb.write_failed`. ⚠️ On Hobby these are still only retained ~1 hour (see retention below) — fine for live repro, not for day-old reports.
+
+### Event-key catalogue
+
+| Event | Level | Where | Meaning |
+|---|---|---|---|
+| `idb.open_failed` | error | SyncProvider | Dexie won't open — local-first app is dead (quota / blocked upgrade / private mode) |
+| `idb.write_failed` | error | ListsView, useListItemsSync, ItemList | a Dexie write rejected (`detail.table`/`op`) |
+| `outbox.dispatch_failed` | error | engine.ts | a queued mutation failed to push (`detail.type`/`attempts`) |
+| `categorize.background_failed` | fallback | engine.ts | background Gemini categorize swallowed; item stays `ovrigt` |
+| `reconcile.precheck_skip` | fallback (5%) | reconcile.ts | healthy fast path — local cache fresh, items refetch skipped |
+| `reconcile.conflict` | info | reconcile.ts | server-vs-local edit collision (`detail.count`) |
+| `reconcile.items_fetch_failed` | warn | reconcile.ts | items SELECT returned an error |
+| `reconcile.network_or_idb` | warn | reconcile.ts | the old bare `catch {}` — real Dexie/PostgREST fault no longer hidden as "offline" (`detail.scope`) |
+| `reconcile.list_failed` / `reconcile.overview_failed` | warn | useListItemsSync, ListsView | a reconcile promise rejected |
+| `realtime.subscribe_error` | warn | realtime.ts | realtime channel error (`detail.scope`/`status`) |
+| `gemini.failover` | warn | gemini.ts | primary model unavailable; used the backup (`from`/`to`/`status`) |
+| `gemini.http_error` / `gemini.empty_response` / `gemini.parse_failed` | error | gemini.ts | Gemini call failed (no payload dumped) |
+| `gemini.suggest_name_error` | error | upload.ts | image→name Gemini call failed |
+| `categorize.gave_up` | warn | gemini.ts | `categorizeNames` gave up; items fall back to `ovrigt` |
+| `extract.*` (`add_items_failed`, `audio_failed`, `recipe_failed`, `image_http_error`, `image_parse_failed`) | error | import.ts | recipe/list/audio extraction failed |
+| `share.extract_failed` / `share.insert_failed` | warn / error | share/route.ts | Web Share Target extraction or DB insert failed |
+| `sw.register_failed` | warn | ServiceWorkerRegister | service worker registration failed |
+| `picture.upload_failed` | warn | PictureInput | image upload/resize threw |
+
+**Convention:** any new swallowed `catch {}` / `.catch(() => {})` should add a `log.*` event key instead of silently discarding — so the failure is diagnosable.
 
 ---
 
 ## What runs where
 
-Next.js code runs in two places. Which one a `console.*` call lands in is determined entirely by whether the module is server or client code.
+Next.js code runs in two places. Historically, which one a `console.*` call landed in (and whether it reached Vercel at all) depended entirely on whether the module was server or client code. **The `log` module above now normalises this** — client events are forwarded to Vercel via `/api/log`. The tables below are the original site inventory; **all of these are now routed through `log.*`** (see the event-key catalogue), so they're documented here as the historical map of where the silent failures were.
 
 ### Server-side → reaches Vercel Runtime Logs
 
@@ -25,11 +81,11 @@ Next.js code runs in two places. Which one a `console.*` call lands in is determ
 
 `gemini.ts` is client-importable in principle but is only called from server actions, so its logs are server-side in practice.
 
-### Client-side → browser console only, invisible to Vercel
+### Client-side → was browser-only, now forwarded via `/api/log`
 
-These are the operationally interesting failures we currently **cannot see**:
+These are the operationally interesting failures that used to be **invisible** — now each is a `log.*` event (see catalogue):
 
-| File | What can fail silently |
+| File | What used to fail silently |
 |---|---|
 | `src/lib/sync/engine.ts` | `[outbox] dispatch failed` (logged but browser-only); background `categorizeItem` swallowed (`.catch(() => {})`); `touchListView` swallowed |
 | `src/lib/sync/reconcile.ts` | two bare `catch {}` blocks (`reconcileLists`, `reconcileListsOverview`) swallow all errors as "probably offline"; early `return` on `error` in `reconcileList` |
@@ -38,7 +94,7 @@ These are the operationally interesting failures we currently **cannot see**:
 | `src/app/lists/[id]/useListItemsSync.ts` | `reconcileList(...).catch(console.error)`; `localDB.lists.put(...).catch(() => {})` |
 | `src/app/lists/[id]/ItemList.tsx`, `TaskList.tsx`, `ListsView.tsx`, `PictureInput.tsx` | assorted Dexie `.catch(console.error)` / `.catch(() => {})` |
 
-**IndexedDB is the headline gap.** Dexie open failures, quota-exceeded, blocked upgrades, and transaction aborts all happen in the browser. They are exactly the kind of "it's broken for one user and we have no idea" problem you'd want logged — and today none of it leaves the device.
+**IndexedDB was the headline gap.** Dexie open failures, quota-exceeded, blocked upgrades, and transaction aborts all happen in the browser — exactly the "it's broken for one user and we have no idea" problem. These are now captured as `idb.open_failed` / `idb.write_failed` and forwarded to Vercel (within the ~1 h Hobby window).
 
 ---
 
@@ -75,7 +131,7 @@ No server-side level switch. Vercel captures everything on stdout/stderr and **i
 
 ### Size limit
 
-Per-log-line cap (~4 KB); longer lines are truncated. High volume can also be rate-limited. This is why the `upload.ts` full-response dump and the `engine.ts` payload dump are wasteful in production.
+Per-log-line cap (~4 KB); longer lines are truncated. High volume can also be rate-limited. This is why the old `upload.ts` full-response dump and `engine.ts` payload dump were wasteful — both removed; `log.ts`/`sanitizeDetail` and the `/api/log` route now clamp every line.
 
 ### Expiration / retention
 
@@ -87,9 +143,9 @@ On Pro/Enterprise, **Log Drains** forward all logs to an external service (Bette
 
 ---
 
-## The two-sided problem this creates
+## The two-sided problem — and where it stands
 
-1. **Server side:** logs exist but are ephemeral, unstructured, and noisy (full-payload dumps). Improvable in code (structured logger + level gating) and in infra (Log Drain).
-2. **Client side:** the most valuable signals (outbox dispatch failures, IndexedDB problems, reconcile/realtime errors) are produced but **thrown away** because the browser console isn't collected anywhere. Closing this gap needs a deliberate channel — there is no automatic Vercel capture for browser code.
+1. **Server side:** was ephemeral, unstructured, and noisy (full-payload dumps). **Addressed in code:** `log.ts` writes structured, size-clamped, level-gated JSON lines; the payload dumps are gone. Still ephemeral (no Log Drain on Hobby).
+2. **Client side:** the most valuable signals (outbox dispatch failures, IndexedDB problems, reconcile/realtime errors) used to be **thrown away** because the browser console isn't collected anywhere. **Addressed:** `log.ts`'s client transport forwards them to `POST /api/log`, which re-emits them into Vercel Runtime Logs.
 
-See `PLAN.md` for the proposed work.
+**Remaining limitation (Hobby):** everything still ages out in ~1 hour, so this is good for live/reproducible issues but not day-old reports. The durable next step (deferred) is either Vercel Pro + a Log Drain, or swapping `log.ts`'s client transport to a browser SDK (Sentry / Better Stack) that ships directly to its own backend with no Pro requirement — a contained change behind the existing `log` interface. See `PLAN.md` Phase 4.

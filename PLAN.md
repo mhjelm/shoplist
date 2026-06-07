@@ -1,6 +1,6 @@
 # Observability: capture errors + off-happy-path fallbacks (incl. client-side IndexedDB)
 
-_Started 2026-06-07. Status: **planned, not started** — awaiting go-ahead._
+_Started 2026-06-07. Status: **implemented (Phases 1–3, 5)** — Phase 4 deferred (Hobby). Ready to commit; awaiting approval._
 
 ## Goal
 
@@ -83,10 +83,10 @@ All four (transport, durability, sampling, PII) settled — see "Decisions" abov
 ## Progress
 - [x] Phase 0: `docs/logging.md` reference written (2026-06-07)
 - [x] Resolve decisions D1–D4 with user (2026-06-07): self-hosted `/api/log`; no drain on Hobby; PII = ids/counts/status/messages only; errors 100% + 10s/key throttle + precheck_skip ~5%
-- [ ] Phase 1: `src/lib/log.ts` + unit tests
-- [ ] Phase 2: client transport (`/api/log` or SDK)
-- [ ] Phase 3: instrument silent sites; delete `upload.ts` payload dump
-- [ ] Phase 4: server Log Drain (optional/deferred)
-- [ ] Phase 5: docs (logging.md final + CLAUDE.md note)
-- [ ] Tests + lint + `npm run build` clean
-- [ ] Report ready (no auto-commit)
+- [x] Phase 1: `src/lib/log.ts` + unit tests (9 tests: sanitise/PII, transport, throttle, sampling, isolation, server gating) (2026-06-07)
+- [x] Phase 2: client transport — `src/app/api/log/route.ts` (batched ingest, clamps count+size, re-emits as console lines tagged `src:'client'`) (2026-06-07)
+- [x] Phase 3: instrumented all silent sites (SyncProvider idb.open_failed, engine outbox.dispatch_failed + categorize.background_failed, reconcile precheck_skip/conflict/network_or_idb/items_fetch_failed, realtime.subscribe_error, gemini.failover/http_error/empty_response/parse_failed + categorize.gave_up, extract.* in import.ts, gemini.suggest_name_error in upload.ts, share.*, idb.write_failed across ListsView/useListItemsSync/ItemList, sw.register_failed, picture.upload_failed); deleted upload.ts response dump + PictureInput debug logs (2026-06-07)
+- [~] Phase 4: server Log Drain — **deferred (Hobby, no drains)**; documented in logging.md
+- [x] Phase 5: docs — `docs/logging.md` rewritten (module API, `/api/log`, event-key catalogue, viewing client logs) + CLAUDE.md "Logging & observability" note (2026-06-07)
+- [x] Tests (516 pass, +9 new) + lint clean + `npm run build` clean (2026-06-07)
+- [ ] Report ready (no auto-commit) — awaiting user approval to commit/push

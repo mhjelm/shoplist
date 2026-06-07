@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { type CategorySlug, isValidCategorySlug } from '@/lib/categories'
 import { callGemini, callGeminiWithAudio } from '@/lib/gemini'
+import { log } from '@/lib/log'
 
 // addItems: batch import entry point for RecipeImportModal and the Web Share Target route.
 // Do not call from add-item flows — those route through muAddItem (outbox) instead.
@@ -155,7 +156,7 @@ ${text}`,
 
     return { items: normalizeExtractedItems(parsed) }
   } catch (e) {
-    console.error('[extractAddItems] failed', e)
+    log.error('extract.add_items_failed', { error: e instanceof Error ? e.message : String(e) })
     return { error: e instanceof Error ? e.message : 'Could not parse Gemini response' }
   }
 }
@@ -174,7 +175,7 @@ export async function extractItemsFromAudio(audioBase64: string, mimeType: strin
 
     return { items: normalizeExtractedItems(parsed) }
   } catch (e) {
-    console.error('[extractItemsFromAudio] failed', e)
+    log.error('extract.audio_failed', { error: e instanceof Error ? e.message : String(e) })
     return { error: e instanceof Error ? e.message : 'Could not parse Gemini response' }
   }
 }
@@ -275,7 +276,7 @@ export async function extractRecipeItems(input: string) {
 
     return { items }
   } catch (e) {
-    console.error('[extractRecipeItems] failed', e)
+    log.error('extract.recipe_failed', { error: e instanceof Error ? e.message : String(e) })
     return { error: e instanceof Error ? e.message : 'Could not parse Gemini response' }
   }
 }
@@ -326,7 +327,7 @@ export async function extractListItemsFromImage(formData: FormData) {
   }
   if (!res.ok) {
     const body = await res.text().catch(() => '')
-    console.error('[extractListItemsFromImage] gemini error', res.status, body)
+    log.error('extract.image_http_error', { status: res.status, error: body.slice(0, 200) })
     if (res.status === 429) return { error: 'Gemini API rate limit reached — wait a moment and try again' }
     return { error: `Gemini failed (${res.status})` }
   }
@@ -352,8 +353,9 @@ export async function extractListItemsFromImage(formData: FormData) {
       .filter(i => i.name.length > 0)
 
     return { items }
-  } catch (e) {
-    console.error('[extractListItemsFromImage] parse failed', e, 'text:', text.slice(0, 500))
+  } catch {
+    // Don't dump `text` — it's user-derived extracted content. Length only.
+    log.error('extract.image_parse_failed', { len: text.length })
     return { error: 'Could not parse Gemini response' }
   }
 }
