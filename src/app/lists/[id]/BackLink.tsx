@@ -11,7 +11,7 @@
 // page's React tree, and any React-managed overlay would be torn down
 // mid-transition. Detached DOM survives the unmount. ListsView removes the
 // overlay (#backnav-loading) in its pre-paint useLayoutEffect, so it lasts
-// exactly until /lists is ready; a 1.5s timeout is a safety net only.
+// exactly until /lists is ready; the timeout below is an error-only safety net.
 //
 // Two back triggers, both covered:
 //   - the in-app arrow below (desktop) → onClick shows the overlay, then back()
@@ -21,6 +21,16 @@
 import { useEffect } from 'react'
 import type { Theme } from '@/lib/types'
 import { useStoreMode } from './StoreModeContext'
+
+// Error-only fallback: the overlay's real remover is ListsView's pre-paint
+// useLayoutEffect, which fires the moment /lists is ready. This timeout only
+// matters if /lists never mounts in the same document (hard error / aborted
+// soft-nav) — without it an un-removed z-index:9999 overlay would block the UI.
+// Kept well beyond a cold serverless + slow-mobile RSC fetch so it can never
+// pre-empt a working-but-slow back-nav (the old 1.5s value did: a >30s-stale
+// router cache made the /lists refetch outlast it, stripping the overlay before
+// ListsView mounted and flashing the leaving page).
+const OVERLAY_FALLBACK_MS = 8000
 
 function bgClassFor(theme: Theme): string {
   switch (theme) {
@@ -100,7 +110,8 @@ function showBackNavOverlay(theme: Theme) {
   overlay.appendChild(glass)
 
   document.body.appendChild(overlay)
-  // Safety net: ListsView removes this on mount (its pre-paint useLayoutEffect).
-  // This only fires if /lists never mounts (error path).
-  setTimeout(() => overlay.remove(), 1500)
+  // Safety net only: ListsView removes this on mount (its pre-paint
+  // useLayoutEffect) the instant /lists is ready. This fires only if that never
+  // happens. See OVERLAY_FALLBACK_MS for why it's long, not 1.5s.
+  setTimeout(() => overlay.remove(), OVERLAY_FALLBACK_MS)
 }
