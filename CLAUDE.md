@@ -21,9 +21,9 @@ See `REFACTOR.md` — the single source of truth for architectural smells worth 
 
 ## Active plan
 
-**Observability: capture errors + off-happy-path fallbacks (incl. client-side IndexedDB)** (planned 2026-06-07, not started) — see `PLAN.md`. Make the app surface errors and degraded-path fallbacks on both tiers. Server `console.*` already reaches Vercel Runtime Logs; the gap is **client-side sync/IndexedDB errors**, which run in the browser and never reach Vercel. Plan adds a tiny isomorphic `src/lib/log.ts` (stable event keys, level gating, PII-safe), a client→server transport (leaning a self-hosted `POST /api/log` first, Sentry/Better Stack as a later swap), and instruments the currently-swallowed catches in `engine.ts`/`reconcile.ts`/`realtime.ts`/`SyncProvider.tsx`/Dexie writes. Standing logging reference: **`docs/logging.md`**. Open questions (transport choice, Vercel Pro/Log Drain, sampling, PII boundary) to resolve before coding.
+**Speech-to-task: voice-add multiple tasks at once** (planned 2026-06-08, not started) — see `PLAN.md`. Task lists currently add one task at a time via a single-line input; this adds a mic button that records spoken Swedish, sends it to Gemini (reusing the grocery `callGeminiWithAudio` / `gemini-3.5-flash` audio pipeline), and segments the rambling speech into discrete tasks — names only (assignee/due set manually after). New `extractTasksFromAudio` action + `normalizeTaskNames` in `actions/import.ts`, a shared `useAudioRecorder` hook extracted from `SpeechModal`'s capture logic, a simplified `TaskSpeechModal`, and a mic button wired into `TaskList.tsx`. Notifications were considered and explicitly deferred (PRD non-goal).
 
-  Completed-plan history → **`docs/PLAN-ARCHIVE.md`** (task-lists plan archived there 2026-06-07).
+  Completed-plan history → **`docs/PLAN-ARCHIVE.md`** (observability/logging plan archived there 2026-06-08; task-lists 2026-06-07).
 
 ## Project
 

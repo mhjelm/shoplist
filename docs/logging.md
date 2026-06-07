@@ -57,7 +57,7 @@ Client events appear in the **same Vercel Runtime Logs** as server logs, attribu
 | `gemini.http_error` / `gemini.empty_response` / `gemini.parse_failed` | error | gemini.ts | Gemini call failed (no payload dumped) |
 | `gemini.suggest_name_error` | error | upload.ts | image→name Gemini call failed |
 | `categorize.gave_up` | warn | gemini.ts | `categorizeNames` gave up; items fall back to `ovrigt` |
-| `extract.*` (`add_items_failed`, `audio_failed`, `recipe_failed`, `image_http_error`, `image_parse_failed`) | error | import.ts | recipe/list/audio extraction failed |
+| `extract.*` (`add_items_failed`, `audio_failed`, `tasks_audio_failed`, `recipe_failed`, `image_http_error`, `image_parse_failed`) | error | import.ts | recipe/list/audio/task-audio extraction failed |
 | `share.extract_failed` / `share.insert_failed` | warn / error | share/route.ts | Web Share Target extraction or DB insert failed |
 | `sw.register_failed` | warn | ServiceWorkerRegister | service worker registration failed |
 | `picture.upload_failed` | warn | PictureInput | image upload/resize threw |

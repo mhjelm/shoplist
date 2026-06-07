@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { type CategorySlug, isValidCategorySlug } from '@/lib/categories'
 import { callGemini, callGeminiWithAudio } from '@/lib/gemini'
+import { normalizeTaskNames } from '@/lib/taskExtract'
 import { log } from '@/lib/log'
 
 // addItems: batch import entry point for RecipeImportModal and the Web Share Target route.
@@ -176,6 +177,45 @@ export async function extractItemsFromAudio(audioBase64: string, mimeType: strin
     return { items: normalizeExtractedItems(parsed) }
   } catch (e) {
     log.error('extract.audio_failed', { error: e instanceof Error ? e.message : String(e) })
+    return { error: e instanceof Error ? e.message : 'Could not parse Gemini response' }
+  }
+}
+
+// Prompt for the spoken task-list flow (extractTasksFromAudio). Unlike the
+// grocery audio path, tasks have no quantity/measurement/category — just a
+// name. The input is rambling spoken Swedish; the model's job is to segment it
+// into discrete actionable tasks and drop the filler between them.
+const TASK_AUDIO_PROMPT = `The attached audio is a person speaking Swedish out loud, listing things they need to do — chores and to-do tasks. The speech is casual and may ramble: filler words, connectors, pauses, and self-corrections.
+
+Extract the distinct, actionable tasks. Rules:
+- One short phrase per task; phrase it as an actionable to-do.
+- Ignore filler and connectors ("öh", "och sen", "jag måste också", "vänta", "alltså").
+- Fold a clarification into the task it belongs to (don't split it into a separate task).
+- If the speaker corrects themselves, keep only the corrected version.
+- Never invent tasks that weren't spoken.
+- Transcribe and return each task in SWEDISH. Do not translate to English.
+- Keep each task concise (max ~8 words).
+
+Example (spoken): "öh jag måste ringa rörmokaren, och sen vattna blommorna, ja och hämta tvätten på fredag"
+Example output: {"tasks":["Ring rörmokaren","Vattna blommorna","Hämta tvätten"]}
+
+Return JSON only: {"tasks": ["...", "..."]}`
+
+export async function extractTasksFromAudio(audioBase64: string, mimeType: string) {
+  if (!audioBase64) return { error: 'No audio' }
+  if (!process.env.GEMINI_API_KEY) return { error: 'GEMINI_API_KEY not configured' }
+
+  try {
+    const parsed = (await callGeminiWithAudio(
+      TASK_AUDIO_PROMPT,
+      audioBase64,
+      mimeType,
+      { temperature: 0 }
+    )) as { tasks?: unknown }
+
+    return { tasks: normalizeTaskNames(parsed) }
+  } catch (e) {
+    log.error('extract.tasks_audio_failed', { error: e instanceof Error ? e.message : String(e) })
     return { error: e instanceof Error ? e.message : 'Could not parse Gemini response' }
   }
 }

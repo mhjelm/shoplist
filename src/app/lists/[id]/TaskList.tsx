@@ -1,17 +1,31 @@
 'use client'
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Item, List, ListPerson } from '@/lib/types'
 import { sortTasks } from '@/lib/taskView'
 import { isNewSinceVisit } from '@/lib/listsUnread'
 import { useRevealFx } from '@/lib/useRevealFx'
+import { useSyncState } from '@/lib/sync/engine'
 import { useListItemsSync } from './useListItemsSync'
 import { buildLocalItem } from './itemHelpers'
 import { muAddItem, muUpdateItem, muDeleteItem, muBulkDelete } from '@/lib/sync/mutations'
 import { touchListView } from './actions'
 import { TaskRow } from './TaskRow'
 import { TaskEditModal } from './TaskEditModal'
+import TaskSpeechModal from './TaskSpeechModal'
+
+// Client-only capability read: false during SSR/first paint (avoids a hydration
+// mismatch), then the real value once mounted. Mirrors useSpeechSupported in
+// AddItemForm.
+const noopSubscribe = () => () => {}
+function useSpeechSupported() {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => !!navigator.mediaDevices?.getUserMedia && typeof window.MediaRecorder !== 'undefined',
+    () => false,
+  )
+}
 
 interface Props {
   list: List
@@ -26,8 +40,11 @@ export default function TaskList({ list, listId, people, currentUserId, lastView
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState<Item | null>(null)
   const [confirmingClear, setConfirmingClear] = useState(false)
+  const [showSpeech, setShowSpeech] = useState(false)
   const { items, hasLoaded } = useListItemsSync(list, listId)
   const revealFx = useRevealFx(hasLoaded)
+  const { isOffline } = useSyncState()
+  const speechSupported = useSpeechSupported()
 
   // Touch last_viewed on mount and unmount so the /lists NEW marker clears for
   // this user (mirrors ItemList). router.refresh on leave re-fetches /lists so
@@ -85,6 +102,20 @@ export default function TaskList({ list, listId, people, currentUserId, lastView
           placeholder="Add a task…"
           className="flex-1 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
+        {speechSupported && (
+          <button
+            type="button"
+            onClick={() => setShowSpeech(true)}
+            disabled={isOffline}
+            title={isOffline ? 'Requires a connection' : 'Speak to add tasks'}
+            aria-label="Speak to add tasks"
+            className="border border-gray-300 dark:border-gray-700 rounded-lg px-3 text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors disabled:opacity-30"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+            </svg>
+          </button>
+        )}
         <button
           type="submit"
           disabled={!draft.trim()}
@@ -171,6 +202,10 @@ export default function TaskList({ list, listId, people, currentUserId, lastView
           onDelete={handleDelete}
           onClose={() => setEditing(null)}
         />
+      )}
+
+      {showSpeech && (
+        <TaskSpeechModal listId={listId} onClose={() => setShowSpeech(false)} />
       )}
     </div>
   )

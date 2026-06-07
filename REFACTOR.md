@@ -26,6 +26,12 @@ A refactor is not "verified" or "behaviour-neutral" until **all** of these pass:
 
 ## Pending
 
+### SpeechModal: adopt the `useAudioRecorder` hook
+- **Smell**: the audio-capture lifecycle (getUserMedia, MediaRecorder, max-duration auto-stop, the abort-vs-intentional-stop guard, codec-suffix strip, `blobToBase64`) now exists twice — inline in `SpeechModal.tsx` and extracted into `src/app/lists/[id]/useAudioRecorder.ts` (used by `TaskSpeechModal.tsx`). Two copies of subtle ref-guard logic invite drift.
+- **Scope**: migrate `SpeechModal.tsx` to consume `useAudioRecorder`, deleting its inline copy. Deferred from the speech-to-task change deliberately to avoid re-testing the working grocery voice flow in the same PR.
+- **Verify**: manual smoke of grocery voice add (record → results → add) after the swap, plus the standard lint/test/build.
+- **Status**: pending.
+
 ### 3. ESLint rule: enforce the mutation-path rule
 - **Smell**: nothing mechanically prevents a client component from calling `addItem` / `updateItem` / etc. directly, bypassing the outbox.
 - **Scope**: add `no-restricted-imports` (or a custom rule) blocking `@/app/lists/[id]/actions/items` from client components, with an allowlist for `@/lib/sync/engine.ts` (the dispatcher). Cross-list and import actions stay allowed from their respective UIs.
