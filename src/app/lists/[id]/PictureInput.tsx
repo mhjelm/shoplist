@@ -115,13 +115,21 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
         className="sr-only"
         onChange={e => {
           const f = e.target.files?.[0]
-          if (f) {
-            // Start the read synchronously to race Android's picker permission revocation.
-            const p = resizeImage(f)
-            p.catch(() => {})
-            handleFile(f, p)
+          if (!f) {
+            setPickerNonce(n => n + 1)
+            return
           }
-          setPickerNonce(n => n + 1)
+          log.info('picture.picked', { size: f.size, type: f.type || 'unknown' })
+          // Start the read synchronously to race Android's picker permission revocation.
+          const p = resizeImage(f)
+          p.catch(() => {})
+          // Defer the input remount until the read finishes. Bumping pickerNonce
+          // changes the input's `key`, which on Android tears down the element
+          // that owns the picked file's content:// read permission. Doing it
+          // synchronously here revoked the file mid-read and broke EVERY read
+          // path (the 817a710 remount regressed 10a3b19's read). The remount
+          // still happens well before any next pick, preserving its purpose.
+          handleFile(f, p).finally(() => setPickerNonce(n => n + 1))
         }}
       />
       {error && <p className="text-xs text-red-500">{error}</p>}

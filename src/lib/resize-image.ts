@@ -1,5 +1,15 @@
+import { log } from './log'
+
+const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
+const ms = (since: number) => Math.round(performance.now() - since)
+
 export async function resizeImage(file: Blob, maxEdge = 1024, quality = 0.85): Promise<Blob> {
   const fileInfo = `type=${file.type || 'unknown'}, size=${file.size}B`
+  // One rich, timed event per attempt (no PII — type/size/timings/error only)
+  // so a single real-device repro pinpoints WHERE and WHEN the Android
+  // content:// read dies, instead of guessing. See docs/logging.md.
+  const meta = { type: file.type || 'unknown', size: file.size }
+  const t0 = performance.now()
 
   // Try the <img> + objectURL path FIRST. Chrome's image loader pipeline reads
   // the underlying content:// URI internally and handles Android permission
@@ -7,22 +17,47 @@ export async function resizeImage(file: Blob, maxEdge = 1024, quality = 0.85): P
   // NotReadableError on Android even for tiny local files. Only if <img> fails
   // do we fall back to materialising bytes in JS.
   let imgErr: unknown
+  const tImg = performance.now()
   try {
-    return await resizeViaImageElement(file, maxEdge, quality)
+    const blob = await resizeViaImageElement(file, maxEdge, quality)
+    log.info('picture.resize_ok', { ...meta, via: 'img', total_ms: ms(t0), out: blob.size })
+    return blob
   } catch (e) {
     imgErr = e
   }
+  const imgMs = ms(tImg)
 
   let bytes: ArrayBuffer
+  const tBytes = performance.now()
   try {
     bytes = await readBytesRobust(file)
   } catch (readErr) {
-    const m1 = imgErr instanceof Error ? imgErr.message : String(imgErr)
-    const m2 = readErr instanceof Error ? readErr.message : String(readErr)
-    throw new Error(`Could not read image (${fileInfo}): img=${m1}; bytes=${m2}`)
+    log.warn('picture.resize_failed', {
+      ...meta, stage: 'read',
+      img_ms: imgMs, img_err: msg(imgErr),
+      bytes_ms: ms(tBytes), bytes_err: msg(readErr),
+      total_ms: ms(t0),
+    })
+    throw new Error(`Could not read image (${fileInfo}): img=${msg(imgErr)}; bytes=${msg(readErr)}`)
   }
+  const bytesMs = ms(tBytes)
+
   const stable = new Blob([bytes], { type: file.type || 'image/jpeg' })
-  return await resizeViaImageBitmap(stable, fileInfo, maxEdge, quality)
+  try {
+    const blob = await resizeViaImageBitmap(stable, fileInfo, maxEdge, quality)
+    // Bytes read fine but <img> had failed — record so we know the img path is
+    // the weak link (not the file itself).
+    log.info('picture.resize_ok', { ...meta, via: 'bytes', img_ms: imgMs, img_err: msg(imgErr), bytes_ms: bytesMs, total_ms: ms(t0), out: blob.size })
+    return blob
+  } catch (decodeErr) {
+    log.warn('picture.resize_failed', {
+      ...meta, stage: 'decode',
+      img_ms: imgMs, img_err: msg(imgErr),
+      bytes_ms: bytesMs, decode_err: msg(decodeErr),
+      total_ms: ms(t0),
+    })
+    throw decodeErr
+  }
 }
 
 async function resizeViaImageElement(file: Blob, maxEdge: number, quality: number): Promise<Blob> {
