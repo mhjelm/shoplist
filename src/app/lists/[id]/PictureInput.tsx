@@ -111,7 +111,13 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
         key={pickerNonce}
         id={inputId}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+        // Broad image/* (NOT a narrow MIME list). On Android a narrow image-MIME
+        // accept forces the system Photo Picker (ACTION_PICK_IMAGES), which hands
+        // back content:// URIs Chrome frequently can't read (NotReadableError on
+        // every path, instantly — confirmed via picture.resize_failed logs). The
+        // broad accept routes to a chooser whose references are readable. The
+        // narrow list (cc1310c) was the "worse than ever" regression.
+        accept="image/*"
         className="sr-only"
         onChange={e => {
           const f = e.target.files?.[0]
