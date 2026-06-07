@@ -17,6 +17,69 @@ function bareUrl(reqUrl) {
   return u.toString()
 }
 
+// Whether a navigation response is safe to store as the app shell for `url`.
+// Must be a real 200 for a cacheable route, AND not a redirect into /auth — an
+// expired session makes the edge middleware 302 to /auth/login, and caching
+// that under the list URL would pin the login page as the shell forever.
+function shouldStore(url, res) {
+  if (!res.ok || !shouldCacheNav(url)) return false
+  if (res.redirected && new URL(res.url).pathname.startsWith('/auth')) return false
+  return true
+}
+
+// Background refresh for stale-while-revalidate. Fire-and-forget: never blocks
+// the response we already served from cache, and a failure is a no-op (the
+// stale shell stays good until the next successful fetch).
+function revalidateShell(req, url) {
+  fetch(req)
+    .then((res) => {
+      if (shouldStore(url, res)) {
+        const copy = res.clone()
+        caches.open(CACHE).then((c) => c.put(req.url, copy))
+      }
+    })
+    .catch(() => {})
+}
+
+// Navigation strategy. Stale-while-revalidate for cacheable, previously-visited
+// pages: serve the cached shell INSTANTLY (no network in the critical path) so a
+// cold wake-up — phone powered off then on, radio still reconnecting — renders
+// immediately from local data, then refreshes the cache in the background. The
+// client heals freshness itself (ItemList reads Dexie via useLiveQuery;
+// reconcileList + realtime refresh on mount).
+//
+// This replaces a network-first handler whose `fetch(req)` would HANG (not fail
+// fast) on a reconnecting radio — and that fetch also ran the edge middleware's
+// supabase.auth.getUser() round-trip — leaving the screen blank for seconds
+// before the cache fallback (which only fires on outright failure) kicked in.
+//
+// Network-first is kept only for never-visited pages (nothing cached yet) and
+// non-cacheable routes (/auth, /share), with the same offline fallback chain.
+async function handleNavigate(req, url) {
+  if (shouldCacheNav(url)) {
+    const cached = await caches.match(req.url)
+    if (cached) {
+      revalidateShell(req, url)
+      return cached
+    }
+  }
+  try {
+    const res = await fetch(req)
+    if (shouldStore(url, res)) {
+      const copy = res.clone()
+      caches.open(CACHE).then((c) => c.put(req.url, copy))
+    }
+    return res
+  } catch {
+    return (
+      (await caches.match(req.url)) ??
+      (await caches.match('/lists')) ??
+      (await caches.match('/')) ??
+      new Response('Offline', { status: 503 })
+    )
+  }
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()))
 })
@@ -41,29 +104,10 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Page navigations: network-first, fall back to a per-URL cache hit, then
-  // /lists, then a stub. Caches HTML by exact URL so an offline reload of a
-  // previously-visited list page returns the right shell.
+  // Page navigations: stale-while-revalidate for visited pages (instant cold
+  // wake-up), network-first otherwise. See handleNavigate above.
   if (req.mode === 'navigate' && req.method === 'GET') {
-    event.respondWith(
-      fetch(req)
-        .then((res) => {
-          if (res.ok && shouldCacheNav(url)) {
-            const copy = res.clone()
-            caches.open(CACHE).then((c) => c.put(req.url, copy))
-          }
-          return res
-        })
-        .catch(() =>
-          caches.match(req.url).then((hit) =>
-            hit ?? caches.match('/lists').then((listsHit) =>
-              listsHit ?? caches.match('/').then((rootHit) =>
-                rootHit ?? new Response('Offline', { status: 503 })
-              )
-            )
-          )
-        ),
-    )
+    event.respondWith(handleNavigate(req, url))
     return
   }
 
