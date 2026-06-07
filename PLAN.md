@@ -1,6 +1,6 @@
 # Observability: capture errors + off-happy-path fallbacks (incl. client-side IndexedDB)
 
-_Started 2026-06-07. Status: **implemented (Phases 1–3, 5)** — Phase 4 deferred (Hobby). Ready to commit; awaiting approval._
+_Started 2026-06-07. Status: **shipped** (Phases 1–3, 5; Phase 4 deferred — Hobby). Live on Vercel; already cracked its first real bug (Android picture upload — see "First real-world win" below)._
 
 ## Goal
 
@@ -89,4 +89,8 @@ All four (transport, durability, sampling, PII) settled — see "Decisions" abov
 - [~] Phase 4: server Log Drain — **deferred (Hobby, no drains)**; documented in logging.md
 - [x] Phase 5: docs — `docs/logging.md` rewritten (module API, `/api/log`, event-key catalogue, viewing client logs) + CLAUDE.md "Logging & observability" note (2026-06-07)
 - [x] Tests (516 pass, +9 new) + lint clean + `npm run build` clean (2026-06-07)
-- [ ] Report ready (no auto-commit) — awaiting user approval to commit/push
+- [x] Shipped — committed + pushed (`5991e7b`), live on Vercel; `/api/log` confirmed working end-to-end (client `src:'client'` events visible in `vercel logs`)
+
+## First real-world win (2026-06-07)
+
+The logging immediately cracked the **Android picture-upload bug** that had resisted ~12 prior commits. Within minutes of going live, `picture.upload_failed` fired on a real device; richer instrumentation (`picture.picked` / `picture.resize_ok` / `picture.resize_failed` with per-stage timings in `resize-image.ts`) then let us kill one hypothesis per real-device trace — remount race → cloud photo → PWA activity recreation → `accept` narrowing → file-specific — until the timing (dead-on-arrival, ~26 ms, all read paths) isolated it to **Android 13's system Photo Picker handing Chrome unreadable `content://` URIs**. Fix (`da730d8`): strip `accept` on Android so the picker uses the readable SAF Files UI; confirmed by `picture.resize_ok` on the same photos that had failed. This is the methodology the plan was built for — diagnose from telemetry, not guesses. (Picture-flow instrumentation kept on for now per user; revisit trimming the success-path `info` events later.)
