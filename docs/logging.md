@@ -50,6 +50,21 @@ These are the operationally interesting failures we currently **cannot see**:
 - **CLI:** `vercel logs <deployment-url>` tails recent runtime logs.
 - **Build logs** are separate, shown per-deployment, retained much longer than runtime logs.
 
+#### CLI access — verified working for this project (2026-06-07)
+
+The repo is Vercel-linked (`.vercel/`) and the production deployment is **`https://shoplist-eta.vercel.app`** (project `prj_MUBLYIGcjJkuI7AiKAjU4xjpKLqE`, scope `magnus-magnus-projects`). With the Vercel CLI installed and logged in (`vercel whoami` → `maghje`), logs are readable directly:
+
+```bash
+vercel logs https://shoplist-eta.vercel.app        # tail recent runtime logs (streams; Ctrl-C / timeout to stop)
+vercel logs https://shoplist-eta.vercel.app --json # machine-readable, easier to grep/filter
+```
+
+`vercel logs` **streams/follows** and only serves the *recent* runtime tail — there is no historical query on Hobby (see retention below), so it's only useful for something happening **now** or that you can reproduce live. Wrap it in a `timeout` when capturing non-interactively (e.g. `timeout 30s vercel logs … | head -80`).
+
+**What the output actually contains:** by default these are Vercel's per-request **access logs** — one line per request with `TIME / HOST / LEVEL / STATUS / MESSAGE`, where `MESSAGE` is usually `(no message)`. A `λ` marks an actual serverless-function invocation (vs. a cached/edge response). Your application `console.*` text appears as the `MESSAGE` on a line **only when it fires** — so a healthy window is all `info` / `200` / `(no message)` and shows nothing diagnostic. To find problems, reproduce the issue while tailing and watch for non-2xx statuses or lines that carry a message.
+
+**Caveat that matters most here:** none of this surfaces the **client-side / IndexedDB** failures — they run in the browser and never reach Vercel (see the gap table above). CLI access confirms the *server* side is observable; the client side stays invisible until the `/api/log` pipe in `PLAN.md` is built.
+
 ### Clearing
 
 Not possible. There is no flush/delete. Logs age out by retention tier — that is the only lever.
