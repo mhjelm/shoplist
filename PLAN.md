@@ -18,15 +18,12 @@ The hard part is **client-side IndexedDB / sync errors**: they run in the browse
 - Client `console.*` → browser only, **invisible to us**.
 - Real durable control = **Log Drain** (server) + a **client→server ingest path** or browser SDK (client).
 
-## Design decisions to settle (resolve before building — see "Open questions")
+## Decisions (settled 2026-06-07)
 
-- **D1 — Client log transport.** Pick one:
-  - (a) **Self-hosted ingest:** a `POST /api/log` Route Handler that `console.*`s its body so client events surface in Vercel Runtime Logs (no new vendor, inherits Vercel's short retention + the existing noise problem).
-  - (b) **Third-party browser SDK** (Sentry / Better Stack browser): proper retention, grouping, source maps, alerting; new dependency + cost + privacy review.
-  - (c) **Both later:** ship (a) now as the pipe, leave (b) as a future swap behind the same `log` interface.
-  - _Leaning (a) first_ — smallest step, reuses Vercel, and a thin `log` wrapper makes (b) a drop-in later.
-- **D2 — Server durability.** Decide whether to add a **Vercel Log Drain** (needs Pro+) now or accept ephemeral logs for the moment. Independent of D1; can defer.
-- **D3 — Level + gating policy.** Define `error | warn | info` and which run in production. Stop dumping full payloads/responses in prod.
+- **D1 — Client log transport: self-hosted `POST /api/log` first.** A Route Handler that `console.*`s its (validated, size-clamped) body so client events surface in Vercel Runtime Logs. No new vendor. The thin `src/lib/log.ts` interface keeps a third-party browser SDK (Sentry / Better Stack) a future drop-in swap behind the same API.
+- **D2 — Server durability: none for now (Vercel Hobby).** Log Drains need Pro+, so they're **off the table while on Hobby**. ⚠️ **Hobby Runtime Log retention is only ~1 hour** — so client/IndexedDB events routed through `/api/log` are visible for ~1h, then gone. Accepted for now (it's still infinitely better than today's zero visibility), but note the real durability path **on Hobby** is *not* a log drain — it's a browser SDK that ships directly to its own backend (no Pro required). Revisit if ~1h proves too short: either upgrade to Pro + add a drain, or swap the `log.ts` transport to an SDK.
+- **D3 — PII boundary (confirmed): ids, counts, status codes, event keys, and error `.message` only.** Never log item names, list names, or payload contents. Enforced in `log.ts` (callers pass structured `detail`, not free text with user data).
+- **D4 — Sampling (confirmed defaults):** errors + warnings = **100%, never sampled**; a **safety throttle of at most once per ~10s per event key per session** on everything (guards against IndexedDB errors looping); **`reconcile.precheck_skip` fractionally sampled (~5%)** or dropped entirely (it's the healthy path — consider only logging when the precheck is *wrong*).
 
 ## Approach
 
@@ -63,18 +60,15 @@ Replace swallowed catches / browser-only `console.*` with `log.*` calls, **keepi
 - Dexie `.catch` sites in `useListItemsSync`/`ItemList`/`TaskList`/`ListsView`/`PictureInput`: `log.error('idb.write_failed', { table, op })`.
 - Server actions (`import.ts`, `upload.ts`, `share/route.ts`): swap raw `console.error` for `log.error` with event keys; **delete the `upload.ts:41` full-response dump** (or gate to dev).
 
-### Phase 4 — Server durability (per D2, optional/deferrable)
-- If pursuing: add a Vercel Log Drain to the chosen sink and document it in `docs/logging.md`. Otherwise note "ephemeral, accepted" there.
+### Phase 4 — Server durability (deferred — Hobby)
+- **Not in scope while on Vercel Hobby** (no Log Drains; ~1h retention). Document the "ephemeral, ~1h, accepted" reality in `docs/logging.md`. Future options if ~1h is too short: (a) upgrade to Pro + add a Log Drain to Better Stack/Axiom (free tiers), or (b) swap `log.ts`'s client transport to a browser SDK that ships directly to its own backend (no Pro needed). Either is a contained change behind the existing `log` interface.
 
 ### Phase 5 — Docs
 - Update `docs/logging.md` with the final transport, event-key catalogue, and how to view client logs.
 - CLAUDE.md: short "Logging & observability" architecture note pointing at `src/lib/log.ts` + `docs/logging.md`; note the convention "new swallowed catch → add a `log.*` event key".
 
-## Open questions (resolve with user before Phase 1)
-- **D1:** self-hosted `/api/log` first (recommended) vs. adopt Sentry/Better Stack now? Privacy: item names / list contents must **not** be logged — events carry ids + counts + error messages only.
-- **D2:** is the project on Vercel Pro (Log Drains available)? Worth enabling, or accept ephemeral for now?
-- **Volume/cost:** sampling rates for high-frequency fallbacks (`reconcile.precheck_skip` especially) so we don't flood the transport or hit Vercel rate limits.
-- **PII boundary:** confirm the redaction rule — no `name`, no `payload` contents; log `event`, ids, counts, status codes, error `.message` only.
+## Open questions — all resolved (2026-06-07)
+All four (transport, durability, sampling, PII) settled — see "Decisions" above. Ready for Phase 1 on go-ahead.
 
 ## Verification
 1. `npm test` — `log.ts` unit tests (gating, isolation, rate-limit) + `/api/log` route test if D1=(a).
@@ -88,7 +82,7 @@ Replace swallowed catches / browser-only `console.*` with `log.*` calls, **keepi
 
 ## Progress
 - [x] Phase 0: `docs/logging.md` reference written (2026-06-07)
-- [ ] Resolve open questions (D1/D2/D3, PII boundary, sampling) with user
+- [x] Resolve decisions D1–D4 with user (2026-06-07): self-hosted `/api/log`; no drain on Hobby; PII = ids/counts/status/messages only; errors 100% + 10s/key throttle + precheck_skip ~5%
 - [ ] Phase 1: `src/lib/log.ts` + unit tests
 - [ ] Phase 2: client transport (`/api/log` or SDK)
 - [ ] Phase 3: instrument silent sites; delete `upload.ts` payload dump
