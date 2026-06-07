@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useId, useState, useEffect, useRef } from 'react'
 import { suggestItemName, uploadImage } from './actions'
 import { resizeImage } from '@/lib/resize-image'
 import { log } from '@/lib/log'
@@ -19,6 +19,18 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
   // See RecipeImportModal: bumping a key on the file input forces a fresh DOM
   // node, avoiding stale content:// permission state on Android Chrome.
   const [pickerNonce, setPickerNonce] = useState(0)
+  // Android 13's system Photo Picker hands Chrome unreadable content:// URIs
+  // (NotReadableError on every read path — confirmed via picture.resize_failed
+  // logs, across two files, browser tab + PWA). The SAF "Files" picker returns
+  // readable URIs, and Chrome routes accept="image/*" to the Photo Picker — so
+  // on Android we strip `accept` to land on the Files picker instead. The input
+  // renders WITH accept="image/*" (correct for desktop/iOS and for SSR/hydration
+  // parity); we remove it imperatively post-mount only on Android. Keyed on
+  // pickerNonce because the input remounts (fresh node) after every pick.
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (/Android/i.test(navigator.userAgent)) fileInputRef.current?.removeAttribute('accept')
+  }, [pickerNonce])
 
   async function handleFile(file: File, resizePromise?: Promise<Blob>) {
     setError(null)
@@ -109,19 +121,22 @@ export default function PictureInput({ value, onChange, placeholder, onSuggestNa
       </div>
       <input
         key={pickerNonce}
+        ref={fileInputRef}
         id={inputId}
         type="file"
-        // Broad image/* (NOT a narrow MIME list). On Android a narrow image-MIME
-        // accept forces the system Photo Picker (ACTION_PICK_IMAGES), which hands
-        // back content:// URIs Chrome frequently can't read (NotReadableError on
-        // every path, instantly — confirmed via picture.resize_failed logs). The
-        // broad accept routes to a chooser whose references are readable. The
-        // narrow list (cc1310c) was the "worse than ever" regression.
+        // accept stripped post-mount on Android (see fileInputRef effect above).
         accept="image/*"
         className="sr-only"
         onChange={e => {
           const f = e.target.files?.[0]
           if (!f) {
+            setPickerNonce(n => n + 1)
+            return
+          }
+          // Without accept on Android the Files picker can return non-images;
+          // reject them cleanly instead of failing later in decode.
+          if (f.type && !f.type.startsWith('image/')) {
+            setError('Choose an image file')
             setPickerNonce(n => n + 1)
             return
           }
