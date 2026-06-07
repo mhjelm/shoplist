@@ -21,9 +21,9 @@ See `REFACTOR.md` — the single source of truth for architectural smells worth 
 
 ## Active plan
 
-**Task lists alongside shopping lists** (started 2026-06-07) — see `PLAN.md`. Add a second list `kind` (`'shopping' | 'task'`) so families can share chores/tasks, reusing the existing sharing/realtime/offline stack. `/lists` stays one stream with a 🛒/✓ icon + `SHOP`/`TASK` pill per row (Mixed·A); task lists open into a simpler checklist view (variant B) with optional assignee + due date (visual + sort only, no reminders), edited via `TaskEditModal`. New migration `0025` adds `lists.kind`, `items.assignee_id`/`due_date`, and a `get_list_people` RPC. Implemented as a page-level `kind` branch rendering a separate `TaskList` tree (not threaded through `ItemList`). **Gotcha:** new item columns must be added to the `ItemUpdatePatch` whitelist in `src/lib/itemUpdate.ts` or their server writes silently no-op.
+**Observability: capture errors + off-happy-path fallbacks (incl. client-side IndexedDB)** (planned 2026-06-07, not started) — see `PLAN.md`. Make the app surface errors and degraded-path fallbacks on both tiers. Server `console.*` already reaches Vercel Runtime Logs; the gap is **client-side sync/IndexedDB errors**, which run in the browser and never reach Vercel. Plan adds a tiny isomorphic `src/lib/log.ts` (stable event keys, level gating, PII-safe), a client→server transport (leaning a self-hosted `POST /api/log` first, Sentry/Better Stack as a later swap), and instruments the currently-swallowed catches in `engine.ts`/`reconcile.ts`/`realtime.ts`/`SyncProvider.tsx`/Dexie writes. Standing logging reference: **`docs/logging.md`**. Open questions (transport choice, Vercel Pro/Log Drain, sampling, PII boundary) to resolve before coding.
 
-  Completed-plan history → **`docs/PLAN-ARCHIVE.md`**.
+  Completed-plan history → **`docs/PLAN-ARCHIVE.md`** (task-lists plan archived there 2026-06-07).
 
 ## Project
 

@@ -1,75 +1,98 @@
-# Task lists alongside shopping lists
+# Observability: capture errors + off-happy-path fallbacks (incl. client-side IndexedDB)
 
-_Started 2026-06-07._
+_Started 2026-06-07. Status: **planned, not started** — awaiting go-ahead._
 
-## Context
+## Goal
 
-Today every list in Shoplist is a grocery shopping list. We're adding **task/chore lists** ("mow the lawn", "call the plumber") for families to share, reusing the existing sharing + realtime + offline infrastructure. Scope is deliberately held to a shared checklist with an optional **assignee** and **due date** (visual + sort only — no reminders/notifications). This is not a Todoist competitor.
+Make the app **tell us when something goes wrong or silently takes a degraded path**, on both tiers:
 
-UI directions (explored in `docs/task-lists-ui-exploration.html` + `docs/task-list-detail-exploration.html`):
-- **`/lists` overview → Mixed · A:** one recency-sorted stream; each row carries a 🛒/✓ icon + `SHOP`/`TASK` pill.
-- **Task detail → variant B:** explicit-checkbox checklist; each task can carry an assignee avatar + due-date pill (amber soon / red overdue / grey future), sorted by due, with a struck-through "Done" section; edited via a dedicated **TaskEditModal**.
+1. **Errors** — anything thrown / rejected that we currently swallow or only `console.error` to a browser nobody reads.
+2. **Off-happy-path fallbacks** — we took a working-but-degraded branch the user didn't ask for: Gemini model fail-over, category classification giving up (→ `ovrigt`), reconcile precheck skips, optimistic-vs-server conflicts, outbox retries/backoff, etc. These aren't errors but we want to know how often they fire.
 
-`kind` column on `lists` (`'shopping' | 'task'`, default `'shopping'`). Tasks reuse `items` (`name` + `is_checked` = done) + new nullable `assignee_id`, `due_date`.
+The hard part is **client-side IndexedDB / sync errors**: they run in the browser, so **Vercel never sees them** (see `docs/logging.md`). Closing that gap is the centre of this plan — server-side cleanup is the easy half.
 
-## Key reuse / gotchas
+## Background
 
-- `muAddItem` / `muUpdateItem(listId, itemId, patch)` / `muDeleteItem` already take arbitrary item fields → assignee/due flow through `item.update` with **no engine changes**.
-- **GOTCHA:** `updateItem` runs patches through `buildItemUpdatePayload` / `ItemUpdatePatch` (`src/lib/itemUpdate.ts`), which **drops unlisted fields**. `assignee_id`/`due_date` MUST be added there or the server write silently no-ops.
-- Reads flow free: `reconcileList` does `.select('*')` + raw `put`; realtime channel watches `items` with `replica identity full`.
-- `itemToLocalItem` / `localItemToItem` / `buildLocalItem` (`itemHelpers.ts`) enumerate fields by hand — add the two there.
-- `reconcileListsOverview` + `/lists` `page.tsx` use explicit `lists` SELECTs — add `kind`.
-- `get_list_members` excludes the owner → new `get_list_people` RPC (owner ∪ members, emails) for the assignee picker.
+`docs/logging.md` is the standing reference (write it first / keep it current). Key facts driving this plan:
+- Server `console.*` → Vercel Runtime Logs automatically (ephemeral, ~1h–1day retention, no levels, ~4 KB/line cap, can't clear).
+- Client `console.*` → browser only, **invisible to us**.
+- Real durable control = **Log Drain** (server) + a **client→server ingest path** or browser SDK (client).
+
+## Design decisions to settle (resolve before building — see "Open questions")
+
+- **D1 — Client log transport.** Pick one:
+  - (a) **Self-hosted ingest:** a `POST /api/log` Route Handler that `console.*`s its body so client events surface in Vercel Runtime Logs (no new vendor, inherits Vercel's short retention + the existing noise problem).
+  - (b) **Third-party browser SDK** (Sentry / Better Stack browser): proper retention, grouping, source maps, alerting; new dependency + cost + privacy review.
+  - (c) **Both later:** ship (a) now as the pipe, leave (b) as a future swap behind the same `log` interface.
+  - _Leaning (a) first_ — smallest step, reuses Vercel, and a thin `log` wrapper makes (b) a drop-in later.
+- **D2 — Server durability.** Decide whether to add a **Vercel Log Drain** (needs Pro+) now or accept ephemeral logs for the moment. Independent of D1; can defer.
+- **D3 — Level + gating policy.** Define `error | warn | info` and which run in production. Stop dumping full payloads/responses in prod.
 
 ## Approach
 
-Branch by `kind` at the page level, rendering a separate, simpler `TaskList` tree for tasks rather than threading `kind` through `ItemList`'s grocery hooks. Shared sync/reconcile/realtime/outbox/Dexie reused as-is.
+A single tiny logging module both tiers import, so call sites are uniform and the transport is swappable.
 
-### 1. Migration `0025_task_lists.sql`
-- `lists.kind text not null default 'shopping'` + `check (kind in ('shopping','task'))`.
-- `items.assignee_id uuid null references auth.users(id) on delete set null`; `items.due_date date null`.
-- `get_list_people(p_list_id uuid) returns table(user_id uuid, email text)` — owner ∪ members, `security definer`, grant to `authenticated` (model on `get_list_members`, migration 0012).
+### Phase 0 — Reference + inventory _(no code)_
+- `docs/logging.md` written (done 2026-06-07).
+- Confirm the full inventory of (i) error sites and (ii) fallback sites from the tables in `docs/logging.md`. The notable silent spots already identified:
+  - `engine.ts`: `[outbox] dispatch failed` (browser-only), categorize `.catch(() => {})`, `touchListView` swallow.
+  - `reconcile.ts`: two bare `catch {}` (offline assumption hides real Dexie/PostgREST errors), `reconcileList` early-return on `error`, the precheck-skip path (a fallback worth counting), the conflict branch (`addConflicts`).
+  - `realtime.ts`: `[realtime] subscribe error`, two catalog `.catch(() => {})`.
+  - `SyncProvider.tsx`: **`localDB` open failure** — the single most important client error to capture.
+  - `gemini.ts`: model fail-over `console.warn`, `categorizeNames` `catch { return {} }` (silent give-up).
+  - Dexie writes across `useListItemsSync.ts`, `ItemList.tsx`, `TaskList.tsx`, `ListsView.tsx`, `PictureInput.tsx`.
 
-### 2. Types & Dexie
-- `types.ts`: `List += kind: ListKind` (`type ListKind = 'shopping' | 'task'`); `Item += assignee_id, due_date`.
-- `db/types.ts`: `LocalListCatalog += kind`; `LocalItem += assignee_id, due_date`.
-- `db/local.ts`: `this.version(6).stores({})` (non-indexed fields).
-- `itemHelpers.ts`: add fields to both adapters + `buildLocalItem` opts (default null).
+### Phase 1 — The `log` module (`src/lib/log.ts`)
+- Tiny isomorphic API: `log.error(event, detail?)`, `log.warn(...)`, `log.info(...)`, plus a `log.fallback(name, detail?)` helper for off-path counts.
+- `event` is a **stable string key** (e.g. `outbox.dispatch_failed`, `idb.open_failed`, `gemini.failover`, `reconcile.conflict`) so logs are greppable/aggregatable, not free text.
+- **Server build:** writes structured `console.*` (JSON line: `{ event, level, ...detail }`) — gated by level so prod stays quiet; never dump full payloads.
+- **Client build:** `console.*` for local dev **and** forwards `error`/`warn` (sampled/throttled `info`) to the transport from D1. Must be: non-blocking (fire-and-forget), failure-proof (a logging failure can never throw into app code), and **deduped/rate-limited** (IndexedDB errors can fire in tight loops).
+- Unit-tested: level gating, payload shape, transport-failure isolation, rate-limit.
 
-### 3. Write path
-- `itemUpdate.ts`: add `assignee_id?: string | null`, `due_date?: string | null` to `ItemUpdatePatch`; handle via `'field' in patch` so explicit null clears. Extend `itemUpdate.test.ts`.
+### Phase 2 — Client transport (per D1)
+- If (a): `src/app/api/log/route.ts` — accepts a small JSON batch, validates/clamps size, `console.*`s each event (so it lands in Vercel), drops oversized/abusive input. No auth beyond existing middleware; cheap and rate-limited client-side. Beware the ~4 KB/line cap — truncate detail.
+- Wire `src/lib/log.ts` client transport to it (batch + `navigator.sendBeacon` on unload where possible).
 
-### 4. `/lists` overview + create (Mixed · A)
-- `CreateListForm.tsx`: 🛒/✓ segmented kind toggle (hidden `kind`, default shopping); `createList` action inserts `kind`.
-- `page.tsx` + `reconcileListsOverview`: add `kind` to SELECT + catalog seed/map.
-- `ListsView.tsx` `ListRow`: leading kind icon + `SHOP`/`TASK` pill. No regrouping.
+### Phase 3 — Instrument the silent sites
+Replace swallowed catches / browser-only `console.*` with `log.*` calls, **keeping current behaviour** (don't turn a swallow into a throw):
+- `SyncProvider`: `log.error('idb.open_failed', …)` on Dexie open reject.
+- `engine.ts`: `log.error('outbox.dispatch_failed', …)`; `log.fallback('categorize.background_failed')`; keep swallow semantics.
+- `reconcile.ts`: turn the two bare `catch {}` into `log.warn('reconcile.network_or_idb', …)` (still return quietly); `log.fallback('reconcile.precheck_skip')` (sampled — high volume); `log.info('reconcile.conflict', …)` alongside `addConflicts`.
+- `realtime.ts`: `log.warn('realtime.subscribe_error', …)`.
+- `gemini.ts`: `log.warn('gemini.failover', { from, to, status })`; `log.warn('categorize.gave_up')` in `categorizeNames`' catch.
+- Dexie `.catch` sites in `useListItemsSync`/`ItemList`/`TaskList`/`ListsView`/`PictureInput`: `log.error('idb.write_failed', { table, op })`.
+- Server actions (`import.ts`, `upload.ts`, `share/route.ts`): swap raw `console.error` for `log.error` with event keys; **delete the `upload.ts:41` full-response dump** (or gate to dev).
 
-### 5. Task detail (variant B)
-- `page.tsx`: branch on `list.kind`. Task → simplified header (BackLink + name + OfflineBadge + LeaveListButton; no EditModeToggle/StoreMode) + `<TaskList people={…} … />` (people via `get_list_people`). Filter copy/move `otherLists` to `kind === 'shopping'`.
-- New `TaskList.tsx` (reuses `useListItemsSync`, minimal plain add → `buildLocalItem` + `muAddItem`, due-sorted to-do + struck-through Done), `TaskRow.tsx` (checkbox toggles `is_checked`, due pill, assignee avatar, pencil → modal), `TaskEditModal.tsx` (name + assignee select + date input + delete/save → `muUpdateItem`/`muDeleteItem`).
-- New `src/lib/taskView.ts`: `dueStatus(due_date, now)` + `sortTasks(items)` (due asc, nulls last, then created_at). Unit-tested.
+### Phase 4 — Server durability (per D2, optional/deferrable)
+- If pursuing: add a Vercel Log Drain to the chosen sink and document it in `docs/logging.md`. Otherwise note "ephemeral, accepted" there.
 
-### 6. Docs
-- CLAUDE.md: migration 0025 → Pending manual tasks; next number → 0026; architecture note (kind branch, TaskList vs ItemList, itemUpdate whitelist rule).
-- Update `PRD.md` (task lists were a non-goal).
+### Phase 5 — Docs
+- Update `docs/logging.md` with the final transport, event-key catalogue, and how to view client logs.
+- CLAUDE.md: short "Logging & observability" architecture note pointing at `src/lib/log.ts` + `docs/logging.md`; note the convention "new swallowed catch → add a `log.*` event key".
+
+## Open questions (resolve with user before Phase 1)
+- **D1:** self-hosted `/api/log` first (recommended) vs. adopt Sentry/Better Stack now? Privacy: item names / list contents must **not** be logged — events carry ids + counts + error messages only.
+- **D2:** is the project on Vercel Pro (Log Drains available)? Worth enabling, or accept ephemeral for now?
+- **Volume/cost:** sampling rates for high-frequency fallbacks (`reconcile.precheck_skip` especially) so we don't flood the transport or hit Vercel rate limits.
+- **PII boundary:** confirm the redaction rule — no `name`, no `payload` contents; log `event`, ids, counts, status codes, error `.message` only.
 
 ## Verification
-1. `npm test` — new unit tests (`itemUpdate`, `taskView`) + component tests (`TaskRow`, `TaskEditModal`, `TaskList` smoke).
-2. `npm run lint` + **`npm run build`** (build catches `'use server'` violations).
-3. Apply migration `0025`.
-4. Manual (two profiles / shared list): create ✓ vs 🛒 list → pills on `/lists`; add tasks, assign, set due → pill colors; check → Done section; share + assign to member → realtime + avatar resolves; offline add/check/assign → outbox drains; copy/move picker excludes task lists.
+1. `npm test` — `log.ts` unit tests (gating, isolation, rate-limit) + `/api/log` route test if D1=(a).
+2. `npm run lint` + **`npm run build`** (build catches `'use server'` boundary violations — required, per project rule).
+3. Manual: force each path and confirm it surfaces —
+   - Dexie open failure (e.g. block the DB / quota) → `idb.open_failed` reaches the transport.
+   - Go offline, edit, come back → outbox retry + reconcile events fire, no PII in payloads.
+   - Trigger a Gemini 503 (or mock) → `gemini.failover` logged once per fail-over.
+   - Confirm prod-level gating: `info`/`fallback` suppressed when simulating production.
+4. Grep for remaining bare `catch {}` / `.catch(() => {})` in `src/lib/sync` + client components — each is either intentional (commented) or routed through `log`.
 
 ## Progress
-- [x] Setup: archive prior plan, write PLAN.md, CLAUDE.md active-plan entry (2026-06-07)
-- [x] 1. Migration 0025 (`lists.kind`, `items.assignee_id`/`due_date`, `get_list_people` RPC)
-- [x] 2. Types & Dexie (ListKind, new item/catalog fields, v6, itemHelpers adapters)
-- [x] 3. itemUpdate whitelist + tests
-- [x] 4. /lists overview + create (KindIcon/KindPill, kind toggle, reconcile/SSR `kind`)
-- [x] 5. Task detail view (TaskList/TaskRow/TaskEditModal/TaskAvatar) + taskView helper, page.tsx kind branch
-- [x] 6. Docs (CLAUDE.md architecture note + data model, PRD.md)
-- [x] Tests (504 pass, +20 new) + lint clean + `npm run build` clean
-- [x] Migration `0025` applied to Supabase
-- [x] Post-impl fix: task adds skip Gemini categorize (`skip_categorize` flag, `engine.ts` gate)
-- [x] Post-impl fix: migration `0026` guards `bump_item_history` so task names stay out of grocery autocomplete
-- [ ] **Apply migration `0026` to Supabase** (manual)
-- [ ] Report ready (no auto-commit) — awaiting user approval to commit/push
+- [x] Phase 0: `docs/logging.md` reference written (2026-06-07)
+- [ ] Resolve open questions (D1/D2/D3, PII boundary, sampling) with user
+- [ ] Phase 1: `src/lib/log.ts` + unit tests
+- [ ] Phase 2: client transport (`/api/log` or SDK)
+- [ ] Phase 3: instrument silent sites; delete `upload.ts` payload dump
+- [ ] Phase 4: server Log Drain (optional/deferred)
+- [ ] Phase 5: docs (logging.md final + CLAUDE.md note)
+- [ ] Tests + lint + `npm run build` clean
+- [ ] Report ready (no auto-commit)
