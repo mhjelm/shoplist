@@ -25,3 +25,6 @@ Thumbs.db
 *.swp
 
 .vercel
+
+# machine-local log-review watermark (tools/query-logs.mjs --new/--mark)
+tools/.logs-watermark.json
