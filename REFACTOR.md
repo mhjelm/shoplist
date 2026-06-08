@@ -22,7 +22,7 @@ A refactor is not "verified" or "behaviour-neutral" until **all** of these pass:
 
 ## Up next
 
-**→ 3. ESLint rule: enforce the mutation-path rule.** Cheap and codifies an existing invariant.
+**→ SpeechModal: adopt the `useAudioRecorder` hook.** Small; deletes a duplicated copy of subtle audio ref-guard logic.
 
 ## Pending
 
@@ -30,11 +30,6 @@ A refactor is not "verified" or "behaviour-neutral" until **all** of these pass:
 - **Smell**: the audio-capture lifecycle (getUserMedia, MediaRecorder, max-duration auto-stop, the abort-vs-intentional-stop guard, codec-suffix strip, `blobToBase64`) now exists twice — inline in `SpeechModal.tsx` and extracted into `src/app/lists/[id]/useAudioRecorder.ts` (used by `TaskSpeechModal.tsx`). Two copies of subtle ref-guard logic invite drift.
 - **Scope**: migrate `SpeechModal.tsx` to consume `useAudioRecorder`, deleting its inline copy. Deferred from the speech-to-task change deliberately to avoid re-testing the working grocery voice flow in the same PR.
 - **Verify**: manual smoke of grocery voice add (record → results → add) after the swap, plus the standard lint/test/build.
-- **Status**: pending.
-
-### 3. ESLint rule: enforce the mutation-path rule
-- **Smell**: nothing mechanically prevents a client component from calling `addItem` / `updateItem` / etc. directly, bypassing the outbox.
-- **Scope**: add `no-restricted-imports` (or a custom rule) blocking `@/app/lists/[id]/actions/items` from client components, with an allowlist for `@/lib/sync/engine.ts` (the dispatcher). Cross-list and import actions stay allowed from their respective UIs.
 - **Status**: pending.
 
 ### 4. Decouple `src/lib/sync/engine.ts` from `actions.ts`
@@ -68,6 +63,12 @@ A refactor is not "verified" or "behaviour-neutral" until **all** of these pass:
 - **Status**: deferred.
 
 ## Completed
+
+### 3. ESLint rule: enforce the mutation-path rule — done 2026-06-08
+- **Smell**: nothing mechanically prevented a component from calling `addItem` / `updateItem` / etc. directly, bypassing the outbox.
+- **Resolution**: added `no-restricted-imports` to `eslint.config.mjs` blocking the 7 raw item-mutation server actions (`addItem`, `updateItem`, `toggleItem`, `reorderItem`, `deleteItem`, `mergeItems`, `setItemCategory`) by **import name** (they're unique to `actions/items.ts` across the repo, so name-filtering is precise even with broad path globs covering the absolute barrel, relative `./actions` / `../actions`, and the underlying `items` module). Allowlisted `src/lib/sync/engine.ts` (the dispatcher — the sole legitimate caller; it uses a dynamic import the base rule wouldn't catch anyway, but the override documents intent).
+- **Deliberately not blocked** (documented direct-call exceptions, current reality): `addItems` (batch), `clearShoppedItems`, `clearAllItems`, `categorizeItem`, `deleteHistoryItem`, `copy`/`move`/`shareItemsToList`, `touchListView`, `suggestItemName`, `uploadImage`, `extract*`.
+- **Verified**: `npm run lint` clean (invariant already held — no existing violations); negative test (temp `import { addItem } from './actions'` → errors with our message, while `clearShoppedItems`/`touchListView` on the same line stay clean); `npm run build` succeeds; 528/528 tests pass.
 
 ### 2. Split `src/app/lists/[id]/actions.ts` — done 2026-05-23
 - **Smell**: 801 LOC / 20 exports in one file mixing item CRUD, batch add, Gemini AI extraction, cross-list copy/move, history mgmt, `list_views`, image upload.

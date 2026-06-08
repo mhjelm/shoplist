@@ -31,7 +31,46 @@ const eslintConfig = defineConfig([
           caughtErrorsIgnorePattern: "^_",
         },
       ],
+      // Enforce the mutation-path rule (CLAUDE.md / REFACTOR.md): the raw
+      // item-mutation server actions must never be imported directly by a
+      // component — all item writes go through the outbox (`mu*` helpers in
+      // src/lib/sync/mutations.ts). The dispatcher src/lib/sync/engine.ts is the
+      // sole legitimate caller and is allowlisted below. These 7 names are
+      // unique to src/app/lists/[id]/actions/items.ts across the repo, so
+      // name-filtering is precise even with broad path globs. Deliberately NOT
+      // blocked (documented direct-call exceptions): addItems (batch),
+      // clearShoppedItems, clearAllItems, categorizeItem, deleteHistoryItem,
+      // copy/move/shareItemsToList, touchListView, suggestItemName, uploadImage.
+      "no-restricted-imports": ["error", {
+        patterns: [{
+          group: [
+            "@/app/lists/[id]/actions",
+            "@/app/lists/[id]/actions/items",
+            "**/lists/*/actions",
+            "**/lists/*/actions/items",
+            "./actions",
+            "./actions/items",
+            "../actions",
+            "../actions/items",
+          ],
+          importNames: [
+            "addItem", "updateItem", "toggleItem", "reorderItem",
+            "deleteItem", "mergeItems", "setItemCategory",
+          ],
+          message:
+            "Item mutations must go through the outbox (mu* helpers in " +
+            "src/lib/sync/mutations.ts), not direct server actions. The " +
+            "dispatcher src/lib/sync/engine.ts is the only allowed caller. " +
+            "See the mutation-path rule in CLAUDE.md / REFACTOR.md.",
+        }],
+      }],
     },
+  },
+  // The outbox dispatcher is the one place allowed to call the raw item
+  // mutations (it drains the outbox by invoking the real server actions).
+  {
+    files: ["src/lib/sync/engine.ts"],
+    rules: { "no-restricted-imports": "off" },
   },
 ]);
 

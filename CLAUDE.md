@@ -4,9 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Pending manual tasks
 
-- **Apply migration `0025_task_lists.sql`** — adds `lists.kind`, `items.assignee_id` + `items.due_date`, and the `get_list_people` RPC. Required for the task-lists feature.
-- **Apply migration `0026_skip_task_history.sql`** — guards `bump_item_history` so task-list items don't pollute the grocery autocomplete history.
-- ~~**Apply migration `0027_app_logs.sql`**~~ — done 2026-06-08 (durable `app_logs` table; `pg_cron` 30-day prune `prune_app_logs` scheduled separately). Still needs the `SUPABASE_SERVICE_ROLE_KEY` env var (below) to actually capture logs.
+_None pending._
+
+- ~~**Apply migration `0025_task_lists.sql`**~~ — done 2026-06-08 (adds `lists.kind`, `items.assignee_id` + `items.due_date`, and the `get_list_people` RPC; required for the task-lists feature).
+- ~~**Apply migration `0026_skip_task_history.sql`**~~ — done 2026-06-08 (guards `bump_item_history` so task-list items don't pollute the grocery autocomplete history).
+- ~~**Apply migration `0027_app_logs.sql`**~~ — done 2026-06-08 (durable `app_logs` table; `pg_cron` 30-day prune `prune_app_logs` scheduled separately).
+- ~~**Set `SUPABASE_SERVICE_ROLE_KEY` env var**~~ — done 2026-06-08 (log persistence now actually captures logs).
 
 > Signup is now invitation-only (done 2026-05-17). See `docs/how-to-add-new-user.html` for the invite flow and how to re-enable public signup if ever needed.
 
@@ -22,7 +25,7 @@ See `REFACTOR.md` — the single source of truth for architectural smells worth 
 
 ## Active plan
 
-_None active._ Durable log persistence was **executed 2026-06-08** (code shipped; pending the manual migration + `SUPABASE_SERVICE_ROLE_KEY` env step above).
+_None active._ ESLint mutation-path rule (REFACTOR #3) was **executed 2026-06-08** (done; see `REFACTOR.md` Completed). Durable log persistence was executed 2026-06-08 (now fully live).
 
   Completed-plan history → **`docs/PLAN-ARCHIVE.md`** (durable log persistence 2026-06-08; speech-to-task 2026-06-08; observability/logging plan archived there 2026-06-08; task-lists 2026-06-07).
 
