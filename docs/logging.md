@@ -148,4 +148,25 @@ On Pro/Enterprise, **Log Drains** forward all logs to an external service (Bette
 1. **Server side:** was ephemeral, unstructured, and noisy (full-payload dumps). **Addressed in code:** `log.ts` writes structured, size-clamped, level-gated JSON lines; the payload dumps are gone. Still ephemeral (no Log Drain on Hobby).
 2. **Client side:** the most valuable signals (outbox dispatch failures, IndexedDB problems, reconcile/realtime errors) used to be **thrown away** because the browser console isn't collected anywhere. **Addressed:** `log.ts`'s client transport forwards them to `POST /api/log`, which re-emits them into Vercel Runtime Logs.
 
-**Remaining limitation (Hobby):** everything still ages out in ~1 hour, so this is good for live/reproducible issues but not day-old reports. The durable next step (deferred) is either Vercel Pro + a Log Drain, or swapping `log.ts`'s client transport to a browser SDK (Sentry / Better Stack) that ships directly to its own backend with no Pro requirement — a contained change behind the existing `log` interface. See `PLAN.md` Phase 4.
+3. **Durable capture (Hobby):** Vercel Runtime Logs still age out in ~1 hour, and Hobby can't fetch them back out (Log Drains / logs API are Pro-only). **Addressed:** every event is also written, at emit time, into a Supabase `app_logs` table — see below.
+
+---
+
+## Durable persistence → the `app_logs` table (migration 0027)
+
+Because Hobby can't query its own logs after ~1h, we capture each event durably **at the moment it's emitted**, into storage we control. Both tiers are hooked:
+
+- **Server:** `instrumentation.ts` registers a sink into `log.ts` via `registerServerSink()` on Node startup. `emit()`'s server branch calls it for **all** levels (durable rows aren't subject to the prod `info`/`fallback` console suppression — DB volume is cheap and pruned). The sink uses `next/server`'s `after()` so the insert runs post-response.
+- **Client:** `POST /api/log` resolves the current user and writes the batch via `persistClientLogs(events, userId)` after re-emitting to the console.
+
+Both write through a **service-role** Supabase client (`src/lib/supabase/admin.ts`, `import 'server-only'`) so writes work from any server context (authed, unauthenticated, background) and bypass RLS. The mapping + insert live in `src/lib/serverLogSink.ts`. The sink **never throws and never calls `log.*`** (that would loop); on failure it emits at most one raw `console.error`. If `SUPABASE_SERVICE_ROLE_KEY` is unset, it no-ops silently — the app behaves exactly as before.
+
+**Table shape** (`app_logs`): `id`, `created_at` (server insert time), `event_t` (the event's own `rec.t`), `user_id` (best-effort, null on the server path / when logged out), `lvl`, `ev`, `side` (`'server' | 'client'`), `detail jsonb` (everything beyond `t/lvl/ev/side`). RLS is enabled with **no policies** — only the service role writes and the dashboard/owner reads.
+
+**Retention:** a daily `pg_cron` job deletes rows older than 30 days (commented at the bottom of the migration; enable the `pg_cron` extension first, then run it). A log row is ~0.5–1 KB, so a family app has months of runway even before pruning.
+
+**Reading the logs** (no in-app viewer):
+- **CLI:** `node tools/query-logs.mjs` (reads `app_logs` via PostgREST with the service key). Filters: `--lvl error`, `--side client`, `--ev reconcile.%`, `--since 2h`, `--limit 200`, `--json`.
+- **Supabase dashboard → SQL editor:** `select created_at, side, lvl, ev, user_id, detail from app_logs order by created_at desc limit 200;`
+
+**Caveat:** edge-runtime logs (`proxy.ts`) are **not** captured to the DB — there's no service-role client there. They remain console-only.

@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Apply migration `0025_task_lists.sql`** — adds `lists.kind`, `items.assignee_id` + `items.due_date`, and the `get_list_people` RPC. Required for the task-lists feature.
 - **Apply migration `0026_skip_task_history.sql`** — guards `bump_item_history` so task-list items don't pollute the grocery autocomplete history.
+- ~~**Apply migration `0027_app_logs.sql`**~~ — done 2026-06-08 (durable `app_logs` table; `pg_cron` 30-day prune `prune_app_logs` scheduled separately). Still needs the `SUPABASE_SERVICE_ROLE_KEY` env var (below) to actually capture logs.
 
 > Signup is now invitation-only (done 2026-05-17). See `docs/how-to-add-new-user.html` for the invite flow and how to re-enable public signup if ever needed.
 
@@ -21,9 +22,9 @@ See `REFACTOR.md` — the single source of truth for architectural smells worth 
 
 ## Active plan
 
-**Speech-to-task: voice-add multiple tasks at once** (planned 2026-06-08, not started) — see `PLAN.md`. Task lists currently add one task at a time via a single-line input; this adds a mic button that records spoken Swedish, sends it to Gemini (reusing the grocery `callGeminiWithAudio` / `gemini-3.5-flash` audio pipeline), and segments the rambling speech into discrete tasks — names only (assignee/due set manually after). New `extractTasksFromAudio` action + `normalizeTaskNames` in `actions/import.ts`, a shared `useAudioRecorder` hook extracted from `SpeechModal`'s capture logic, a simplified `TaskSpeechModal`, and a mic button wired into `TaskList.tsx`. Notifications were considered and explicitly deferred (PRD non-goal).
+_None active._ Durable log persistence was **executed 2026-06-08** (code shipped; pending the manual migration + `SUPABASE_SERVICE_ROLE_KEY` env step above).
 
-  Completed-plan history → **`docs/PLAN-ARCHIVE.md`** (observability/logging plan archived there 2026-06-08; task-lists 2026-06-07).
+  Completed-plan history → **`docs/PLAN-ARCHIVE.md`** (durable log persistence 2026-06-08; speech-to-task 2026-06-08; observability/logging plan archived there 2026-06-08; task-lists 2026-06-07).
 
 ## Project
 
@@ -49,6 +50,7 @@ Required env vars:
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase project.
 - `GEMINI_API_KEY` — Google Gemini 2.5 Flash, used for recipe ingredient extraction, image-based item naming, and grocery category classification. The app degrades gracefully if missing (returns errors that surface in the UI).
 - `IMGBB_API_KEY` — ImgBB image hosting for user-uploaded item pictures.
+- `SUPABASE_SERVICE_ROLE_KEY` — **server-only** Supabase secret key (`sb_secret_…`, from dashboard → Project Settings → API keys). Powers the durable `app_logs` sink (migration 0027). **Never** prefix it `NEXT_PUBLIC_` / expose it to the client bundle (`src/lib/supabase/admin.ts` is `import 'server-only'`). Absent → log persistence no-ops silently.
 
 ## Stack
 
@@ -208,7 +210,7 @@ A separate UI mode toggled from the page header that swaps the per-row pencil fo
 
 ### Logging & observability
 
-All diagnostic logging goes through **`src/lib/log.ts`** — `log.error / warn / info / fallback(event, detail?)`. Do **not** add raw `console.*` (the only legitimate ones are the sinks inside `log.ts` and `src/app/api/log/route.ts`). It's isomorphic: server-side it writes one compact, level-gated JSON line to console (captured by Vercel); client-side it also forwards events to **`POST /api/log`**, which re-emits them so browser/IndexedDB failures reach Vercel at all (tagged `src:'client'`). `event` is a stable key (`area.thing`); `detail` is **PII-safe — ids/counts/status/error-message only**, never item/list names (enforced by `sanitizeDetail`). Errors/warns are unsampled; a 10 s/key throttle + per-key sampling protect the transport. **Convention: a new swallowed `catch {}` / `.catch(() => {})` should add a `log.*` event key instead of silently discarding.** Full reference + event-key catalogue: **`docs/logging.md`**. On Hobby, retention is ~1 h (durable drain deferred — `PLAN.md` Phase 4).
+All diagnostic logging goes through **`src/lib/log.ts`** — `log.error / warn / info / fallback(event, detail?)`. Do **not** add raw `console.*` (the only legitimate ones are the sinks inside `log.ts` and `src/app/api/log/route.ts`). It's isomorphic: server-side it writes one compact, level-gated JSON line to console (captured by Vercel); client-side it also forwards events to **`POST /api/log`**, which re-emits them so browser/IndexedDB failures reach Vercel at all (tagged `src:'client'`). `event` is a stable key (`area.thing`); `detail` is **PII-safe — ids/counts/status/error-message only**, never item/list names (enforced by `sanitizeDetail`). Errors/warns are unsampled; a 10 s/key throttle + per-key sampling protect the transport. **Convention: a new swallowed `catch {}` / `.catch(() => {})` should add a `log.*` event key instead of silently discarding.** Full reference + event-key catalogue: **`docs/logging.md`**. Vercel Runtime Logs age out in ~1 h on Hobby, so every event (client *and* server) is **also persisted durably** to the Supabase `app_logs` table (migration 0027) via a service-role sink — registered into `log.ts` by `instrumentation.ts`, and written from `/api/log` for client batches. Read it back with `node tools/query-logs.mjs` or the Supabase dashboard. Needs `SUPABASE_SERVICE_ROLE_KEY`; no-ops without it.
 
 ## Data Model
 
@@ -247,4 +249,4 @@ Realtime publication includes `items`, `lists`, and `list_members`. `items` uses
 
 - **`@/...` imports** resolve to `src/...` (Next.js default).
 - **Tailwind v4** — uses `@tailwindcss/postcss`; no `tailwind.config.js`.
-- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0027_`.
+- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0028_`.

@@ -144,6 +144,20 @@ function ensureUnloadFlush() {
 }
 
 // ---------------------------------------------------------------------------
+// Durable server sink (durable log persistence, migration 0027).
+//
+// Injected at runtime from instrumentation.ts — we deliberately DO NOT import
+// the sink module here, because it pulls in @supabase/supabase-js + the
+// `server-only` guard, which would either bloat or break the client bundle.
+// Default null means client/test paths are unaffected.
+// ---------------------------------------------------------------------------
+let serverSink: ((rec: LogRecord) => void) | null = null
+
+export function registerServerSink(fn: (rec: LogRecord) => void) {
+  serverSink = fn
+}
+
+// ---------------------------------------------------------------------------
 // Core emit
 // ---------------------------------------------------------------------------
 function writeConsole(level: LogLevel, rec: LogRecord) {
@@ -164,6 +178,10 @@ function emit(level: LogLevel, event: string, detail?: LogDetail) {
     }
 
     if (env.isServer) {
+      // Durable capture for ALL levels — DB volume is cheap and pruned, and the
+      // extra context is useful. Not subject to the prod info/fallback console
+      // suppression below. The sink never throws (it swallows internally).
+      serverSink?.(rec)
       if (env.isProd && PRIORITY[level] < WARN) return
       writeConsole(level, rec)
       return
@@ -201,6 +219,7 @@ export const __test = {
   reset() {
     queue = []
     lastSent.clear()
+    serverSink = null
     if (flushTimer) {
       clearTimeout(flushTimer)
       flushTimer = null

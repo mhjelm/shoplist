@@ -1,114 +1,197 @@
-# Speech-to-task: voice-add multiple tasks at once
+# Plan: Durable log persistence (beyond Vercel's ~1h)
 
-_Planned 2026-06-08. Status: **implemented — ready to commit** (2026-06-08). Manual smoke (step 7, device) still pending._
+_Planned 2026-06-08. Status: **executed 2026-06-08** — code shipped; pending the manual migration apply, `pg_cron` enable, and `SUPABASE_SERVICE_ROLE_KEY` env step. Archived in `docs/PLAN-ARCHIVE.md`._
 
 ## Context
 
-Task lists (`lists.kind === 'task'`) currently support adding **one task at a time** via a single-line
-text input in `TaskList.tsx`. The user wants to **speak several tasks at once** and have Gemini segment
-the spoken audio into discrete tasks — solving the "what's a task vs. filler, and where does the next
-one start" problem, which the LLM handles well.
+We recently added structured logging (`src/lib/log.ts`, `docs/logging.md`). On the
+Vercel **Hobby** plan, logs only survive in Vercel Runtime Logs for ~1 hour. If an
+issue happens on the phone and isn't noticed within the hour, the evidence is gone.
 
-The grocery side already has a complete, production-tested **speech-to-list** pipeline
-(`SpeechModal.tsx` → `extractItemsFromAudio` → `callGeminiWithAudio` on `gemini-3.5-flash`). This plan
-**reuses that spine** and only swaps the prompt + output shape.
+A key constraint clarified during planning: **the app cannot fetch its own logs back
+out of Vercel** on Hobby — Log Drains / the logs API are Pro-only and push-based. So
+the only reliable approach is to **capture each log durably at the moment it's
+emitted**, into storage we control.
 
-**Scope decisions (confirmed with user 2026-06-08):**
-- Speech-to-task **only** (no push notifications — that remains a PRD non-goal).
-- **Task names only** — do NOT parse assignee or due date from speech. User sets those manually
-  afterward via the existing `TaskEditModal`.
-- Spoken input is **Swedish**; pin the prompt to Swedish (see §1). Android is the target.
+Decisions from planning:
+- **Capture both tiers.** Server-side failures matter as much as client-side, so we
+  hook *both* the server `emit()` path in `log.ts` **and** the client-batch endpoint
+  `/api/log`. (Hooking only `/api/log` would miss all server logs.)
+- **No admin mode / no in-app viewer.** Logs live in a Supabase table; the logs are
+  read directly via the Supabase dashboard / SQL editor under the owner's account
+  (which bypasses RLS). This drops the entire admin-UI / `app_admins` / `is_admin()`
+  idea that was originally considered.
+- **Storage = Supabase table**, with an automated retention prune to bound size.
 
-## Implementation
+Intended outcome: every `log.error/warn/info/fallback` (client *and* server) lands in
+a durable `app_logs` table, queryable later from the Supabase dashboard, with old
+rows auto-pruned.
 
-### 1. New server action: `extractTasksFromAudio`
+## Approach
 
-File: `src/app/lists/[id]/actions/import.ts` (add alongside `extractItemsFromAudio`).
+Add a single locked-down `app_logs` table written by a **service-role** Supabase
+client (so writes work from any server context — authed, unauthenticated, or
+background — and bypass RLS). Register a server sink into `log.ts` via Next's
+`instrumentation.ts`, and also persist the client batch inside `/api/log`. Read logs
+via the Supabase dashboard. Prune with `pg_cron`.
 
-- Signature: `extractTasksFromAudio(audioBase64: string, mimeType: string)` → `{ tasks: string[] }` or
-  `{ error: string }`. Guard on empty audio + missing `GEMINI_API_KEY` (mirror `extractItemsFromAudio`).
-- Call `callGeminiWithAudio(prompt, audioBase64, mimeType, { temperature: 0 })` — reuses the
-  `AUDIO_MODELS` chain (`gemini-3.5-flash` primary; the only model confirmed to handle inline audio).
-- On error: `log.error('extract.tasks_audio_failed', { error })`, return `{ error }`. Add the key to
-  `docs/logging.md`'s catalogue (extend the existing `extract.*` row).
-- **Prompt:** audio is a person speaking **Swedish**, listing to-do tasks/chores, possibly rambling
-  with filler, connectors, self-corrections. Rules: extract distinct **actionable** tasks; one short
-  phrase each; ignore filler ("öh", "och sen", "jag måste också", "vänta"); fold a clarification into
-  its task; on a self-correction keep the corrected version; never invent tasks; **transcribe and
-  return each task in Swedish** (don't translate); concise (≈ max 8 words). Return JSON only
-  `{"tasks": ["..."]}`. Include one Swedish example → `{"tasks":["Ring rörmokaren","Vattna
-  blommorna","Hämta tvätten"]}`. (Swedish pin removes occasional English translation + stabilizes
-  short utterances/loanwords; matches the grocery prompt convention.)
-- **`normalizeTaskNames(parsed: { tasks?: unknown })`** helper (parallel to `normalizeExtractedItems`):
-  keep strings only, trim, drop empties, cap length (~200), case-insensitive dedupe, cap count (~50).
+Why service-role rather than the existing cookie/anon client: the cookie client
+(`server.ts`) requires a request scope (`cookies()`) and only authenticates the
+current user — it would miss pre-login/background server logs and add RLS friction.
+The service-role client has none of those issues and the table is read out-of-band via
+the dashboard anyway. Trade-off: one new server-only secret
+(`SUPABASE_SERVICE_ROLE_KEY`), never exposed to the client bundle.
 
-### 2. Shared recording hook: `useAudioRecorder`
+## Sizing & retention (the size-limit concern)
 
-File: `src/app/lists/[id]/useAudioRecorder.ts` (new). Extract the capture mechanics from
-`SpeechModal.tsx` (`abortedRef` guard, `releaseMic`, `onstop` handler, 30 s auto-stop, codec-suffix
-strip, `blobToBase64`) so the subtle lifecycle isn't duplicated.
-- Input: `{ maxSeconds, onResult(base64, mimeType), onError(msg) }`. Returns `{ elapsed, stop, restart }`;
-  starts on mount, releases mic on unmount.
-- **Risk control:** use the hook in the new `TaskSpeechModal` only for now; leave `SpeechModal`
-  untouched (zero grocery regression). Note in `REFACTOR.md` that `SpeechModal` should later adopt it.
+- Supabase free tier = **500 MB** Postgres storage. A log row (~timestamps, short
+  `lvl`/`ev`/`side` strings, small `jsonb` detail clamped to ≤20 keys / ≤300 chars
+  each by the existing `sanitizeDetail`) is on the order of **0.5–1 KB** including
+  index overhead — so ~500k+ rows of headroom. A family app realistically emits
+  tens–low-hundreds of rows/day (client errors/warns are already throttled 10s/key).
+  Months of runway even with no pruning, but we prune anyway as good hygiene.
+- **Automated prune via `pg_cron`** (available on Supabase): a daily job deletes rows
+  older than **30 days** (tunable). This is fully DB-side — no Vercel cron, route, or
+  extra secret. Enabling the `pg_cron` extension is a one-time dashboard toggle
+  (Database → Extensions), noted as a manual prerequisite alongside the migration.
 
-### 3. New component: `TaskSpeechModal`
+## Changes
 
-File: `src/app/lists/[id]/TaskSpeechModal.tsx` (new) — adapt `SpeechModal.tsx`, simplified.
-- Props `{ listId, onClose }` (no `items`/merge). `Parsed = { name; selected }` (no qty/measurement/cat).
-- Uses `useAudioRecorder`; on result calls `extractTasksFromAudio`; results stage = checkbox list of
-  task names.
-- `handleAdd`: loop selected → `await muAddItem(buildLocalItem(listId, name), { skipCategorize: true })`
-  (matches `TaskList.tsx:56` exactly; no update/merge branch).
-- Copy in English to match TaskList chrome ("Add tasks", "Speak to add tasks…", "Add N", "Cancel").
+### 1. Migration `supabase/migrations/0027_app_logs.sql`
+- `create table public.app_logs`:
+  - `id bigint generated always as identity primary key`
+  - `created_at timestamptz not null default now()` — server insert time
+  - `event_t timestamptz` — the event's own `rec.t`
+  - `user_id uuid references auth.users(id) on delete set null` — best-effort, null when unknown
+  - `lvl text not null`, `ev text not null`, `side text not null` (`'server' | 'client'`)
+  - `detail jsonb` — the sanitized extra fields (everything beyond `t/lvl/ev/side`)
+- `create index app_logs_created_at_idx on public.app_logs (created_at desc);`
+  (drives both the prune `delete` and dashboard "latest first" queries)
+- `create index app_logs_ev_idx on public.app_logs (ev);` (filter by event key)
+- `alter table public.app_logs enable row level security;` with **no policies** —
+  this locks the table to the service role + dashboard only. Normal authed users can
+  neither read nor write it directly (they don't need to; writes go through the
+  service-role sink).
+- `pg_cron` schedule (after enabling the extension):
+  `select cron.schedule('prune_app_logs','0 3 * * *',
+   $$delete from public.app_logs where created_at < now() - interval '30 days'$$);`
+- Follows the existing migration conventions (comment header explaining the why;
+  next number is `0027` per CLAUDE.md).
 
-### 4. Wire into `TaskList.tsx`
+### 2. `src/lib/supabase/admin.ts` (new, server-only)
+- `import 'server-only'` at the top so it can never land in a client bundle.
+- Export `createAdminClient()` using `createClient` from **`@supabase/supabase-js`**
+  (not `@supabase/ssr`) with `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`,
+  `auth: { persistSession: false }`. Lazily instantiate a module-level singleton.
 
-- `const { isOffline } = useSyncState()` (from `@/lib/sync/engine`).
-- `speechSupported` via `useSyncExternalStore` (copy `useSpeechSupported` pattern from `AddItemForm.tsx`).
-- Mic button beside "Add" in the form row, gated by `speechSupported && !isOffline` (reuse mic SVG +
-  styling from `AddItemForm.tsx`, indigo accent to match task UI).
-- `const [showSpeech, setShowSpeech] = useState(false)`; render
-  `{showSpeech && <TaskSpeechModal listId={listId} onClose={() => setShowSpeech(false)} />}`.
+### 3. `src/lib/serverLogSink.ts` (new, server-only)
+- `import 'server-only'`.
+- Export `persistServerLog(rec)` and `persistClientLogs(events, userId)`:
+  - Map a log record `{ t, lvl, ev, side, ...rest }` →
+    row `{ event_t: t, lvl, ev, side, user_id, detail: rest }`.
+  - Insert via `createAdminClient()`.
+  - **Never throw, never call `log.*`** (would loop) — wrap in `try/catch {}` and at
+    most a single raw `console.error` on failure.
+- If `SUPABASE_SERVICE_ROLE_KEY` is missing, no-op silently (graceful degradation, same
+  spirit as the rest of the app).
 
-## Critical files
+### 4. `src/lib/log.ts` (modify — minimal, keeps it client-safe)
+- Add a module-level `let serverSink: ((rec: LogRecord) => void) | null = null` and
+  `export function registerServerSink(fn)`. **Do not import the sink here** — that
+  would pull `@supabase/supabase-js` / `server-only` into the client bundle. The sink
+  is injected at runtime (step 5).
+- In `emit()`'s server branch (`src/lib/log.ts:166`), after building `rec`, call
+  `serverSink?.(rec)` for **all** levels (so durable capture isn't subject to the prod
+  `info/fallback` console suppression — DB volume is cheap and pruned, and the extra
+  context is useful). Keep the existing `writeConsole` + prod-suppression behavior for
+  Vercel exactly as-is.
 
-- `src/app/lists/[id]/actions/import.ts` — `extractTasksFromAudio` + `normalizeTaskNames`
-- `src/app/lists/[id]/useAudioRecorder.ts` — new hook
-- `src/app/lists/[id]/TaskSpeechModal.tsx` — new modal
-- `src/app/lists/[id]/TaskList.tsx` — mic button + modal wiring
-- `docs/logging.md` — register `extract.tasks_audio_failed`; `REFACTOR.md` — SpeechModal→hook note
-- Reference (unchanged): `SpeechModal.tsx`, `src/lib/gemini.ts`, `src/lib/sync/mutations.ts`,
-  `src/app/lists/[id]/itemHelpers.ts`
+### 5. `src/instrumentation.ts` (new)
+- `export async function register()` — runs once per server runtime on startup.
+- Guard to the **Node.js runtime** (`process.env.NEXT_RUNTIME === 'nodejs'`), then
+  dynamically `import('./lib/log')` and `import('./lib/serverLogSink')` and call
+  `registerServerSink(persistServerLog)`.
+  - Use `next/server`'s `after()` inside the sink wrapper where a request scope exists
+    so the insert runs post-response without adding latency; fall back to
+    fire-and-forget otherwise. (Edge-runtime logs from `proxy.ts`, if any, won't
+    persist to DB — they still hit the console; acceptable, noted in docs.)
 
-## Tests
+### 6. `src/app/api/log/route.ts` (modify)
+- Keep the existing console re-emit (so live Vercel tailing still works).
+- After re-emitting, resolve the current user (`createClient()` → `getUser()`),
+  then `await persistClientLogs(events, user?.id ?? null)` inside `try/catch`.
+  Await (rather than fire-and-forget) so the insert completes before the serverless
+  function returns its 204 — but never let a failure change the 204 response.
 
-- Unit-test `normalizeTaskNames` (pure): trims, drops empties, dedupes case-insensitively, caps count.
-- Light `TaskSpeechModal` component test: `vi.mock` the action → `{ tasks: [...] }`, drive to results,
-  assert `muAddItem` called once per selected task with `skipCategorize`. (Recording path uses browser
-  APIs absent in jsdom — same limitation as `SpeechModal`; don't test capture.)
+### 7. Env / config — **manual step by the user**
+- **Claude cannot do this part** — the service-role key is a secret only the user can
+  retrieve. During execution Claude will **pause and ask the user** to add it; the sink
+  no-ops (and verification can't run) until it's present.
+- Get the **secret key** from Supabase dashboard → Project Settings → API keys
+  (`sb_secret_…`, the privileged counterpart to the `sb_publishable_…` anon key), and
+  add to `.env.local` (local) **and** Vercel project env (all environments):
+  `SUPABASE_SERVICE_ROLE_KEY=sb_secret_…`
+- Document it in CLAUDE.md's "Required env vars" with a note that it is **server-only**
+  and must never be `NEXT_PUBLIC_`.
+- No `next.config.ts` change needed (`instrumentation.ts` is stable in Next 16).
+
+### 8. `tools/query-logs.mjs` (new) — read logs from the CLI
+- A tiny Node script (built-in `fetch`, no deps) that reads
+  `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from `.env.local` and hits
+  the PostgREST endpoint
+  `GET /rest/v1/app_logs?select=*&order=created_at.desc&limit=N`
+  with `apikey` + `Authorization: Bearer` headers (service key bypasses RLS).
+- Optional filters via args (e.g. `--lvl error`, `--ev reconcile.%`, `--limit 200`).
+- **Effect:** once step 7 is done, Claude can read the durable logs directly from this
+  CLI (`node tools/query-logs.mjs …`) — no Supabase CLI/`psql` install, no dashboard
+  round-trip needed. (Reading via the Supabase dashboard SQL editor still works too.)
+
+### 9. Docs / housekeeping
+- `docs/logging.md`: replace the "durable next step (deferred)" section with the
+  shipped design — table shape, service-role sink, both-tier capture, dashboard as the
+  read path, 30-day `pg_cron` retention, and the edge-runtime caveat.
+- `CLAUDE.md`:
+  - Add `0027_app_logs.sql` (+ "enable `pg_cron` extension" one-time step) to **Pending
+    manual tasks**.
+  - Note `SUPABASE_SERVICE_ROLE_KEY` under Required env vars.
+  - Bump "Next migration number is `0028_`".
+  - Update the logging "On Hobby, retention is ~1 h" line to reflect durable capture.
+
+## How to read the logs (no app UI)
+Two ways, both using the owner's privileged access (no in-app viewer):
+
+1. **From this CLI** — once the service key is in `.env.local` (step 7), run the
+   `tools/query-logs.mjs` helper (step 8); it reads `app_logs` via PostgREST. This is
+   how Claude reads the durable logs directly during/after a debugging session.
+2. **Supabase dashboard → SQL editor**, e.g.:
+   ```sql
+   select created_at, side, lvl, ev, user_id, detail
+   from app_logs
+   order by created_at desc
+   limit 200;
+   ```
+(Filter by `lvl='error'`, `ev like 'reconcile.%'`, a time window, or a `user_id`.)
 
 ## Verification
+1. `npm run build` — **required**: confirms the `server-only` boundary holds and no
+   server module leaked into the client bundle (lint/tsc/tests won't catch this — per
+   project memory, only `next build` does).
+2. Local: set `SUPABASE_SERVICE_ROLE_KEY`, `npm run dev`.
+   - Trigger a **server** log (e.g. force a Gemini failure path / a server action
+     error) → confirm a `side='server'` row appears in `app_logs`.
+   - Trigger a **client** log (e.g. simulate an IndexedDB/sync failure, or temporarily
+     call `log.warn('test.manual')` in a client component) → confirm a `side='client'`
+     row arrives via `/api/log`, with `detail` populated and `user_id` set.
+3. Confirm logging-never-throws still holds: with `SUPABASE_SERVICE_ROLE_KEY` unset,
+   the app behaves exactly as today (sink no-ops, console output unchanged).
+4. `npm test` — existing `log.ts` tests still pass (the `__test` hooks and client
+   transport are untouched; `registerServerSink` defaults to null so client/test paths
+   are unaffected).
+5. Verify the `pg_cron` job is registered (`select * from cron.job;`) after enabling
+   the extension.
 
-1. `npm run lint`
-2. `npm test`
-3. `npm run build` — **required**: only `next build` catches `'use server'` violations.
-4. Manual (needs `GEMINI_API_KEY`): `npm run dev`, open a **task** list, tap mic, speak several Swedish
-   tasks with filler, confirm discrete tasks parsed + added. Spot-check on installed Android PWA.
-
-## Out of scope (later)
-
-- Parsing assignee / due date from speech.
-- Typed multi-task add in the TaskList input.
-- Migrating `SpeechModal` onto `useAudioRecorder`.
-
-## Progress
-
-- [x] Step 0: bookkeeping (PLAN.md + CLAUDE.md active entry + archive observability) — _done 2026-06-08_
-- [x] 1. `extractTasksFromAudio` + `normalizeTaskNames` (in `src/lib/taskExtract.ts`, imported by `import.ts`; barrel re-exports the action)
-- [x] 2. `useAudioRecorder` hook
-- [x] 3. `TaskSpeechModal`
-- [x] 4. Wire mic button into `TaskList.tsx`
-- [x] 5. Docs: `docs/logging.md` event key + `REFACTOR.md` note
-- [x] 6. Tests (5 `normalizeTaskNames` unit + 4 `TaskSpeechModal` component)
-- [x] 7. lint clean + 525 tests pass (+9) + `npm run build` clean; **manual device smoke still pending**
+## Out of scope (explicitly dropped)
+- In-app admin mode / log viewer, `app_admins` table, `is_admin()` RLS helper — reading
+  is done via the Supabase dashboard.
+- Capturing edge-runtime (`proxy.ts`) logs to the DB — they remain console-only.
+- Third-party observability (Sentry / Log Drains) — Supabase table is sufficient.
