@@ -1,7 +1,26 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { localDB } from '@/lib/db/local'
 import type { LocalItem, LocalListCatalog } from '@/lib/db/types'
 import { log } from '@/lib/log'
+
+// Re-assert a FRESH access token on the realtime socket. getSession() refreshes
+// an expired token (GoTrue), and setAuth() rewrites EVERY channel's rejoin
+// payload — so the next auto-rejoin uses current credentials instead of the
+// stale token captured at subscribe time. Called both at subscribe time and on
+// CHANNEL_ERROR: after a device sleeps past the ~1h JWT lifetime, the socket
+// reconnects (on network `online`) and rejoins with the expired token before
+// GoTrue's visibility-gated refresh fires, producing a transient
+// `realtime.subscribe_error`. Refreshing here closes that window. Never throws
+// (offline → the channel keeps retrying on its own backoff).
+export async function applyRealtimeAuth(supabase: SupabaseClient): Promise<void> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) supabase.realtime.setAuth(session.access_token)
+  } catch {
+    // transient (offline / refresh failure) — recovery happens on a later rejoin
+  }
+}
 
 export function subscribeToList(
   listId: string,
@@ -13,11 +32,8 @@ export function subscribeToList(
   let everSubscribed = false
 
   ;(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
+    await applyRealtimeAuth(supabase)
     if (cancelled) return
-    if (session?.access_token) {
-      supabase.realtime.setAuth(session.access_token)
-    }
 
     channel = supabase
       .channel(`list-${listId}`)
@@ -33,7 +49,12 @@ export function subscribeToList(
         },
       )
       .subscribe((status, err) => {
-        if (err) log.warn('realtime.subscribe_error', { scope: 'list', status, error: String(err?.message ?? err) })
+        if (err) {
+          log.warn('realtime.subscribe_error', { scope: 'list', status, error: String(err?.message ?? err) })
+          // Likely a stale/expired token after reconnect — refresh it so the
+          // channel's next auto-rejoin uses fresh credentials.
+          void applyRealtimeAuth(supabase)
+        }
         if (status === 'SUBSCRIBED') {
           if (everSubscribed) {
             onReconnect()
@@ -63,11 +84,8 @@ export function subscribeToListsOverview(
   let cancelled = false
 
   ;(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
+    await applyRealtimeAuth(supabase)
     if (cancelled) return
-    if (session?.access_token) {
-      supabase.realtime.setAuth(session.access_token)
-    }
 
     channel = supabase
       .channel(`lists-overview-${userId}`)
@@ -144,7 +162,12 @@ export function subscribeToListsOverview(
         },
       )
       .subscribe((status, err) => {
-        if (err) log.warn('realtime.subscribe_error', { scope: 'lists-overview', status, error: String(err?.message ?? err) })
+        if (err) {
+          log.warn('realtime.subscribe_error', { scope: 'lists-overview', status, error: String(err?.message ?? err) })
+          // Likely a stale/expired token after reconnect — refresh it so the
+          // channel's next auto-rejoin uses fresh credentials.
+          void applyRealtimeAuth(supabase)
+        }
         if (status === 'SUBSCRIBED') {
           onReconcile()
         }
