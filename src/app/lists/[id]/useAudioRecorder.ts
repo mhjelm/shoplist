@@ -20,6 +20,12 @@ interface Recorder {
   restart: () => void
 }
 
+// Recordings shorter than this almost never contain a real spoken item — a
+// stray tap of "Done" right after opening the mic. We drop them client-side
+// rather than send ~1 s of ambient noise to Gemini, which confabulates a
+// plausible-looking list from it ("gurka, mjölk två liter, …") at temperature 0.
+const MIN_RECORDING_MS = 1500
+
 // Strip the "data:<mime>;base64," prefix that FileReader produces.
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -49,6 +55,8 @@ export function useAudioRecorder({ maxSeconds, onResult, onError }: Options): Re
   const streamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Wall-clock start of the current recording, for the min-duration guard.
+  const startedAtRef = useRef(0)
   // Guards the onstop handler: only deliver audio for an intentional stop, not
   // an abort triggered by unmounting.
   const abortedRef = useRef(false)
@@ -87,6 +95,12 @@ export function useAudioRecorder({ maxSeconds, onResult, onError }: Options): Re
     recorder.onstop = async () => {
       releaseMic()
       if (abortedRef.current) return
+      // Too-short clips are noise, not speech — Gemini hallucinates a list from
+      // them. Treat the same as "heard nothing" without the round-trip.
+      if (Date.now() - startedAtRef.current < MIN_RECORDING_MS) {
+        onErrorRef.current('Hörde inget. Försök igen.')
+        return
+      }
       const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
       if (blob.size === 0) {
         onErrorRef.current('Hörde inget. Försök igen.')
@@ -105,6 +119,7 @@ export function useAudioRecorder({ maxSeconds, onResult, onError }: Options): Re
     }
 
     recorder.start()
+    startedAtRef.current = Date.now()
     timerRef.current = setInterval(() => {
       setElapsed(s => {
         const next = s + 1

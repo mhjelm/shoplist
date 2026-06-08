@@ -115,6 +115,8 @@ function buildExtractionPrompt(source: string) {
 
 CRITICAL: Never invent or modify measurements. Copy exactly as stated, including fractions (½), approximations (ca), and Swedish decimal commas (1,5). When a number is a count of a named unit ("3 burkar tonfisk" → quantity 3, measurement "3 burkar"), include it in both. When a number is purely an amount ("500 g pasta" → quantity 1, measurement "500 g"). When uncertain, prefer quantity 1.
 
+CRITICAL: Only return items that are actually present in the input. If the input contains no clear items — e.g. silence, background noise, or unintelligible audio — return {"items": []}. Never guess, fill in, or invent a plausible shopping list when nothing was clearly stated. The example below is only a format guide; never copy its items into your answer.
+
 Example input:
 ${exampleInput}
 
@@ -192,7 +194,7 @@ Extract the distinct, actionable tasks. Rules:
 - Ignore filler and connectors ("öh", "och sen", "jag måste också", "vänta", "alltså").
 - Fold a clarification into the task it belongs to (don't split it into a separate task).
 - If the speaker corrects themselves, keep only the corrected version.
-- Never invent tasks that weren't spoken.
+- Never invent tasks that weren't spoken. If the audio is silence, background noise, or unintelligible, return {"tasks": []} — never guess a plausible task list. The example below is only a format guide; never copy its tasks into your answer.
 - Transcribe and return each task in SWEDISH. Do not translate to English.
 - Keep each task concise (max ~8 words).
 
