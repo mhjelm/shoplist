@@ -25,7 +25,7 @@ See `REFACTOR.md` — the single source of truth for architectural smells worth 
 
 ## Active plan
 
-_None active._ ESLint mutation-path rule (REFACTOR #3) was **executed 2026-06-08** (done; see `REFACTOR.md` Completed). Durable log persistence was executed 2026-06-08 (now fully live).
+_None active._ SpeechModal `useAudioRecorder` dedup was **executed 2026-06-08** (done; see `REFACTOR.md` Completed). ESLint mutation-path rule (REFACTOR #3) executed 2026-06-08. Durable log persistence executed 2026-06-08 (now fully live).
 
   Completed-plan history → **`docs/PLAN-ARCHIVE.md`** (durable log persistence 2026-06-08; speech-to-task 2026-06-08; observability/logging plan archived there 2026-06-08; task-lists 2026-06-07).
 

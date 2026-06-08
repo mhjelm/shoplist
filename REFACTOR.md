@@ -22,15 +22,9 @@ A refactor is not "verified" or "behaviour-neutral" until **all** of these pass:
 
 ## Up next
 
-**→ SpeechModal: adopt the `useAudioRecorder` hook.** Small; deletes a duplicated copy of subtle audio ref-guard logic.
+**→ 4. Decouple `src/lib/sync/engine.ts` from `actions.ts`.** Kill the dynamic-import circular-dep workaround via a `dispatchers` map.
 
 ## Pending
-
-### SpeechModal: adopt the `useAudioRecorder` hook
-- **Smell**: the audio-capture lifecycle (getUserMedia, MediaRecorder, max-duration auto-stop, the abort-vs-intentional-stop guard, codec-suffix strip, `blobToBase64`) now exists twice — inline in `SpeechModal.tsx` and extracted into `src/app/lists/[id]/useAudioRecorder.ts` (used by `TaskSpeechModal.tsx`). Two copies of subtle ref-guard logic invite drift.
-- **Scope**: migrate `SpeechModal.tsx` to consume `useAudioRecorder`, deleting its inline copy. Deferred from the speech-to-task change deliberately to avoid re-testing the working grocery voice flow in the same PR.
-- **Verify**: manual smoke of grocery voice add (record → results → add) after the swap, plus the standard lint/test/build.
-- **Status**: pending.
 
 ### 4. Decouple `src/lib/sync/engine.ts` from `actions.ts`
 - **Smell**: `engine.ts` uses dynamic `import('@/app/lists/[id]/actions')` and `import('./reconcile')` to escape a circular dep. Indicates a tangled dep graph; the sync layer shouldn't know route paths.
@@ -63,6 +57,13 @@ A refactor is not "verified" or "behaviour-neutral" until **all** of these pass:
 - **Status**: deferred.
 
 ## Completed
+
+### SpeechModal: adopt the `useAudioRecorder` hook — done 2026-06-08
+- **Smell**: the audio-capture lifecycle (getUserMedia, MediaRecorder, max-duration auto-stop, abort-vs-intentional-stop guard, codec-suffix strip, `blobToBase64`) existed twice — inline in `SpeechModal.tsx` and extracted into `useAudioRecorder.ts` (used by `TaskSpeechModal.tsx`).
+- **Resolution**: `SpeechModal.tsx` now consumes `useAudioRecorder`, deleting ~110 lines of inline capture plumbing (the five refs, `releaseMic`/`startRecording`/`stopRecording`/`handleClose`, the mount/unmount effect, local `elapsed` state, and the duplicate `blobToBase64`). The grocery-specific bits (quantity/measurement/category `Parsed` shape, `handleAdd` name-merge) stay in the component. Close affordances now call `onClose` directly and rely on the hook's unmount cleanup for mic release — same pattern `TaskSpeechModal` already shipped.
+- **Behaviour note**: mic release moved from synchronous (`handleClose`) to the hook's unmount cleanup. Functionally identical (unmount-on-close is synchronous); matches the proven `TaskSpeechModal` flow.
+- **Tests**: added `tests/components/SpeechModal.test.tsx` (6 cases, mirrors the `TaskSpeechModal` mock pattern) — recording stage, add-selected via `muAddItem`, the **merge-into-existing** path via `muUpdateItem`, extraction error, empty result, and a recorder (mic-denied) error. Net suite 528 → 534.
+- **Verified**: lint clean; 534/534 tests pass; `npm run build` succeeds. Manual browser smoke of the grocery voice flow still recommended (real `getUserMedia` is untestable in jsdom).
 
 ### 3. ESLint rule: enforce the mutation-path rule — done 2026-06-08
 - **Smell**: nothing mechanically prevented a component from calling `addItem` / `updateItem` / etc. directly, bypassing the outbox.

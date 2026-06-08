@@ -1,146 +1,120 @@
-# PLAN — ESLint rule: enforce the mutation-path rule (REFACTOR #3)
+# PLAN — SpeechModal: adopt the `useAudioRecorder` hook (REFACTOR: dedup)
 
 **Created:** 2026-06-08
 **Status:** awaiting go-ahead (not started)
-**Source:** `REFACTOR.md` → "Up next: 3. ESLint rule: enforce the mutation-path rule"
+**Source:** `REFACTOR.md` → "Up next: SpeechModal: adopt the `useAudioRecorder` hook"
 
 ## Goal
 
-Mechanically prevent a component from importing the raw item-mutation server
-actions (`addItem`, `updateItem`, `toggleItem`, `reorderItem`, `deleteItem`,
-`mergeItems`, `setItemCategory`) and bypassing the outbox. Today the invariant
-holds only by convention + code review; nothing stops a future edit from calling
-`addItem()` directly instead of `muAddItem()`.
+Delete the inline audio-capture lifecycle in `SpeechModal.tsx` (grocery voice
+add) and have it consume `src/app/lists/[id]/useAudioRecorder.ts` — the hook
+already extracted and in production use by `TaskSpeechModal.tsx`. Removes a
+second copy of subtle ref-guard logic (getUserMedia, MediaRecorder,
+max-duration auto-stop, abort-vs-intentional-stop guard, codec-suffix strip,
+`blobToBase64`) so the two can't drift.
 
-This locks the **current** invariant. It is not meant to impose a stricter
-policy than what ships today — so bulk clears and the documented direct-call
-exceptions stay allowed.
+Pure dedup. No user-facing behaviour or string changes intended.
 
-## What the codebase actually looks like (verified 2026-06-08)
+## What's duplicated today (verified 2026-06-08)
 
-- The item-mutation actions live in `src/app/lists/[id]/actions/items.ts` and are
-  re-exported through the barrel `src/app/lists/[id]/actions/index.ts`.
-- **The only consumer of the raw mutations is the dispatcher**,
-  `src/lib/sync/engine.ts:119`, via a **dynamic** `await import('@/app/lists/[id]/actions')`.
-- **No static import** of the 7 dangerous names exists anywhere in `src/`
-  (confirmed by grep). The outbox `mu*` helpers in `src/lib/sync/mutations.ts`
-  are what components use; the engine drains the outbox by calling the real
-  actions.
-- Direct imports that are **legitimate and must keep working**:
-  - `ItemList.tsx` → `clearShoppedItems` (bulk clear, line 207), `touchListView`
-  - `useAddItems.ts` → `deleteHistoryItem`, `extractAddItems`
-  - `useItemSelection.ts` → `copyItemsToList`, `moveItemsToList`, `shareItemsToList` (cross-list, intentionally direct)
-  - `RecipeImportModal.tsx` / `share` → `addItems` (batch), `extractRecipeItems`, `extractListItemsFromImage`
-  - `PictureInput.tsx` → `suggestItemName`, `uploadImage`
-  - `engine.ts` → `categorizeItem` (background fallback)
+`SpeechModal.tsx` lines 28–157 reimplement, nearly verbatim, what the hook
+already does:
+- `blobToBase64` (identical to the hook's copy, lines 28–39)
+- refs: `recorderRef`, `streamRef`, `chunksRef`, `timerRef`, `abortedRef`
+- `releaseMic`, `startRecording` (mic acquire → MediaRecorder → onstop blob
+  handling → base64 → bare-MIME), `stopRecording`
+- local `elapsed` state + the 1 s interval with max-duration auto-stop
+- the mount-start / unmount-release `useEffect`
 
-## Design decisions
+The hook (`useAudioRecorder`) owns all of this and exposes
+`{ elapsed, stop, restart }`, taking `{ maxSeconds, onResult, onError }`.
+`TaskSpeechModal.tsx` (lines 29–61) is the reference consumer.
 
-1. **Block by import *name*, not by path.** Components import the barrel
-   (`./actions`), not `./actions/items`, so a path-only restriction would miss
-   them. The 7 dangerous names are **unique to the item-actions module** across
-   the whole repo, so name-filtering is precise even with a broad path glob.
+## Migration — `SpeechModal.tsx` only
 
-2. **Blocked set (exactly these 7):**
-   `addItem`, `updateItem`, `toggleItem`, `reorderItem`, `deleteItem`,
-   `mergeItems`, `setItemCategory`.
+Mirror `TaskSpeechModal`'s shape exactly.
 
-3. **Deliberately NOT blocked** (current direct-call reality / documented
-   exceptions): `addItems` (batch), `clearShoppedItems`, `clearAllItems`,
-   `categorizeItem`, `deleteHistoryItem`, `copyItemsToList`, `moveItemsToList`,
-   `shareItemsToList`, `touchListView`, `suggestItemName`, `uploadImage`,
-   `extract*`.
+### Remove
+- `blobToBase64` helper (lines 28–39).
+- All five refs, `releaseMic`, `startRecording`, `stopRecording`, `handleClose`,
+  the mount/unmount `useEffect` (lines 147–157), and the local `elapsed` /
+  `setElapsed` state. The `react-hooks/set-state-in-effect` eslint-disable goes
+  away with the effect.
 
-4. **Allowlist the dispatcher.** `src/lib/sync/engine.ts` is the one place
-   allowed to pull the raw mutations. It currently uses dynamic `import()`,
-   which the base `no-restricted-imports` rule does **not** inspect — but we add
-   an explicit per-file override anyway so the intent is documented and the rule
-   stays correct if the engine is ever switched to a static import.
+### Add
+- `import { useAudioRecorder } from './useAudioRecorder'`.
+- `handleResult = useCallback(async (base64, mimeType) => { ... })` — the body of
+  the current `onstop` handler **from `setStage('processing')` onward** (the blob
+  build / size-0 check / abort / releaseMic all move into the hook). i.e.:
+  `setStage('processing')` → `extractItemsFromAudio(base64, mimeType)` → error /
+  empty / `setParsed(...selected:true)` → `setStage('results')`. Deps `[]`
+  (matches TaskSpeechModal — setState + action import are stable).
+- `handleRecordError = useCallback((message) => { setError(message); setStage('error') }, [])`.
+  The hook already emits the same Swedish strings the inline code used
+  (`'Mikrofonåtkomst nekades…'`, `'Hörde inget. Försök igen.'`), so messages are
+  unchanged.
+- `const { elapsed, stop, restart } = useAudioRecorder({ maxSeconds: MAX_SECONDS, onResult: handleResult, onError: handleRecordError })`.
+- `handleRetry = () => { setError(null); setStage('recording'); restart() }`
+  (`restart` resets `elapsed` inside the hook).
 
-5. **Scope = whole `src/` tree, not "client components only."** ESLint globs
-   can't see the `'use client'` directive, and the only legitimate consumer is
-   the dispatcher regardless of client/server. So: restrict everywhere,
-   allowlist `engine.ts`. This is simpler and strictly more correct than trying
-   to glob-match client files.
+### Rewire the JSX
+- Backdrop `onClick`, header `×`, results "Avbryt", error "Avbryt", and the
+  Escape-key effect: `handleClose` → **`onClose`** (matches TaskSpeechModal —
+  closing unmounts the modal, and the hook's unmount cleanup releases the mic).
+  Escape effect dep `[handleClose]` → `[onClose]`.
+- "Klar" button `onClick={stopRecording}` → `onClick={stop}`.
+- Error "Försök igen" button inline handler → `onClick={handleRetry}`.
 
-## Implementation
+Everything else (the `Parsed` type with quantity/measurement/category, `handleAdd`
+with its `findExistingItem` name-merge, all markup/styles) stays untouched —
+that's the grocery-specific logic the hook deliberately doesn't own.
 
-Single file changed: `eslint.config.mjs` (flat config).
+## One behaviour note (equivalent, not a change)
 
-### Step 1 — add the restriction to the main rules block
+Today `handleClose` stops the recorder synchronously *before* `onClose()`. After
+the refactor, closing calls `onClose()` → the modal unmounts → the hook's
+unmount cleanup (`abortedRef = true`, `recorder.stop()`, `releaseMic`) runs.
+Unmount on close is synchronous, and this is exactly how `TaskSpeechModal` has
+worked in production — so mic-release timing is functionally identical. Calling
+this out so it's a conscious decision, not an accident.
 
-Add `no-restricted-imports` using `patterns` with `importNames`, matching the
-barrel (absolute + relative forms) and the underlying `items` module:
+## Tests
 
-```js
-"no-restricted-imports": ["error", {
-  patterns: [{
-    group: [
-      "@/app/lists/[id]/actions",
-      "@/app/lists/[id]/actions/items",
-      "**/lists/*/actions",       // matches the literal `[id]` segment via `*`
-      "**/lists/*/actions/items",
-      "./actions",                // ItemList/TaskList import the barrel relatively
-      "../actions",
-    ],
-    importNames: [
-      "addItem", "updateItem", "toggleItem", "reorderItem",
-      "deleteItem", "mergeItems", "setItemCategory",
-    ],
-    message:
-      "Item mutations must go through the outbox (mu* helpers in " +
-      "src/lib/sync/mutations.ts), not direct server actions. The dispatcher " +
-      "src/lib/sync/engine.ts is the only allowed caller. See the mutation-path " +
-      "rule in CLAUDE.md / REFACTOR.md.",
-  }],
-}],
-```
+`SpeechModal` currently has **no** dedicated test (only `TaskSpeechModal.test.tsx`
+exists). Once it consumes the hook, the same jsdom-friendly mock pattern applies
+(mock `useAudioRecorder` to capture `onResult`/`onError`, drive past the
+browser-only capture stage). **Add `tests/components/SpeechModal.test.tsx`**
+mirroring `TaskSpeechModal.test.tsx`:
+- starts in recording stage,
+- after `onResult` → results render the parsed items,
+- selecting + "Lägg till" calls `muAddItem` / `muUpdateItem` appropriately
+  (incl. the name-merge path via a pre-existing item — the one bit of logic
+  unique to the grocery modal worth locking).
 
-> NOTE (verify during execution): flat-config `no-restricted-imports`
-> `patterns[].importNames` glob matching against **relative** specifiers
-> (`./actions`) can be finicky. The decisive test is Step 3 — a deliberate
-> violating import must error. If relative-path globs don't match, fall back to
-> a broader `group: ["**"]` entry (names are unique, so no false positives) or
-> add an absolute-only `paths` entry alongside. Final glob form is settled by
-> the Step-3 test, not by assumption.
+This turns "manual smoke only" into automated coverage and is cheap given the
+existing template. (If the merge-path assertion proves fiddly, ship the two
+basic cases and keep the manual smoke for the merge.)
 
-### Step 2 — allowlist the dispatcher
+## Verification (REFACTOR.md checklist)
 
-Add a second flat-config object scoping the rule off for the engine:
-
-```js
-{
-  files: ["src/lib/sync/engine.ts"],
-  rules: { "no-restricted-imports": "off" },
-},
-```
-
-## Verification (all mandatory — per REFACTOR.md checklist)
-
-1. **`npm run lint`** → must be **clean** (0 errors). Proves no current code
-   violates the rule (the invariant already holds).
-2. **Negative test:** temporarily add `import { addItem } from './actions'` to a
-   component (e.g. `ItemList.tsx`) → `npm run lint` must **error** on it with our
-   message. Remove the temp import. This is the test that actually validates the
-   glob form.
-3. **Positive test:** confirm `clearShoppedItems` / `deleteHistoryItem` imports
-   still lint clean (not over-matched).
-4. **`npm run build`** → must pass (config-only change, but mandatory per the
-   checklist).
-5. `npm test` — should be unaffected (no runtime change); run it to be safe.
+1. `npm run lint` — clean.
+2. `npm test` — all pass, incl. the new SpeechModal test.
+3. `npm run build` — passes (mandatory).
+4. **Manual browser smoke** (the hook touches real `getUserMedia`, untestable in
+   jsdom): grocery voice add — open mic, speak items, "Klar" → results → "Lägg
+   till"; plus the retry path (deny mic / "Försök igen") and close-mid-recording
+   (confirm the mic indicator turns off, i.e. tracks released).
 
 ## Out of scope
-
-- Blocking direct `localDB.items` writes outside `mutations.ts` (a separate
-  possible guard; not part of REFACTOR #3).
-- Converting `clearShoppedItems` / bulk clears to the outbox (would change
-  behaviour; this plan only freezes the status quo).
-- Touching `engine.ts`'s dynamic-import pattern (that's REFACTOR #4).
+- Any change to `useAudioRecorder` itself or to `TaskSpeechModal`.
+- Touching `handleAdd` / grocery merge logic beyond what's needed to wire the hook.
 
 ## Done criteria
-
-- `eslint.config.mjs` carries the rule + engine allowlist.
-- All five verification steps pass.
-- `REFACTOR.md` item #3 marked `done — 2026-06-08`, moved to Completed; the
-  "Up next" pointer advanced to the next item.
+- `SpeechModal.tsx` consumes `useAudioRecorder`; inline copy deleted.
+- New `SpeechModal.test.tsx` added and passing.
+- All verification steps pass (incl. manual smoke).
+- Update the hook's doc comment (lines 42–44) — drop the "(SpeechModal itself
+  still has its own copy for now — see REFACTOR.md.)" caveat.
+- `REFACTOR.md`: mark the item `done — 2026-06-08`, move to Completed, advance
+  "Up next" to **#4 (decouple `engine.ts` from `actions.ts`)**.
 - Tell the user it's ready; do **not** commit/push without explicit go.

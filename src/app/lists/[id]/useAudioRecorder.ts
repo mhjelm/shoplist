@@ -39,9 +39,8 @@ function blobToBase64(blob: Blob): Promise<string> {
  * abort-vs-intentional-stop guard, codec-suffix stripping, and base64
  * conversion. Starts recording on mount and releases the mic on unmount.
  *
- * Extracted from SpeechModal so TaskSpeechModal can reuse the subtle parts
- * verbatim. (SpeechModal itself still has its own copy for now — see
- * REFACTOR.md.)
+ * Extracted from SpeechModal so both voice flows (SpeechModal for groceries,
+ * TaskSpeechModal for tasks) reuse the subtle parts verbatim.
  */
 export function useAudioRecorder({ maxSeconds, onResult, onError }: Options): Recorder {
   const [elapsed, setElapsed] = useState(0)

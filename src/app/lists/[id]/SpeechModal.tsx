@@ -1,9 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { extractItemsFromAudio } from './actions'
 import { muAddItem, muUpdateItem } from '@/lib/sync/mutations'
 import { findExistingItem, buildLocalItem } from './itemHelpers'
+import { useAudioRecorder } from './useAudioRecorder'
 import type { CategorySlug } from '@/lib/categories'
 import type { Item } from '@/lib/types'
 
@@ -25,142 +26,57 @@ type Parsed = {
 
 const MAX_SECONDS = 30
 
-// Strip the "data:<mime>;base64," prefix that FileReader produces.
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(reader.error ?? new Error('Could not read audio'))
-    reader.onload = () => {
-      const result = reader.result as string
-      resolve(result.slice(result.indexOf(',') + 1))
-    }
-    reader.readAsDataURL(blob)
-  })
-}
-
 export default function SpeechModal({ listId, items, onClose }: Props) {
   const [stage, setStage] = useState<Stage>('recording')
   const [error, setError] = useState<string | null>(null)
   const [parsed, setParsed] = useState<Parsed[]>([])
-  const [elapsed, setElapsed] = useState(0)
   const [adding, setAdding] = useState(false)
 
-  const recorderRef = useRef<MediaRecorder | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const chunksRef = useRef<Blob[]>([])
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  // Guards the onstop handler: only process audio for an intentional stop, not
-  // an abort triggered by closing the modal.
-  const abortedRef = useRef(false)
-
-  const releaseMic = useCallback(() => {
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    streamRef.current = null
-  }, [])
-
-  const handleClose = useCallback(() => {
-    abortedRef.current = true
-    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-      recorderRef.current.stop()
-    }
-    releaseMic()
-    onClose()
-  }, [releaseMic, onClose])
-
-  // Begins the async mic capture. Deliberately performs no synchronous setState
-  // before the first await: on mount the initial state already matches the
-  // recording stage, and the retry path resets state in its click handler.
-  const startRecording = useCallback(async () => {
-    abortedRef.current = false
-    chunksRef.current = []
-
-    let stream: MediaStream
+  const handleResult = useCallback(async (base64: string, mimeType: string) => {
+    setStage('processing')
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    } catch {
-      setError('Mikrofonåtkomst nekades. Tillåt mikrofonen och försök igen.')
-      setStage('error')
-      return
-    }
-    streamRef.current = stream
-
-    const recorder = new MediaRecorder(stream)
-    recorderRef.current = recorder
-    recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
-    recorder.onstop = async () => {
-      releaseMic()
-      if (abortedRef.current) return
-      const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
-      if (blob.size === 0) {
-        setError('Hörde inget. Försök igen.')
+      const result = await extractItemsFromAudio(base64, mimeType)
+      if (result.error) {
+        setError(result.error)
         setStage('error')
         return
       }
-      setStage('processing')
-      try {
-        const base64 = await blobToBase64(blob)
-        // Gemini accepts base audio MIME types (audio/webm, audio/mp4, …) but
-        // NOT the ";codecs=opus" suffix MediaRecorder appends — that returns a
-        // 500. Send the bare type.
-        const mimeType = blob.type.split(';')[0] || 'audio/webm'
-        const result = await extractItemsFromAudio(base64, mimeType)
-        if (result.error) {
-          setError(result.error)
-          setStage('error')
-          return
-        }
-        const got = result.items ?? []
-        if (got.length === 0) {
-          setError('Inga varor hittades. Försök igen och tala tydligt.')
-          setStage('error')
-          return
-        }
-        setParsed(got.map(i => ({ ...i, selected: true })))
-        setStage('results')
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Kunde inte tolka ljudet')
+      const got = result.items ?? []
+      if (got.length === 0) {
+        setError('Inga varor hittades. Försök igen och tala tydligt.')
         setStage('error')
+        return
       }
+      setParsed(got.map(i => ({ ...i, selected: true })))
+      setStage('results')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Kunde inte tolka ljudet')
+      setStage('error')
     }
-
-    recorder.start()
-    timerRef.current = setInterval(() => {
-      setElapsed(s => {
-        const next = s + 1
-        if (next >= MAX_SECONDS && recorderRef.current?.state === 'recording') {
-          recorderRef.current.stop()
-        }
-        return next
-      })
-    }, 1000)
-  }, [releaseMic])
-
-  function stopRecording() {
-    if (recorderRef.current?.state === 'recording') recorderRef.current.stop()
-  }
-
-  // Start recording on mount; release the mic on unmount. startRecording is an
-  // async side-effect (getUserMedia) whose state updates all happen after the
-  // first await — the set-state-in-effect rule can't see past it, so it's a
-  // false positive here.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    startRecording()
-    return () => {
-      abortedRef.current = true
-      if (recorderRef.current && recorderRef.current.state !== 'inactive') recorderRef.current.stop()
-      releaseMic()
-    }
-    // Run once on mount — startRecording/releaseMic are stable for this purpose.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const handleRecordError = useCallback((message: string) => {
+    setError(message)
+    setStage('error')
+  }, [])
+
+  const { elapsed, stop, restart } = useAudioRecorder({
+    maxSeconds: MAX_SECONDS,
+    onResult: handleResult,
+    onError: handleRecordError,
+  })
+
+  function handleRetry() {
+    setError(null)
+    setStage('recording')
+    restart()
+  }
+
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') handleClose() }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [handleClose])
+  }, [onClose])
 
   function toggleAt(idx: number) {
     setParsed(prev => prev.map((p, n) => n === idx ? { ...p, selected: !p.selected } : p))
@@ -197,7 +113,7 @@ export default function SpeechModal({ listId, items, onClose }: Props) {
 
   return (
     <div
-      onClick={handleClose}
+      onClick={onClose}
       className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center sm:p-4"
     >
       <div
@@ -209,7 +125,7 @@ export default function SpeechModal({ listId, items, onClose }: Props) {
             {stage === 'results' ? `Lägg till ${selectedCount} varor` : 'Tala för att lägga till'}
           </h2>
           <button
-            onClick={handleClose}
+            onClick={onClose}
             aria-label="Stäng"
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none"
           >
@@ -232,7 +148,7 @@ export default function SpeechModal({ listId, items, onClose }: Props) {
               {elapsed}s / {MAX_SECONDS}s
             </p>
             <button
-              onClick={stopRecording}
+              onClick={stop}
               className="text-sm px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
             >
               Klar
@@ -277,7 +193,7 @@ export default function SpeechModal({ listId, items, onClose }: Props) {
             </ul>
             <div className="flex gap-2 justify-end">
               <button
-                onClick={handleClose}
+                onClick={onClose}
                 className="text-sm px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
                 Avbryt
@@ -298,13 +214,13 @@ export default function SpeechModal({ listId, items, onClose }: Props) {
             <p className="text-sm text-red-500 text-center">{error}</p>
             <div className="flex gap-2">
               <button
-                onClick={handleClose}
+                onClick={onClose}
                 className="text-sm px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
                 Avbryt
               </button>
               <button
-                onClick={() => { setError(null); setElapsed(0); setStage('recording'); startRecording() }}
+                onClick={handleRetry}
                 className="text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
               >
                 Försök igen
