@@ -19,13 +19,11 @@ See `REFACTOR.md` — the single source of truth for architectural smells worth 
 
 ## Known issues
 
+Functional bugs are tracked in **`BUGS.md`** (single source of truth; e.g. BUG-001: share-image import → 404 on Back). The entry below is a deep, deliberately-masked architectural issue kept here because it has its own investigation doc.
+
 ### Back-nav from `/lists/[id]` visibly scrolls to top before `/lists` appears
 
 **MASKED, not fixed** (overlay in `BackLink.tsx`). Full history — 8 failed fix attempts, untested hypotheses, what's confirmed working, and the store-mode Back interception — lives in **`docs/known-issues/back-nav-scroll-jump.md`**. **Read it before attempting another fix** (every attempt so far either failed or fixed the symptom while introducing a worse one).
-
-### Share-image import → 404 on Back (reported 2026-06-09, not yet fixed)
-
-Repro: share an image with a list of items → select a target list (observed picking a **task** list) → confirm (works, lands on the list) → press Back at some later point → **404 not found**. Likely the Back stack returns to `/share/[importId]`, whose `pending_imports` row was deleted on confirm, so the page `notFound()`s. Needs confirmation whether it's task-specific or general to the whole share flow. **To triage/fix separately.**
 
 ## Active plan
 
