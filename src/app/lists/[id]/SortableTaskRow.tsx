@@ -16,7 +16,13 @@ export function SortableTaskRow(props: {
   onToggle: (rect?: DOMRect) => void
   onEdit: () => void
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.item.id })
+  // animateLayoutChanges: () => false — drop the layout-settle transition so a
+  // dropped task just snaps into its new place instead of re-sliding after the
+  // reorder data lands (which looked like a strange double-move).
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.item.id,
+    animateLayoutChanges: () => false,
+  })
 
   const handle = (
     <button
