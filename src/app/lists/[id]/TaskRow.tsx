@@ -1,5 +1,6 @@
 'use client'
 
+import type { CSSProperties, ReactNode } from 'react'
 import type { Item, ListPerson } from '@/lib/types'
 import { dueStatus, formatDueLabel, type DueStatus } from '@/lib/taskView'
 import { TaskAvatar } from './TaskAvatar'
@@ -11,30 +12,46 @@ const DUE_PILL: Record<DueStatus, string> = {
   future:  'text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700',
 }
 
+// Drag wiring supplied by SortableTaskRow (Manual view only). `handle` is the
+// pre-wired drag-handle button (listeners already spread on it); container ref +
+// style go on the <li>. Absent in the Done section and the By-date view.
+export interface TaskRowDrag {
+  setNodeRef: (el: HTMLElement | null) => void
+  style: CSSProperties
+  handle: ReactNode
+}
+
 export function TaskRow({
-  item, people, done = false, isNew = false, onToggle, onEdit,
+  item, people, done = false, isNew = false, rowAnim, onToggle, onEdit, drag,
 }: {
   item: Item
   people: ListPerson[]
   done?: boolean
   isNew?: boolean
-  onToggle: () => void
+  rowAnim?: 'uncheck'
+  onToggle: (rect?: DOMRect) => void
   onEdit: () => void
+  drag?: TaskRowDrag
 }) {
   const status = dueStatus(item.due_date)
   const dueLabel = formatDueLabel(item.due_date)
 
   return (
     <li
+      ref={drag?.setNodeRef}
+      style={drag?.style}
+      data-row-anim={rowAnim}
       className={`flex items-center gap-3 rounded-xl border px-3 py-3 transition-colors ${
         done
           ? 'bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800/60'
           : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800'
       }`}
     >
+      {drag?.handle}
+
       <button
         type="button"
-        onClick={onToggle}
+        onClick={e => onToggle((e.currentTarget.closest('li') as HTMLElement | null)?.getBoundingClientRect())}
         role="checkbox"
         aria-checked={done}
         aria-label={done ? `Mark ${item.name} not done` : `Mark ${item.name} done`}

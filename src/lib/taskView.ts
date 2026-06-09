@@ -63,3 +63,79 @@ export function sortTasks(items: Item[]): Item[] {
     return a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
   })
 }
+
+/** The two task-list sort views. Persisted per-user-per-list on `list_views`. */
+export type TaskSort = 'manual' | 'date'
+
+/**
+ * Manual / added order: by `sort_order` ascending (null sorts last), then
+ * `created_at` as a stable tiebreak. This is what the drag-reorderable Manual
+ * view shows — deliberately ignoring due dates (those drive the By-date view).
+ */
+export function sortTasksManual(items: Item[]): Item[] {
+  return [...items].sort((a, b) => {
+    const ao = a.sort_order ?? Infinity
+    const bo = b.sort_order ?? Infinity
+    if (ao !== bo) return ao - bo
+    return a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
+  })
+}
+
+export type TaskSectionTone = 'over' | 'today' | 'soon' | 'future' | 'none'
+
+export interface TaskSection {
+  key: string
+  label: string
+  tone: TaskSectionTone
+  items: Item[]
+}
+
+/**
+ * Groups undone tasks into date buckets for the By-date view, in display order:
+ * Overdue → Today → Tomorrow → one section per weekday within the next week
+ * (diff 2–6, labelled e.g. "Wednesday") → Later (≥1 week) → No date. Only
+ * non-empty sections are returned; items within a section keep the due/created
+ * sort. Pass `done` tasks separately — this is for the to-do stream only.
+ */
+export function taskDateSections(items: Item[], now: Date = new Date()): TaskSection[] {
+  const today = startOfDay(now)
+  const overdue: Item[] = []
+  const todayItems: Item[] = []
+  const tomorrow: Item[] = []
+  const weekdays = new Map<number, Item[]>() // diffDays 2..6 → items
+  const later: Item[] = []
+  const noDate: Item[] = []
+
+  for (const it of items) {
+    const due = it.due_date ? parseYMD(it.due_date) : null
+    if (!due) { noDate.push(it); continue }
+    const diff = Math.round((due.getTime() - today.getTime()) / 86_400_000)
+    if (diff < 0) overdue.push(it)
+    else if (diff === 0) todayItems.push(it)
+    else if (diff === 1) tomorrow.push(it)
+    else if (diff <= 6) {
+      const arr = weekdays.get(diff) ?? []
+      arr.push(it)
+      weekdays.set(diff, arr)
+    } else later.push(it)
+  }
+
+  const sections: TaskSection[] = []
+  if (overdue.length) sections.push({ key: 'overdue', label: 'Overdue', tone: 'over', items: sortTasks(overdue) })
+  if (todayItems.length) sections.push({ key: 'today', label: 'Today', tone: 'today', items: sortTasks(todayItems) })
+  if (tomorrow.length) sections.push({ key: 'tomorrow', label: 'Tomorrow', tone: 'soon', items: sortTasks(tomorrow) })
+  for (let diff = 2; diff <= 6; diff++) {
+    const arr = weekdays.get(diff)
+    if (!arr?.length) continue
+    const date = new Date(today.getTime() + diff * 86_400_000)
+    sections.push({
+      key: `wd-${diff}`,
+      label: date.toLocaleDateString('en-US', { weekday: 'long' }),
+      tone: 'future',
+      items: sortTasks(arr),
+    })
+  }
+  if (later.length) sections.push({ key: 'later', label: 'Later', tone: 'future', items: sortTasks(later) })
+  if (noDate.length) sections.push({ key: 'none', label: 'No date', tone: 'none', items: sortTasks(noDate) })
+  return sections
+}

@@ -33,7 +33,7 @@ export {
   shareItemsToList,
 } from './cross-list'
 
-export { touchListView } from './views'
+export { touchListView, setTaskSort } from './views'
 
 export {
   suggestItemName,

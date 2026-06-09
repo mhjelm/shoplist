@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dueStatus, formatDueLabel, sortTasks } from '@/lib/taskView'
+import { dueStatus, formatDueLabel, sortTasks, sortTasksManual, taskDateSections } from '@/lib/taskView'
 import type { Item } from '@/lib/types'
 
 const NOW = new Date(2026, 5, 7) // 2026-06-07, local
@@ -13,7 +13,7 @@ function task(partial: Partial<Item>): Item {
     is_checked: false,
     created_at: partial.created_at ?? '2026-06-01T00:00:00.000Z',
     picture_url: null,
-    sort_order: null,
+    sort_order: partial.sort_order ?? null,
     quantity: 1,
     category: null,
     measurement: null,
@@ -78,5 +78,58 @@ describe('sortTasks', () => {
     const copy = [...items]
     sortTasks(items)
     expect(items).toEqual(copy)
+  })
+})
+
+describe('sortTasksManual', () => {
+  it('orders by sort_order ascending, nulls last, created_at tiebreak', () => {
+    const items = [
+      task({ id: 'c', sort_order: null, created_at: '2026-06-03T00:00:00Z' }),
+      task({ id: 'a', sort_order: 1 }),
+      task({ id: 'b', sort_order: 5 }),
+      task({ id: 'd', sort_order: null, created_at: '2026-06-01T00:00:00Z' }),
+    ]
+    expect(sortTasksManual(items).map(i => i.id)).toEqual(['a', 'b', 'd', 'c'])
+  })
+  it('does not mutate the input', () => {
+    const items = [task({ id: 'a', sort_order: 2 }), task({ id: 'b', sort_order: 1 })]
+    const copy = [...items]
+    sortTasksManual(items)
+    expect(items).toEqual(copy)
+  })
+})
+
+describe('taskDateSections', () => {
+  // NOW = 2026-06-07 (Sunday): +1 Mon, +2 Tue, +3 Wed, +6 Sat, +7 = Later.
+  it('buckets and orders sections, with the right tones', () => {
+    const items = [
+      task({ id: 'over', due_date: '2026-06-01' }),
+      task({ id: 'today', due_date: '2026-06-07' }),
+      task({ id: 'tom', due_date: '2026-06-08' }),
+      task({ id: 'tue', due_date: '2026-06-09' }),
+      task({ id: 'wed', due_date: '2026-06-10' }),
+      task({ id: 'later', due_date: '2026-06-20' }),
+      task({ id: 'none', due_date: null }),
+    ]
+    const sections = taskDateSections(items, NOW)
+    expect(sections.map(s => s.label)).toEqual(
+      ['Overdue', 'Today', 'Tomorrow', 'Tuesday', 'Wednesday', 'Later', 'No date'],
+    )
+    expect(sections.map(s => s.tone)).toEqual(
+      ['over', 'today', 'soon', 'future', 'future', 'future', 'none'],
+    )
+  })
+  it('omits empty sections', () => {
+    const sections = taskDateSections([task({ id: 'none', due_date: null })], NOW)
+    expect(sections.map(s => s.label)).toEqual(['No date'])
+  })
+  it('groups multiple overdue items sorted by due date', () => {
+    const items = [
+      task({ id: 'o2', due_date: '2026-06-05' }),
+      task({ id: 'o1', due_date: '2026-06-01' }),
+    ]
+    const overdue = taskDateSections(items, NOW)[0]
+    expect(overdue.label).toBe('Overdue')
+    expect(overdue.items.map(i => i.id)).toEqual(['o1', 'o2'])
   })
 })

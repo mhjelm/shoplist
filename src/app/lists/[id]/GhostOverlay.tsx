@@ -9,6 +9,9 @@ export function GhostOverlay({ ghost, onDone }: { ghost: GhostItem; onDone: () =
   useEffect(() => {
     const el = ref.current
     if (!el) return
+    // No Web Animations API (e.g. jsdom, or a stripped-down browser) → skip the
+    // fly-up and just clean up immediately rather than throwing.
+    if (typeof el.animate !== 'function') { onDone(); return }
     const anim = el.animate(
       [
         { opacity: 0.75, transform: 'translateY(0px)' },

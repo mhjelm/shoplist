@@ -15,9 +15,11 @@ vi.mock('@/lib/sync/mutations', () => ({
   muUpdateItem: vi.fn().mockResolvedValue(undefined),
   muDeleteItem: vi.fn().mockResolvedValue(undefined),
   muBulkDelete: vi.fn().mockResolvedValue(undefined),
+  muReorderItem: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock('@/app/lists/[id]/actions', () => ({
   touchListView: vi.fn().mockResolvedValue(undefined),
+  setTaskSort: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock('@/lib/useRevealFx', () => ({ useRevealFx: () => '' }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
@@ -42,7 +44,12 @@ function makeTask(o: Partial<Item> = {}): Item {
 }
 
 function renderList() {
-  return render(<TaskList list={LIST} listId="l1" people={PEOPLE} currentUserId="u-anna" lastViewedAt={null} />)
+  return render(
+    <TaskList
+      list={LIST} listId="l1" people={PEOPLE} currentUserId="u-anna"
+      lastViewedAt={null} theme="light" initialSort="manual"
+    />,
+  )
 }
 
 beforeEach(() => {
@@ -123,5 +130,21 @@ describe('TaskList', () => {
     state.items = [makeTask({ id: 't1', name: 'Mow lawn' })]
     renderList()
     expect(screen.queryByRole('button', { name: /clear done/i })).not.toBeInTheDocument()
+  })
+
+  it('switches to the by-date view and renders date section headers', () => {
+    state.items = [
+      makeTask({ id: 't1', name: 'Overdue thing', due_date: '2020-01-01' }),
+      makeTask({ id: 't2', name: 'Someday thing' }), // no due date
+    ]
+    renderList()
+    // Starts in Manual: no section headers.
+    expect(screen.queryByText('Overdue')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('radio', { name: /by date/i }))
+    // Overdue (past date) and No date (null) are now grouped — robust regardless of "now".
+    expect(screen.getByText('Overdue')).toBeInTheDocument()
+    expect(screen.getByText('No date')).toBeInTheDocument()
+    expect(screen.getByText('Overdue thing')).toBeInTheDocument()
+    expect(screen.getByText('Someday thing')).toBeInTheDocument()
   })
 })

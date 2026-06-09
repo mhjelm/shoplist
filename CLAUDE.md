@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Pending manual tasks
 
-_None pending._
+- **Apply migration `0028_list_views_task_sort.sql`** — adds `list_views.task_sort` (`'manual' | 'date'`, default `'manual'`); persists the per-user-per-list task-list sort view. Without it, the By-date toggle won't survive a reload (and `page.tsx`'s `list_views` select of `task_sort` will error).
 
 - ~~**Apply migration `0025_task_lists.sql`**~~ — done 2026-06-08 (adds `lists.kind`, `items.assignee_id` + `items.due_date`, and the `get_list_people` RPC; required for the task-lists feature).
 - ~~**Apply migration `0026_skip_task_history.sql`**~~ — done 2026-06-08 (guards `bump_item_history` so task-list items don't pollute the grocery autocomplete history).
@@ -27,9 +27,9 @@ Functional bugs are tracked in **`BUGS.md`** (single source of truth; e.g. BUG-0
 
 ## Active plan
 
-_None active._ **Fix BUG-001: share-import → 404 on Back** executed 2026-06-10 (graceful `ShareGone` state replaces `notFound()`; see `BUGS.md` → Fixed).
+_None active._ **Task-list polish — done animation, drag-reorder, by-date sort view** executed 2026-06-10 (plan at `C:\Users\mh\.claude\plans\some-things-related-to-dynamic-mochi.md`; design exploration `docs/task-sort-exploration.html`). Needs migration `0028` applied (see Pending manual tasks).
 
-_Prior:_ Image Gemini calls routed through the failover chain (503 fix) + BUG-002 recorded — 2026-06-10. Task-list kind on share-import + picture import inside task lists — executed 2026-06-09 (plan at `C:\Users\mh\.claude\plans\some-things-related-to-dynamic-mochi.md`). SpeechModal `useAudioRecorder` dedup executed 2026-06-08 (see `REFACTOR.md` Completed). ESLint mutation-path rule (REFACTOR #3) executed 2026-06-08. Durable log persistence executed 2026-06-08.
+_Prior:_ Fix BUG-001: share-import → 404 on Back executed 2026-06-10 (graceful `ShareGone`; see `BUGS.md` → Fixed). Image Gemini calls routed through the failover chain (503 fix) + BUG-002 recorded — 2026-06-10. Task-list kind on share-import + picture import inside task lists — executed 2026-06-09 (plan at `C:\Users\mh\.claude\plans\some-things-related-to-dynamic-mochi.md`). SpeechModal `useAudioRecorder` dedup executed 2026-06-08 (see `REFACTOR.md` Completed). ESLint mutation-path rule (REFACTOR #3) executed 2026-06-08. Durable log persistence executed 2026-06-08.
 
   Completed-plan history → **`docs/PLAN-ARCHIVE.md`** (durable log persistence 2026-06-08; speech-to-task 2026-06-08; observability/logging plan archived there 2026-06-08; task-lists 2026-06-07).
 
@@ -123,7 +123,8 @@ The `addItems` batch action (`src/app/lists/[id]/actions.ts`) is used exclusivel
 
 A list is either a grocery `'shopping'` list (default) or a `'task'` list — the `kind` column on `lists` (migration `0025`). Task lists are a shared checklist for chores, with optional per-task **assignee** (`items.assignee_id`) and **due date** (`items.due_date`), both added in `0025`. They reuse the entire sync substrate (outbox mutations, `useListItemsSync`, `reconcileList`, realtime, Dexie) unchanged — only the *presentation* differs.
 
-- **Page-level branch, not in-component flags.** `src/app/lists/[id]/page.tsx` renders a separate, simpler `TaskList` tree for `kind === 'task'` (no `StoreModeProvider`/`EditModeProvider`, no AI/measurement/category/store-mode). Don't thread `kind` conditionals through `ItemList` and its hooks. Task UI lives in `TaskList.tsx` / `TaskRow.tsx` / `TaskEditModal.tsx` / `TaskAvatar.tsx`; pure date logic (pill bucket + due sort) is in `src/lib/taskView.ts` (`dueStatus`, `formatDueLabel`, `sortTasks`).
+- **Page-level branch, not in-component flags.** `src/app/lists/[id]/page.tsx` renders a separate, simpler `TaskList` tree for `kind === 'task'` (no `StoreModeProvider`/`EditModeProvider`, no AI/measurement/category/store-mode). Don't thread `kind` conditionals through `ItemList` and its hooks. Task UI lives in `TaskList.tsx` / `TaskRow.tsx` / `SortableTaskRow.tsx` / `TaskEditModal.tsx` / `TaskAvatar.tsx`; pure date logic (pill bucket + due sort + date sections) is in `src/lib/taskView.ts` (`dueStatus`, `formatDueLabel`, `sortTasks`, `sortTasksManual`, `taskDateSections`).
+- **Two sort views (2026-06-10).** A segmented switcher toggles `TaskList` between **Manual** (`sortTasksManual` = `sort_order` then `created_at`; drag-to-reorder via dnd-kit `SortableTaskRow` → `muReorderItem`, reusing shopping's `computeNewSortOrder`) and **By date** (`taskDateSections` → Overdue/Today/Tomorrow/weekday/Later/No date, colored header bars). The choice is per-user-per-list, persisted on `list_views.task_sort` (migration `0028`, read in `page.tsx`, written by `setTaskSort` in `actions/views.ts`). Completing a task reuses the shopping celebration (`useItemCelebrations` + `GhostOverlay` + `FireworkCanvas`, fireworks only on decorative themes), gated on `reduce-motion`. Design exploration: `docs/task-sort-exploration.html`.
 - **GOTCHA — new item columns need the `itemUpdate.ts` whitelist.** Any column the outbox forwards through `item.update` must be added to `ItemUpdatePatch` + `buildItemUpdatePayload` in `src/lib/itemUpdate.ts`, or the local Dexie write succeeds while the server write silently no-ops. `assignee_id`/`due_date` are already there; future task fields must follow suit. (Reads need nothing — `reconcileList` does `select('*')` + raw `put`.)
 - **No Gemini / no history for tasks.** Task adds call `muAddItem(item, { skipCategorize: true })`, which sets `skip_categorize` on the `item.insert` outbox payload so the dispatcher's background `categorizeItem` fallback (`engine.ts`) is skipped. Server-side, the `bump_item_history` trigger is guarded (migration `0026`) to skip task lists, so task names don't leak into the grocery autocomplete. Both gates are because tasks aren't groceries.
 - **Assignees** come from the `get_list_people(p_list_id)` RPC (owner ∪ members with emails; the existing `get_list_members` excludes the owner), fetched server-side in `page.tsx` and passed to `TaskList`.
@@ -258,4 +259,4 @@ Realtime publication includes `items`, `lists`, and `list_members`. `items` uses
 
 - **`@/...` imports** resolve to `src/...` (Next.js default).
 - **Tailwind v4** — uses `@tailwindcss/postcss`; no `tailwind.config.js`.
-- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0028_`.
+- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0029_`.

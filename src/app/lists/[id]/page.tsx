@@ -45,7 +45,7 @@ export default async function ListPage({ params }: Props) {
   // others since this timestamp). null = never opened this list.
   const { data: view } = await supabase
     .from('list_views')
-    .select('last_viewed_at')
+    .select('last_viewed_at, task_sort')
     .eq('user_id', user.id)
     .eq('list_id', id)
     .maybeSingle()
@@ -74,6 +74,8 @@ export default async function ListPage({ params }: Props) {
             people={people}
             currentUserId={user.id}
             lastViewedAt={view?.last_viewed_at ?? null}
+            theme={theme}
+            initialSort={view?.task_sort === 'date' ? 'date' : 'manual'}
           />
         </main>
       </div>

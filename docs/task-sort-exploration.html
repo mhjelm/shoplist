@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Task sort views — UI exploration</title>
+<style>
+  :root{
+    --bg:#f9fafb; --card:#ffffff; --line:#e5e7eb; --line2:#eef0f2;
+    --ink:#111827; --ink2:#6b7280; --ink3:#9ca3af;
+    --pink:#EC4899; --blue:#2563eb; --task:#6366f1; --task-bg:#eef2ff; --task-line:#c7d2fe;
+    --amber:#b45309; --amber-bg:#fffbeb; --amber-line:#fde68a;
+    --red:#b91c1c; --red-bg:#fef2f2; --red-line:#fecaca;
+    --gray-bg:#f3f4f6; --done:#10b981;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:#eceef1; color:var(--ink);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:32px 16px 80px;
+  }
+  .intro{max-width:1180px;margin:0 auto 28px}
+  .intro h1{font-size:22px;margin:0 0 6px}
+  .intro p{margin:0;color:#4b5563;max-width:78ch}
+  .secthead{max-width:1180px;margin:34px auto 16px}
+  .secthead h2{font-size:17px;margin:0 0 4px}
+  .secthead p{margin:0;color:#6b7280;font-size:13px;max-width:78ch}
+
+  .grid{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+  .grid.two{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:1080px){.grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:720px){.grid,.grid.two{grid-template-columns:1fr}}
+
+  .variant{background:#fff;border:1px solid #dfe3e8;border-radius:20px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px -16px rgba(0,0,0,.25)}
+  .variant > header{padding:14px 18px;border-bottom:1px solid var(--line);
+    display:flex;align-items:baseline;justify-content:space-between;gap:10px;background:linear-gradient(#fff,#fcfcfd)}
+  .variant h3{font-size:14px;margin:0;font-weight:650}
+  .variant .tag{font-size:11px;color:#fff;background:var(--task);border-radius:999px;padding:2px 8px;font-weight:600}
+  .variant .tag.alt{background:#0ea5e9}
+  .variant .note{font-size:12px;color:var(--ink2);padding:10px 18px 0}
+  .variant .stage{padding:18px}
+
+  .phone{background:var(--bg);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .topbar{background:#fff;border-bottom:1px solid var(--line);padding:11px 14px;display:flex;align-items:center;gap:11px}
+  .topbar .back{color:var(--ink3);font-size:19px;line-height:1}
+  .topbar .title{font-weight:650;font-size:15px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .body{padding:16px 14px 20px}
+
+  .add{display:flex;gap:8px;margin-bottom:12px}
+  .add input{flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--ink2);background:#fff}
+  .add .btn{border:0;background:var(--task);color:#fff;border-radius:10px;padding:0 15px;font-weight:600;cursor:pointer}
+
+  ul.rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+  li.row{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 13px;
+    display:flex;align-items:center;gap:11px;position:relative}
+  .cb{width:21px;height:21px;border-radius:7px;border:2px solid #cbd0d8;flex:none;display:grid;place-items:center;background:#fff}
+  .cb.done{background:var(--done);border-color:var(--done)}
+  .cb.done::after{content:"✓";color:#fff;font-size:13px;font-weight:800;line-height:1}
+  .name{font-weight:550;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .grip{color:#cdd2d9;font-size:15px;flex:none;margin-left:-2px;cursor:grab}
+  .pencil{color:#d1d5db;font-size:14px;flex:none}
+
+  .ava{width:24px;height:24px;border-radius:999px;flex:none;display:grid;place-items:center;
+    font-size:11px;font-weight:700;color:#fff;letter-spacing:.02em}
+  .ava.a{background:#0ea5e9} .ava.e{background:#f59e0b} .ava.m{background:#ec4899} .ava.un{background:#cbd5e1;color:#64748b}
+
+  .due{font-size:11px;font-weight:600;border-radius:999px;padding:3px 8px;flex:none;white-space:nowrap}
+  .due.soon{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-line)}
+  .due.over{background:var(--red-bg);color:var(--red);border:1px solid var(--red-line)}
+  .due.plain{background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb}
+  .new{font:800 9px/1 sans-serif;color:#fff;background:var(--pink);border-radius:5px;padding:3px 5px;
+    transform:rotate(-8deg);flex:none;box-shadow:0 1px 2px rgba(236,72,153,.4)}
+
+  /* ===== switcher styles ===== */
+  .seg{display:inline-flex;background:#eef0f3;border:1px solid #e2e5ea;border-radius:10px;padding:3px;gap:2px}
+  .seg.full{display:flex}
+  .seg button{flex:1;border:0;background:transparent;color:var(--ink2);font-size:13px;font-weight:600;
+    padding:6px 14px;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+  .seg button.on{background:#fff;color:var(--task);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .switchrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+  .iconbtn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px 9px;display:inline-flex;gap:6px;align-items:center;cursor:pointer;color:var(--ink2);font-size:13px;font-weight:600}
+  .iconbtn .ic{font-size:14px}
+  .iconbtn.on{border-color:var(--task-line);background:var(--task-bg);color:var(--task)}
+  .drop{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px 11px;color:var(--ink2);font-size:13px;font-weight:600;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+
+  /* ===== date section headers ===== */
+  section + section{margin-top:18px}
+  .lane{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);
+    margin:0 2px 9px;display:flex;align-items:center;gap:8px}
+  .lane .count{background:#eef0f2;color:var(--ink2);border-radius:999px;padding:1px 7px;font-size:10px}
+  .lane.over{color:var(--red)} .lane.over .count{background:var(--red-bg);color:var(--red)}
+  .lane.today{color:var(--amber)} .lane.today .count{background:var(--amber-bg);color:var(--amber)}
+
+  /* variant: colored header bar */
+  .bar{display:flex;align-items:center;gap:8px;border-radius:9px;padding:6px 11px;margin:0 0 9px;
+    font-size:12px;font-weight:700;letter-spacing:.02em}
+  .bar .count{margin-left:auto;font-size:11px;font-weight:700;opacity:.8}
+  .bar.over{background:var(--red-bg);color:var(--red);border:1px solid var(--red-line)}
+  .bar.today{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-line)}
+  .bar.soon{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa}
+  .bar.future{background:#f8fafc;color:#475569;border:1px solid #e2e8f0}
+  .bar.none{background:#f8fafc;color:#94a3b8;border:1px solid #eef0f2}
+
+  /* variant: left spine */
+  section.spine{position:relative;padding-left:12px}
+  section.spine::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:3px;border-radius:999px;background:#e5e7eb}
+  section.spine.over::before{background:#ef4444}
+  section.spine.today::before{background:#f59e0b}
+  section.spine.soon::before{background:#fbbf24}
+
+  .donehead{font-size:12px;color:var(--ink3);margin:20px 2px 9px;display:flex;align-items:center;gap:7px}
+  li.row.is-done{background:#fafbfc;border-color:var(--line2)}
+  li.row.is-done .name{color:var(--ink3);text-decoration:line-through;font-weight:450}
+
+  .takeaways{max-width:1180px;margin:36px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:720px){.takeaways{grid-template-columns:1fr}}
+  .takeaways .box{background:#fff;border:1px solid #dfe3e8;border-radius:16px;padding:16px 18px}
+  .takeaways h3{margin:0 0 8px;font-size:14px}
+  .takeaways ul{margin:0;padding-left:18px;color:#4b5563;font-size:13px}
+  .takeaways li{margin:5px 0}
+  .pro{color:#047857}.con{color:#b91c1c}
+  .lean{max-width:1180px;margin:24px auto 0;color:#374151;font-size:13.5px;
+    background:#fff;border:1px solid #dfe3e8;border-radius:16px;padding:16px 18px}
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>Task lists — sort views &amp; the view switcher</h1>
+  <p>Two new things for the task-list detail screen: a <b>switcher</b> between <em>Manual</em> (added order / hand-reordered, drag grips) and <em>By&nbsp;date</em>, and the <b>by-date view</b> itself — tasks grouped into <b>Overdue · Today · Tomorrow · &lt;weekday&gt; · Later · No date</b>. The Done section stays at the bottom in both. Below: switcher placements first, then three takes on the grouped view. Colours reuse the app's due palette (red overdue, amber today/soon, grey later).</p>
+</div>
+
+<!-- ================= SWITCHER ================= -->
+<div class="secthead">
+  <h2>1 · The view switcher</h2>
+  <p>Where it sits and how it reads. It lives just under the add-task field, above the list. Manual shows drag grips; Date hides them (order is the date).</p>
+</div>
+
+<div class="grid">
+
+  <!-- S1 segmented full width -->
+  <div class="variant">
+    <header><h3>S1 — segmented control</h3><span class="tag">recommended</span></header>
+    <div class="note">A full-width two-up pill. Unmistakable, thumb-friendly, both options always visible. Most "iOS settings" familiar.</div>
+    <div class="stage">
+      <div class="phone">
+        <div class="topbar"><span class="back">‹</span><span class="title">Weekend chores</span></div>
+        <div class="body">
+          <div class="add"><input placeholder="Add a task…" /><button class="btn">Add</button></div>
+          <div class="seg full" style="margin-bottom:14px">
+            <button class="on">☰ Manual</button>
+            <button>▦ By date</button>
+          </div>
+          <ul class="rows">
+            <li class="row"><span class="grip">⋮⋮</span><span class="cb"></span><span class="name">Mow the lawn</span><span class="due soon">Today</span><span class="ava a">A</span></li>
+            <li class="row"><span class="grip">⋮⋮</span><span class="cb"></span><span class="name">Call the plumber</span><span class="due over">Mon</span><span class="ava e">E</span></li>
+            <li class="row"><span class="grip">⋮⋮</span><span class="cb"></span><span class="name">Wash the car</span><span class="ava un">?</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S2 icon toggle right aligned -->
+  <div class="variant">
+    <header><h3>S2 — compact icon toggle</h3><span class="tag alt">minimal</span></header>
+    <div class="note">A single right-aligned button that flips between a list icon and a calendar icon. Smallest footprint; the current mode is implied, not spelled out — slightly less discoverable.</div>
+    <div class="stage">
+      <div class="phone">
+        <div class="topbar"><span class="back">‹</span><span class="title">Weekend chores</span></div>
+        <div class="body">
+          <div class="add"><input placeholder="Add a task…" /><button class="btn">Add</button></div>
+          <div class="switchrow">
+            <span style="font-size:12px;color:var(--ink3);font-weight:600;letter-spacing:.04em;text-transform:uppercase">3 tasks</span>
+            <span class="iconbtn on"><span class="ic">▦</span> By date</span>
+          </div>
+          <section>
+            <div class="lane today">Today <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Mow the lawn</span><span class="ava a">A</span></li></ul>
+          </section>
+          <section>
+            <div class="lane">Wednesday <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Wash the car</span><span class="ava un">?</span></li></ul>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S3 dropdown -->
+  <div class="variant">
+    <header><h3>S3 — "Sort:" dropdown</h3><span class="tag alt">scalable</span></header>
+    <div class="note">A right-aligned label + dropdown. Reads as plain text, and leaves room to add more sort modes later (by assignee, A–Z) without redesigning. One extra tap to switch.</div>
+    <div class="stage">
+      <div class="phone">
+        <div class="topbar"><span class="back">‹</span><span class="title">Weekend chores</span></div>
+        <div class="body">
+          <div class="add"><input placeholder="Add a task…" /><button class="btn">Add</button></div>
+          <div class="switchrow">
+            <span style="font-size:12px;color:var(--ink3);font-weight:600;letter-spacing:.04em;text-transform:uppercase">3 tasks</span>
+            <span class="drop">Sort: Manual ▾</span>
+          </div>
+          <ul class="rows">
+            <li class="row"><span class="grip">⋮⋮</span><span class="cb"></span><span class="name">Mow the lawn</span><span class="due soon">Today</span><span class="ava a">A</span></li>
+            <li class="row"><span class="grip">⋮⋮</span><span class="cb"></span><span class="name">Call the plumber</span><span class="due over">Mon</span><span class="ava e">E</span></li>
+            <li class="row"><span class="grip">⋮⋮</span><span class="cb"></span><span class="name">Wash the car</span><span class="ava un">?</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ================= BY-DATE VIEW ================= -->
+<div class="secthead">
+  <h2>2 · The by-date view</h2>
+  <p>Same data, grouped by when it's due. Overdue is pinned on top in red. Within days 2–6 each weekday is its own section (e.g. "Wednesday"); a week out or more collapses to "Later"; undated tasks sink to "No date". The three takes differ in how loud the section headers are and whether rows still show a date pill.</p>
+</div>
+
+<div class="grid">
+
+  <!-- D1 quiet swimlane labels, no row pill -->
+  <div class="variant">
+    <header><h3>D1 — quiet labels</h3><span class="tag">recommended</span></header>
+    <div class="note">Lightweight uppercase labels + count, like the existing swimlane style. Overdue/Today get a colour; the rest are grey. Row-level due pills are dropped — the section already says when. Calmest, most list-like.</div>
+    <div class="stage">
+      <div class="phone">
+        <div class="topbar"><span class="back">‹</span><span class="title">Weekend chores</span></div>
+        <div class="body">
+          <div class="seg full" style="margin-bottom:14px"><button>☰ Manual</button><button class="on">▦ By date</button></div>
+
+          <section><div class="lane over">Overdue <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Call the plumber</span><span class="ava e">E</span><span class="new">NEW</span></li></ul></section>
+          <section><div class="lane today">Today <span class="count">2</span></div>
+            <ul class="rows">
+              <li class="row"><span class="cb"></span><span class="name">Mow the lawn</span><span class="ava a">A</span></li>
+              <li class="row"><span class="cb"></span><span class="name">Take out recycling</span><span class="ava m">M</span></li>
+            </ul></section>
+          <section><div class="lane">Tomorrow <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Water the plants</span><span class="ava un">?</span></li></ul></section>
+          <section><div class="lane">Wednesday <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Wash the car</span><span class="ava un">?</span></li></ul></section>
+          <section><div class="lane">Later <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Service the bikes</span><span class="ava a">A</span></li></ul></section>
+          <section><div class="lane">No date <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Sort the garage</span><span class="ava un">?</span></li></ul></section>
+
+          <div class="donehead">▾ Done (1)</div>
+          <ul class="rows"><li class="row is-done"><span class="cb done"></span><span class="name">Book dentist</span></li></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- D2 colored header bars -->
+  <div class="variant">
+    <header><h3>D2 — colored header bars</h3><span class="tag alt">boldest</span></header>
+    <div class="note">Each section gets a tinted bar (red overdue, amber today/soon, slate later/none). Strongest visual chunking — you read it at a glance — but busier, and a lot of colour on a long list.</div>
+    <div class="stage">
+      <div class="phone">
+        <div class="topbar"><span class="back">‹</span><span class="title">Weekend chores</span></div>
+        <div class="body">
+          <div class="seg full" style="margin-bottom:14px"><button>☰ Manual</button><button class="on">▦ By date</button></div>
+
+          <section><div class="bar over">⚠ Overdue <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Call the plumber</span><span class="ava e">E</span></li></ul></section>
+          <section><div class="bar today">Today <span class="count">2</span></div>
+            <ul class="rows">
+              <li class="row"><span class="cb"></span><span class="name">Mow the lawn</span><span class="ava a">A</span></li>
+              <li class="row"><span class="cb"></span><span class="name">Take out recycling</span><span class="ava m">M</span></li>
+            </ul></section>
+          <section><div class="bar soon">Tomorrow <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Water the plants</span><span class="ava un">?</span></li></ul></section>
+          <section><div class="bar future">Wednesday <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Wash the car</span><span class="ava un">?</span></li></ul></section>
+          <section><div class="bar future">Later <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Service the bikes</span><span class="ava a">A</span></li></ul></section>
+          <section><div class="bar none">No date <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Sort the garage</span><span class="ava un">?</span></li></ul></section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- D3 spine + exact date pill -->
+  <div class="variant">
+    <header><h3>D3 — spine + exact dates</h3><span class="tag alt">most info</span></header>
+    <div class="note">Quiet labels with a coloured left spine per section, and the row keeps a small pill with the <em>exact</em> date (e.g. "Wed 18"). Best when precise dates matter, not just the bucket — at the cost of a touch more noise per row.</div>
+    <div class="stage">
+      <div class="phone">
+        <div class="topbar"><span class="back">‹</span><span class="title">Weekend chores</span></div>
+        <div class="body">
+          <div class="seg full" style="margin-bottom:14px"><button>☰ Manual</button><button class="on">▦ By date</button></div>
+
+          <section class="spine over"><div class="lane over">Overdue <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Call the plumber</span><span class="due over">Mon 9</span><span class="ava e">E</span></li></ul></section>
+          <section class="spine today"><div class="lane today">Today <span class="count">2</span></div>
+            <ul class="rows">
+              <li class="row"><span class="cb"></span><span class="name">Mow the lawn</span><span class="due soon">Jun 11</span><span class="ava a">A</span></li>
+              <li class="row"><span class="cb"></span><span class="name">Take out recycling</span><span class="due soon">Jun 11</span><span class="ava m">M</span></li>
+            </ul></section>
+          <section class="spine soon"><div class="lane">Tomorrow <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Water the plants</span><span class="due plain">Jun 12</span><span class="ava un">?</span></li></ul></section>
+          <section class="spine"><div class="lane">Wednesday <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Wash the car</span><span class="due plain">Jun 18</span><span class="ava un">?</span></li></ul></section>
+          <section class="spine"><div class="lane">No date <span class="count">1</span></div>
+            <ul class="rows"><li class="row"><span class="cb"></span><span class="name">Sort the garage</span><span class="ava un">?</span></li></ul></section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="takeaways">
+  <div class="box">
+    <h3>Switcher — reading the three</h3>
+    <ul>
+      <li><b>S1 segmented</b>: clearest, both modes visible, biggest tap target. Costs a full row of vertical space.</li>
+      <li><b>S2 icon toggle</b>: tiny, pairs with a task-count line. Current mode is implied by the icon — least discoverable.</li>
+      <li><b>S3 dropdown</b>: text-labelled and future-proof (room for more sort modes), but hides options behind a tap.</li>
+    </ul>
+  </div>
+  <div class="box">
+    <h3>By-date view — reading the three</h3>
+    <ul>
+      <li class="pro"><b>D1 quiet labels</b> reuses the existing swimlane style; dropping the row pill keeps it calm and scannable.</li>
+      <li><b>D2 bars</b> chunk hardest — great for a glance, but lots of colour on a long chore list.</li>
+      <li><b>D3 spine + dates</b> keeps the exact date per row; most precise, slightly noisier. Worth it only if exact dates matter.</li>
+      <li class="con">All three: undated tasks sink to "No date"; only non-empty sections render so a short list stays short.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="lean">
+  <b>My lean:</b> <b>S1 (segmented) + D1 (quiet labels)</b>. The segmented control is the most obvious "two ways to look at this", and quiet labels keep the grouped view feeling like the same calm checklist — the colour earns its place only on Overdue/Today. If exact dates turn out to matter in use, D1 → D3 is a small, additive change (just re-show the row pill). The switcher's "Manual" mode keeps the drag grips; "By date" hides them. Section labels follow the task UI's English (Today / Tomorrow / Wednesday / Later / No&nbsp;date).
+</div>
+
+</body>
+</html>
