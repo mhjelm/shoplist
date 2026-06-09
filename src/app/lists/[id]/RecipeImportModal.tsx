@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { addItems, extractRecipeItems, extractListItemsFromImage } from './actions'
 import { resizeImage } from '@/lib/resize-image'
 import type { Item } from '@/lib/types'
@@ -24,6 +24,18 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
   // the content:// permission Chrome grants to the input is one-shot — reusing
   // the same element makes subsequent reads fail with NotReadableError.
   const [pickerNonce, setPickerNonce] = useState(0)
+  // Android 13's system Photo Picker hands Chrome unreadable content:// URIs
+  // (NotReadableError on every read path — the picture.resize_failed logs). The
+  // SAF "Files" picker returns readable URIs, and Chrome routes accept="image/*"
+  // to the Photo Picker — so on Android we strip `accept` to land on the Files
+  // picker instead. The input renders WITH accept="image/*" (correct for
+  // desktop/iOS and SSR/hydration parity); we remove it imperatively post-mount
+  // only on Android. Keyed on pickerNonce because the input remounts after every
+  // pick. This mirrors PictureInput.tsx — keep the two in sync.
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (/Android/i.test(navigator.userAgent)) fileInputRef.current?.removeAttribute('accept')
+  }, [pickerNonce])
 
   async function handleImageFile(file: File, resizePromise?: Promise<Blob>) {
     setError(null)
@@ -161,26 +173,37 @@ export default function RecipeImportModal({ listId, onClose, onItemsAdded }: Pro
             </label>
             <input
               key={pickerNonce}
+              ref={fileInputRef}
               id={fileInputId}
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              // accept stripped post-mount on Android (see fileInputRef effect above).
+              accept="image/*"
               className="sr-only"
               onChange={e => {
                 const f = e.target.files?.[0]
-                if (f) {
-                  // Android 13's photo picker grants a short-lived read URI;
-                  // start the read synchronously here to win the race before
-                  // any state update or React render delays it.
-                  const p = resizeImage(f)
-                  p.catch(() => {})
-                  handleImageFile(f, p)
+                if (!f) {
+                  setPickerNonce(n => n + 1)
+                  return
                 }
-                setPickerNonce(n => n + 1)
+                // Without accept on Android the Files picker can return non-images;
+                // reject them cleanly instead of failing later in decode.
+                if (f.type && !f.type.startsWith('image/')) {
+                  setError('Välj en bildfil')
+                  setPickerNonce(n => n + 1)
+                  return
+                }
+                // Android 13's photo picker grants a short-lived read URI; start
+                // the read synchronously here to win the race before any state
+                // update or React render delays it.
+                const p = resizeImage(f)
+                p.catch(() => {})
+                // Defer the input remount until the read finishes: bumping
+                // pickerNonce changes the `key`, tearing down the element that
+                // owns the picked file's content:// read permission. Doing it
+                // synchronously revoked the file mid-read (see PictureInput.tsx).
+                handleImageFile(f, p).finally(() => setPickerNonce(n => n + 1))
               }}
             />
-            <p className="text-[11px] text-gray-400 dark:text-gray-500 -mt-1">
-              Tips: om bilden inte läses, dela från Galleri istället.
-            </p>
             <div className="relative my-1">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-200 dark:border-gray-800" />
