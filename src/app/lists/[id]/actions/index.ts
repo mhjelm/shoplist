@@ -24,6 +24,7 @@ export {
   extractTasksFromAudio,
   extractRecipeItems,
   extractListItemsFromImage,
+  extractTasksFromImage,
 } from './import'
 
 export {

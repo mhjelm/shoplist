@@ -3,10 +3,11 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { addItems } from '@/app/lists/[id]/actions'
+import type { ListKind } from '@/lib/types'
 
 type Destination =
   | { kind: 'existing'; listId: string }
-  | { kind: 'new'; name: string }
+  | { kind: 'new'; name: string; listKind: ListKind }
 
 export async function confirmShareImport(
   importId: string,
@@ -23,9 +24,10 @@ export async function confirmShareImport(
   if (destination.kind === 'new') {
     const name = destination.name.trim()
     if (!name) return { error: 'List name is required' }
+    const listKind: ListKind = destination.listKind === 'task' ? 'task' : 'shopping'
     const { data: list, error } = await supabase
       .from('lists')
-      .insert({ name, owner_id: user.id })
+      .insert({ name, owner_id: user.id, kind: listKind })
       .select('id')
       .single()
     if (error || !list) return { error: error?.message ?? 'Could not create list' }

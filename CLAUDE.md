@@ -23,9 +23,15 @@ See `REFACTOR.md` — the single source of truth for architectural smells worth 
 
 **MASKED, not fixed** (overlay in `BackLink.tsx`). Full history — 8 failed fix attempts, untested hypotheses, what's confirmed working, and the store-mode Back interception — lives in **`docs/known-issues/back-nav-scroll-jump.md`**. **Read it before attempting another fix** (every attempt so far either failed or fixed the symptom while introducing a worse one).
 
+### Share-image import → 404 on Back (reported 2026-06-09, not yet fixed)
+
+Repro: share an image with a list of items → select a target list (observed picking a **task** list) → confirm (works, lands on the list) → press Back at some later point → **404 not found**. Likely the Back stack returns to `/share/[importId]`, whose `pending_imports` row was deleted on confirm, so the page `notFound()`s. Needs confirmation whether it's task-specific or general to the whole share flow. **To triage/fix separately.**
+
 ## Active plan
 
-_None active._ SpeechModal `useAudioRecorder` dedup was **executed 2026-06-08** (done; see `REFACTOR.md` Completed). ESLint mutation-path rule (REFACTOR #3) executed 2026-06-08. Durable log persistence executed 2026-06-08 (now fully live).
+**Task-list kind on share-import + picture import inside task lists** — started 2026-06-09. Plan: `C:\Users\mh\.claude\plans\some-things-related-to-dynamic-mochi.md`. (1) Kind toggle when creating a new list via the share-import screen; (2) "import tasks from a picture" button inside task lists, backed by a new task-tuned `extractTasksFromImage` action + `TaskImageImportModal`.
+
+_Prior:_ SpeechModal `useAudioRecorder` dedup was **executed 2026-06-08** (done; see `REFACTOR.md` Completed). ESLint mutation-path rule (REFACTOR #3) executed 2026-06-08. Durable log persistence executed 2026-06-08 (now fully live).
 
   Completed-plan history → **`docs/PLAN-ARCHIVE.md`** (durable log persistence 2026-06-08; speech-to-task 2026-06-08; observability/logging plan archived there 2026-06-08; task-lists 2026-06-07).
 

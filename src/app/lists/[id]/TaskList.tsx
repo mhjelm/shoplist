@@ -14,6 +14,7 @@ import { touchListView } from './actions'
 import { TaskRow } from './TaskRow'
 import { TaskEditModal } from './TaskEditModal'
 import TaskSpeechModal from './TaskSpeechModal'
+import TaskImageImportModal from './TaskImageImportModal'
 
 // Client-only capability read: false during SSR/first paint (avoids a hydration
 // mismatch), then the real value once mounted. Mirrors useSpeechSupported in
@@ -41,6 +42,7 @@ export default function TaskList({ list, listId, people, currentUserId, lastView
   const [editing, setEditing] = useState<Item | null>(null)
   const [confirmingClear, setConfirmingClear] = useState(false)
   const [showSpeech, setShowSpeech] = useState(false)
+  const [showImage, setShowImage] = useState(false)
   const { items, hasLoaded } = useListItemsSync(list, listId)
   const revealFx = useRevealFx(hasLoaded)
   const { isOffline } = useSyncState()
@@ -111,8 +113,21 @@ export default function TaskList({ list, listId, people, currentUserId, lastView
             Add
           </button>
         </div>
-        {speechSupported && (
-          <div className="flex gap-2">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setShowImage(true)}
+            disabled={isOffline}
+            title={isOffline ? 'Requires a connection' : 'Import tasks from a picture'}
+            aria-label="Import tasks from a picture"
+            className="border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-1.5 text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors disabled:opacity-30"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
+            </svg>
+          </button>
+          {speechSupported && (
             <button
               type="button"
               onClick={() => setShowSpeech(true)}
@@ -125,8 +140,8 @@ export default function TaskList({ list, listId, people, currentUserId, lastView
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
               </svg>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </form>
 
       {hasLoaded && todo.length === 0 && done.length === 0 && (
@@ -210,6 +225,10 @@ export default function TaskList({ list, listId, people, currentUserId, lastView
 
       {showSpeech && (
         <TaskSpeechModal listId={listId} onClose={() => setShowSpeech(false)} />
+      )}
+
+      {showImage && (
+        <TaskImageImportModal listId={listId} onClose={() => setShowImage(false)} />
       )}
     </div>
   )

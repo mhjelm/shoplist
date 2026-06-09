@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import type { ListKind } from '@/lib/types'
 import { confirmShareImport, cancelShareImport } from '../actions'
 
 interface SharedItem {
@@ -36,6 +37,7 @@ export default function ShareImportClient({ importId, items, source, lists, curr
     lists.length === 1 ? lists[0].id : lists.length === 0 ? NEW_LIST_ID : null
   const [selectedListId, setSelectedListId] = useState<string | null>(initialSelectedId)
   const [newListName, setNewListName] = useState('')
+  const [newListKind, setNewListKind] = useState<ListKind>('shopping')
   const [selectedItems, setSelectedItems] = useState<boolean[]>(() => items.map(() => true))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -56,7 +58,7 @@ export default function ShareImportClient({ importId, items, source, lists, curr
     setBusy(true)
     const chosen = items.filter((_, idx) => selectedItems[idx])
     const destination = isCreatingNew
-      ? { kind: 'new' as const, name: newNameTrimmed }
+      ? { kind: 'new' as const, name: newNameTrimmed, listKind: newListKind }
       : { kind: 'existing' as const, listId: selectedListId! }
     const result = await confirmShareImport(importId, destination, chosen)
     if (result?.error) {
@@ -131,14 +133,45 @@ export default function ShareImportClient({ importId, items, source, lists, curr
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">+ Skapa ny lista</span>
               </button>
               {isCreatingNew && (
-                <input
-                  type="text"
-                  value={newListName}
-                  onChange={e => setNewListName(e.target.value)}
-                  placeholder="Listnamn"
-                  autoFocus
-                  className="mt-2 w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <>
+                  <input
+                    type="text"
+                    value={newListName}
+                    onChange={e => setNewListName(e.target.value)}
+                    placeholder="Listnamn"
+                    autoFocus
+                    className="mt-2 w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {/* Kind toggle: shopping list (🛒) vs task list (✓). Mirrors CreateListForm. */}
+                  <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Listtyp">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={newListKind === 'shopping'}
+                      onClick={() => setNewListKind('shopping')}
+                      className={`flex items-center justify-center gap-2 rounded-lg border py-2 text-sm font-medium transition-colors ${
+                        newListKind === 'shopping'
+                          ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                          : 'border-gray-300 text-gray-500 dark:border-gray-700 dark:text-gray-400'
+                      }`}
+                    >
+                      🛒 Inköp
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={newListKind === 'task'}
+                      onClick={() => setNewListKind('task')}
+                      className={`flex items-center justify-center gap-2 rounded-lg border py-2 text-sm font-medium transition-colors ${
+                        newListKind === 'task'
+                          ? 'border-indigo-400 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300'
+                          : 'border-gray-300 text-gray-500 dark:border-gray-700 dark:text-gray-400'
+                      }`}
+                    >
+                      ✓ Uppgifter
+                    </button>
+                  </div>
+                </>
               )}
             </li>
           </ul>

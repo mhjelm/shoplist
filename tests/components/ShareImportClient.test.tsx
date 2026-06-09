@@ -137,7 +137,7 @@ describe('ShareImportClient', () => {
       expect(screen.getByRole('button', { name: /skapa & lägg till 2/i })).toBeDisabled()
     })
 
-    it('confirm calls confirmShareImport with the new-list destination', async () => {
+    it('confirm calls confirmShareImport with the new-list destination (defaults to shopping)', async () => {
       mockConfirm.mockResolvedValue(undefined as unknown as { error?: string })
       renderClient()
       fireEvent.click(screen.getByText(/skapa ny lista/i))
@@ -146,7 +146,23 @@ describe('ShareImportClient', () => {
       await waitFor(() =>
         expect(mockConfirm).toHaveBeenCalledWith(
           'imp-1',
-          { kind: 'new', name: 'Picnic' },
+          { kind: 'new', name: 'Picnic', listKind: 'shopping' },
+          baseItems,
+        ),
+      )
+    })
+
+    it('confirm passes listKind: task when the task toggle is chosen', async () => {
+      mockConfirm.mockResolvedValue(undefined as unknown as { error?: string })
+      renderClient()
+      fireEvent.click(screen.getByText(/skapa ny lista/i))
+      fireEvent.change(screen.getByPlaceholderText(/listnamn/i), { target: { value: 'Helgsysslor' } })
+      fireEvent.click(screen.getByRole('radio', { name: /uppgifter/i }))
+      fireEvent.click(screen.getByRole('button', { name: /skapa & lägg till 2/i }))
+      await waitFor(() =>
+        expect(mockConfirm).toHaveBeenCalledWith(
+          'imp-1',
+          { kind: 'new', name: 'Helgsysslor', listKind: 'task' },
           baseItems,
         ),
       )

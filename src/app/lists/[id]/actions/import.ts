@@ -222,6 +222,84 @@ export async function extractTasksFromAudio(audioBase64: string, mimeType: strin
   }
 }
 
+// Prompt for the task-list picture import (extractTasksFromImage). Image sibling
+// of TASK_AUDIO_PROMPT: a photo of a handwritten/printed to-do or chore list, not
+// groceries — so no quantity/measurement/category, just task names.
+const TASK_IMAGE_PROMPT = `The attached image is a photo of a handwritten or printed to-do / chore list. Extract the distinct, actionable tasks. Rules:
+- One short phrase per task; phrase it as an actionable to-do.
+- Skip crossed-out / struck-through items, checked-off lines, header text, dates, and any decoration.
+- Fold a clarification into the task it belongs to (don't split it into a separate task).
+- Never invent tasks that aren't written in the image. If the image shows no clear list — e.g. it's blank, illegible, or not a list at all — return {"tasks": []}. The example below is only a format guide; never copy its tasks into your answer.
+- Transcribe and return each task in SWEDISH. Do not translate to English.
+- Keep each task concise (max ~8 words).
+
+Example output: {"tasks":["Ring rörmokaren","Vattna blommorna","Hämta tvätten"]}
+
+Return JSON only: {"tasks": ["...", "..."]}`
+
+export async function extractTasksFromImage(formData: FormData) {
+  const file = formData.get('image')
+  if (!(file instanceof File) || file.size === 0) return { error: 'No image' }
+  if (file.size > 5 * 1024 * 1024) return { error: 'Image too large (max 5 MB)' }
+
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) return { error: 'GEMINI_API_KEY not configured' }
+
+  const mimeType = file.type || 'image/jpeg'
+  const buf = await file.arrayBuffer()
+  const base64 = Buffer.from(buf).toString('base64')
+
+  async function callOnce(): Promise<Response> {
+    return fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { inline_data: { mime_type: mimeType, data: base64 } },
+              { text: TASK_IMAGE_PROMPT },
+            ],
+          }],
+          generationConfig: {
+            temperature: 0,
+            maxOutputTokens: 4000,
+            thinkingConfig: { thinkingBudget: 0 },
+            responseMimeType: 'application/json',
+          },
+        }),
+      }
+    )
+  }
+
+  let res = await callOnce()
+  if (res.status === 429) {
+    await new Promise(r => setTimeout(r, 5000))
+    res = await callOnce()
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    log.error('extract.tasks_image_http_error', { status: res.status, error: body.slice(0, 200) })
+    if (res.status === 429) return { error: 'Gemini API rate limit reached — wait a moment and try again' }
+    return { error: `Gemini failed (${res.status})` }
+  }
+
+  type GemResp = { candidates?: { content?: { parts?: { text?: string }[] } }[] }
+  const data = (await res.json()) as GemResp
+  const text = data.candidates?.[0]?.content?.parts?.map(p => p.text ?? '').join('').trim() ?? ''
+  if (!text) return { error: 'Gemini returned no text' }
+
+  try {
+    const parsed = JSON.parse(text) as { tasks?: unknown }
+    return { tasks: normalizeTaskNames(parsed) }
+  } catch {
+    // Don't dump `text` — it's user-derived extracted content. Length only.
+    log.error('extract.tasks_image_parse_failed', { len: text.length })
+    return { error: 'Could not parse Gemini response' }
+  }
+}
+
 // Walk a JSON-LD value and collect every node typed as Recipe (handles bare
 // objects, arrays, and `@graph` wrappers).
 function findRecipeNodes(node: unknown): Array<Record<string, unknown>> {
