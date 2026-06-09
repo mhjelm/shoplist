@@ -33,6 +33,26 @@ Bug tracker for shoplist — the single source of truth for known **functional**
   or have the `[importId]` page render a friendly "already imported" state instead of `notFound()`
   when the pending row is gone. Triage before fixing.
 
+### BUG-002 — Server-side `log.error` doesn't reach the durable `app_logs` table
+- **Status:** open
+- **Reported:** 2026-06-09
+- **Severity:** medium (observability — silent blind spot, not a user-facing fault)
+- **Symptom:** a server action's `log.error` was visible in **Vercel runtime logs** but **never landed in
+  `app_logs`** (confirmed 2026-06-09: `extract.tasks_image_http_error` from a failed task-image import
+  appeared on Vercel but `query-logs.mjs --new` showed zero server rows for that window). This defeats
+  the durable-logging guarantee precisely for the errors we most want to triage after the ~1h Vercel
+  retention window.
+- **Suspected cause:** the service-role `app_logs` sink (registered by `instrumentation.ts`, writes from
+  `src/lib/serverLogSink.ts`) does its Supabase insert **fire-and-forget**. On Vercel Fluid/serverless,
+  the function can be frozen/suspended the instant the action returns its result, killing the in-flight
+  insert before it round-trips. Synchronous `console.*` (what Vercel captures) survives; the async DB
+  write doesn't.
+- **Notes / possible fixes:** make server-side error/warn sink writes awaitable and flush them before the
+  action returns (e.g. `await log.flush()` or `waitUntil(...)` for the sink promise), or batch + flush via
+  `after()` / `waitUntil` so the runtime keeps the function alive until the write completes. Verify with a
+  deliberately-failing server action that the row shows up via `query-logs.mjs`. Until fixed, client-side
+  breadcrumbs (e.g. `taskimport.image_failed`) are the reliable signal.
+
 ---
 
 ## Fixed

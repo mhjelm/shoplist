@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { type CategorySlug, isValidCategorySlug } from '@/lib/categories'
-import { callGemini, callGeminiWithAudio } from '@/lib/gemini'
+import { callGemini, callGeminiWithAudio, callGeminiWithImage } from '@/lib/gemini'
 import { normalizeTaskNames } from '@/lib/taskExtract'
 import { log } from '@/lib/log'
 
@@ -241,62 +241,17 @@ export async function extractTasksFromImage(formData: FormData) {
   const file = formData.get('image')
   if (!(file instanceof File) || file.size === 0) return { error: 'No image' }
   if (file.size > 5 * 1024 * 1024) return { error: 'Image too large (max 5 MB)' }
-
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return { error: 'GEMINI_API_KEY not configured' }
+  if (!process.env.GEMINI_API_KEY) return { error: 'GEMINI_API_KEY not configured' }
 
   const mimeType = file.type || 'image/jpeg'
-  const buf = await file.arrayBuffer()
-  const base64 = Buffer.from(buf).toString('base64')
-
-  async function callOnce(): Promise<Response> {
-    return fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { inline_data: { mime_type: mimeType, data: base64 } },
-              { text: TASK_IMAGE_PROMPT },
-            ],
-          }],
-          generationConfig: {
-            temperature: 0,
-            maxOutputTokens: 4000,
-            thinkingConfig: { thinkingBudget: 0 },
-            responseMimeType: 'application/json',
-          },
-        }),
-      }
-    )
-  }
-
-  let res = await callOnce()
-  if (res.status === 429) {
-    await new Promise(r => setTimeout(r, 5000))
-    res = await callOnce()
-  }
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    log.error('extract.tasks_image_http_error', { status: res.status, error: body.slice(0, 200) })
-    if (res.status === 429) return { error: 'Gemini API rate limit reached — wait a moment and try again' }
-    return { error: `Gemini failed (${res.status})` }
-  }
-
-  type GemResp = { candidates?: { content?: { parts?: { text?: string }[] } }[] }
-  const data = (await res.json()) as GemResp
-  const text = data.candidates?.[0]?.content?.parts?.map(p => p.text ?? '').join('').trim() ?? ''
-  if (!text) return { error: 'Gemini returned no text' }
+  const base64 = Buffer.from(await file.arrayBuffer()).toString('base64')
 
   try {
-    const parsed = JSON.parse(text) as { tasks?: unknown }
+    const parsed = (await callGeminiWithImage(TASK_IMAGE_PROMPT, base64, mimeType, { temperature: 0 })) as { tasks?: unknown }
     return { tasks: normalizeTaskNames(parsed) }
-  } catch {
-    // Don't dump `text` — it's user-derived extracted content. Length only.
-    log.error('extract.tasks_image_parse_failed', { len: text.length })
-    return { error: 'Could not parse Gemini response' }
+  } catch (e) {
+    log.error('extract.tasks_image_failed', { error: e instanceof Error ? e.message : String(e) })
+    return { error: e instanceof Error ? e.message : 'Could not parse Gemini response' }
   }
 }
 
@@ -405,60 +360,16 @@ export async function extractListItemsFromImage(formData: FormData) {
   const file = formData.get('image')
   if (!(file instanceof File) || file.size === 0) return { error: 'No image' }
   if (file.size > 5 * 1024 * 1024) return { error: 'Image too large (max 5 MB)' }
-
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return { error: 'GEMINI_API_KEY not configured' }
+  if (!process.env.GEMINI_API_KEY) return { error: 'GEMINI_API_KEY not configured' }
 
   const mimeType = file.type || 'image/jpeg'
-  const buf = await file.arrayBuffer()
-  const base64 = Buffer.from(buf).toString('base64')
+  const base64 = Buffer.from(await file.arrayBuffer()).toString('base64')
 
   const categoryList = `frukt-gront, mejeri, kott-fisk, brod, frys, skafferi, drycker, snacks, hushall, hygien, ovrigt`
   const prompt = `Extract grocery shopping list items from this image of a shopping list or recipe. Reply in Swedish. Keep names short (1-4 words each). Classify each item into one of these category slugs: ${categoryList}.\n\nFor each item, include a "measurement" field with the quantity/unit phrase if visible in the image. CRITICAL: copy the measurement VERBATIM from the image. Never modify, round, paraphrase, or invent numbers. Preserve fractions (½, ¼), ranges (350-400), approximations (ca), parentheticals (à 500 g), and Swedish decimal commas (1,5) exactly as shown. Set "measurement" to null when no amount is shown.\n\nSkip handwritten strikethroughs or crossed-out items. Skip header text, dates, or store names.\n\nReturn JSON only in this exact shape: {"items": [{"name": "...", "category": "slug", "measurement": "..." or null}, ...]}`
 
-  async function callOnce(): Promise<Response> {
-    return fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { inline_data: { mime_type: mimeType, data: base64 } },
-              { text: prompt },
-            ],
-          }],
-          generationConfig: {
-            temperature: 0,
-            maxOutputTokens: 4000,
-            thinkingConfig: { thinkingBudget: 0 },
-            responseMimeType: 'application/json',
-          },
-        }),
-      }
-    )
-  }
-
-  let res = await callOnce()
-  if (res.status === 429) {
-    await new Promise(r => setTimeout(r, 5000))
-    res = await callOnce()
-  }
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    log.error('extract.image_http_error', { status: res.status, error: body.slice(0, 200) })
-    if (res.status === 429) return { error: 'Gemini API rate limit reached — wait a moment and try again' }
-    return { error: `Gemini failed (${res.status})` }
-  }
-
-  type GemResp = { candidates?: { content?: { parts?: { text?: string }[] } }[] }
-  const data = (await res.json()) as GemResp
-  const text = data.candidates?.[0]?.content?.parts?.map(p => p.text ?? '').join('').trim() ?? ''
-  if (!text) return { error: 'Gemini returned no text' }
-
   try {
-    const parsed = JSON.parse(text) as { items?: unknown }
+    const parsed = (await callGeminiWithImage(prompt, base64, mimeType, { temperature: 0 })) as { items?: unknown }
     if (!Array.isArray(parsed.items)) return { items: [] }
 
     const items = (parsed.items as unknown[])
@@ -473,9 +384,8 @@ export async function extractListItemsFromImage(formData: FormData) {
       .filter(i => i.name.length > 0)
 
     return { items }
-  } catch {
-    // Don't dump `text` — it's user-derived extracted content. Length only.
-    log.error('extract.image_parse_failed', { len: text.length })
-    return { error: 'Could not parse Gemini response' }
+  } catch (e) {
+    log.error('extract.image_failed', { error: e instanceof Error ? e.message : String(e) })
+    return { error: e instanceof Error ? e.message : 'Could not parse Gemini response' }
   }
 }

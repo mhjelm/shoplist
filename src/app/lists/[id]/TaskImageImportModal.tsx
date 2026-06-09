@@ -5,6 +5,7 @@ import { extractTasksFromImage } from './actions'
 import { resizeImage } from '@/lib/resize-image'
 import { muAddItem } from '@/lib/sync/mutations'
 import { buildLocalItem } from './itemHelpers'
+import { log } from '@/lib/log'
 
 interface Props {
   listId: string
@@ -54,6 +55,9 @@ export default function TaskImageImportModal({ listId, onClose }: Props) {
       fd.append('image', new File([blob], 'image.jpg', { type: 'image/jpeg' }))
       const result = await extractTasksFromImage(fd)
       if (result.error) {
+        // Client-side breadcrumb: the server log.error doesn't reliably reach the
+        // durable app_logs sink at end-of-request (see BUG-002), so log here too.
+        log.warn('taskimport.image_failed', { error: result.error })
         setError(result.error)
         return
       }
@@ -64,7 +68,9 @@ export default function TaskImageImportModal({ listId, onClose }: Props) {
       }
       setParsed(tasks.map(name => ({ name, selected: true })))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Kunde inte bearbeta bilden')
+      const message = e instanceof Error ? e.message : 'Kunde inte bearbeta bilden'
+      log.warn('taskimport.image_failed', { error: message })
+      setError(message)
     } finally {
       setLoading(false)
     }

@@ -13,6 +13,12 @@ const TEXT_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash']
 // 503-overloaded. So 3.5-flash is the audio primary, 2.5-flash the fallback.
 const AUDIO_MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash']
 
+// Image (picture-import / item-naming) calls. Same story as audio: 2.5-flash is
+// frequently 503-overloaded (it was the sole, un-failed-over model behind the
+// image extractors and caused hard failures), so 3.5-flash is primary with
+// 2.5-flash as the overload fallback.
+const IMAGE_MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash']
+
 // 3.x uses thinkingConfig.thinkingLevel; 2.x uses thinkingConfig.thinkingBudget.
 // Derive per model so a chain can mix generations.
 function thinkingConfigFor(model: string): Record<string, unknown> {
@@ -139,6 +145,22 @@ export async function callGeminiWithAudio(
   return callGeminiChain(
     AUDIO_MODELS,
     [{ inline_data: { mime_type: mimeType, data: audioBase64 } }, { text: prompt }],
+    options,
+  )
+}
+
+// Vision calls (picture import, item naming). Returns parsed JSON, so the prompt
+// must instruct the model to reply with JSON. Gets the same 503 retry + model
+// failover as the text/audio chains.
+export async function callGeminiWithImage(
+  prompt: string,
+  imageBase64: string,
+  mimeType: string,
+  options: { temperature?: number } = {},
+): Promise<unknown> {
+  return callGeminiChain(
+    IMAGE_MODELS,
+    [{ inline_data: { mime_type: mimeType, data: imageBase64 } }, { text: prompt }],
     options,
   )
 }
