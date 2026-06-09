@@ -27,9 +27,9 @@ Functional bugs are tracked in **`BUGS.md`** (single source of truth; e.g. BUG-0
 
 ## Active plan
 
-**Task-list kind on share-import + picture import inside task lists** — started 2026-06-09. Plan: `C:\Users\mh\.claude\plans\some-things-related-to-dynamic-mochi.md`. (1) Kind toggle when creating a new list via the share-import screen; (2) "import tasks from a picture" button inside task lists, backed by a new task-tuned `extractTasksFromImage` action + `TaskImageImportModal`.
+_None active._ **Fix BUG-001: share-import → 404 on Back** executed 2026-06-10 (graceful `ShareGone` state replaces `notFound()`; see `BUGS.md` → Fixed).
 
-_Prior:_ SpeechModal `useAudioRecorder` dedup was **executed 2026-06-08** (done; see `REFACTOR.md` Completed). ESLint mutation-path rule (REFACTOR #3) executed 2026-06-08. Durable log persistence executed 2026-06-08 (now fully live).
+_Prior:_ Image Gemini calls routed through the failover chain (503 fix) + BUG-002 recorded — 2026-06-10. Task-list kind on share-import + picture import inside task lists — executed 2026-06-09 (plan at `C:\Users\mh\.claude\plans\some-things-related-to-dynamic-mochi.md`). SpeechModal `useAudioRecorder` dedup executed 2026-06-08 (see `REFACTOR.md` Completed). ESLint mutation-path rule (REFACTOR #3) executed 2026-06-08. Durable log persistence executed 2026-06-08.
 
   Completed-plan history → **`docs/PLAN-ARCHIVE.md`** (durable log persistence 2026-06-08; speech-to-task 2026-06-08; observability/logging plan archived there 2026-06-08; task-lists 2026-06-07).
 

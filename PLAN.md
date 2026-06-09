@@ -1,120 +1,66 @@
-# PLAN — SpeechModal: adopt the `useAudioRecorder` hook (REFACTOR: dedup)
+# PLAN — Fix BUG-001: Share-import → 404 when navigating Back
 
-**Created:** 2026-06-08
-**Status:** awaiting go-ahead (not started)
-**Source:** `REFACTOR.md` → "Up next: SpeechModal: adopt the `useAudioRecorder` hook"
+**Created:** 2026-06-10
+**Status:** DONE — executed 2026-06-10 (recommended fix applied; optional history-replace enhancement deferred). BUG-001 moved to Fixed in `BUGS.md`.
+**Source:** `BUGS.md` → BUG-001
 
-## Goal
+## Context
 
-Delete the inline audio-capture lifecycle in `SpeechModal.tsx` (grocery voice
-add) and have it consume `src/app/lists/[id]/useAudioRecorder.ts` — the hook
-already extracted and in production use by `TaskSpeechModal.tsx`. Removes a
-second copy of subtle ref-guard logic (getUserMedia, MediaRecorder,
-max-duration auto-stop, abort-vs-intentional-stop guard, codec-suffix strip,
-`blobToBase64`) so the two can't drift.
+After a user confirms (or cancels) a shared-image/text import, the server actions
+`confirmShareImport` / `cancelShareImport` (`src/app/share/actions.ts`) delete the `pending_imports`
+row and `redirect()` to `/lists/[id]` (or `/lists`). The browser keeps `/share/[importId]` in its
+history stack. Pressing **Back** re-renders `SharePage` (`src/app/share/[importId]/page.tsx`), which
+re-queries `pending_imports`, finds nothing, and calls **`notFound()` → 404**.
 
-Pure dedup. No user-facing behaviour or string changes intended.
+The same `notFound()` path also fires for: a hard refresh of `/share/[importId]` after import, a
+double-confirm, and genuinely stale / invalid / not-owned share links. Goal: **never show a 404 there**
+— gracefully route the user to their lists instead.
 
-## What's duplicated today (verified 2026-06-08)
+## Root cause
 
-`SpeechModal.tsx` lines 28–157 reimplement, nearly verbatim, what the hook
-already does:
-- `blobToBase64` (identical to the hook's copy, lines 28–39)
-- refs: `recorderRef`, `streamRef`, `chunksRef`, `timerRef`, `abortedRef`
-- `releaseMic`, `startRecording` (mic acquire → MediaRecorder → onstop blob
-  handling → base64 → bare-MIME), `stopRecording`
-- local `elapsed` state + the 1 s interval with max-duration auto-stop
-- the mount-start / unmount-release `useEffect`
+`src/app/share/[importId]/page.tsx:22` — `if (!pending) notFound()`. The pending row is *intentionally*
+gone after a handled import, so `notFound()` is the wrong response for the "already handled" case (and
+unfriendly for bad links). This is kind-agnostic — nothing to do with task vs shopping targets, so the
+"is it task-specific?" question in the BUG-001 note is moot once the missing row is handled gracefully.
 
-The hook (`useAudioRecorder`) owns all of this and exposes
-`{ elapsed, stop, restart }`, taking `{ maxSeconds, onResult, onError }`.
-`TaskSpeechModal.tsx` (lines 29–61) is the reference consumer.
+## Fix (recommended)
 
-## Migration — `SpeechModal.tsx` only
+Replace the `notFound()` with a graceful "this share is no longer available" state.
 
-Mirror `TaskSpeechModal`'s shape exactly.
+- **`src/app/share/[importId]/page.tsx`** — when `pending` is null, render a small friendly view
+  instead of `notFound()`. Drop the now-unused `notFound` import.
+- **(new) `src/app/share/[importId]/ShareGone.tsx`** — a tiny presentational component: a short message
+  (e.g. _"Den här delningen är redan hanterad eller hittades inte."_) and a primary link/button to
+  `/lists` (_"Till mina listor"_). Reuse the Tailwind classes already used in `ShareImportClient`'s
+  header/buttons for visual consistency. (Could be inlined in `page.tsx`, but a separate component keeps
+  the page lean and matches the file-per-concern style already used in this route.)
 
-### Remove
-- `blobToBase64` helper (lines 28–39).
-- All five refs, `releaseMic`, `startRecording`, `stopRecording`, `handleClose`,
-  the mount/unmount `useEffect` (lines 147–157), and the local `elapsed` /
-  `setElapsed` state. The `react-hooks/set-state-in-effect` eslint-disable goes
-  away with the effect.
+This single change covers confirm, cancel, refresh, double-submit, and bogus IDs — no path left to a
+404 on this route.
 
-### Add
-- `import { useAudioRecorder } from './useAudioRecorder'`.
-- `handleResult = useCallback(async (base64, mimeType) => { ... })` — the body of
-  the current `onstop` handler **from `setStage('processing')` onward** (the blob
-  build / size-0 check / abort / releaseMic all move into the hook). i.e.:
-  `setStage('processing')` → `extractItemsFromAudio(base64, mimeType)` → error /
-  empty / `setParsed(...selected:true)` → `setStage('results')`. Deps `[]`
-  (matches TaskSpeechModal — setState + action import are stable).
-- `handleRecordError = useCallback((message) => { setError(message); setStage('error') }, [])`.
-  The hook already emits the same Swedish strings the inline code used
-  (`'Mikrofonåtkomst nekades…'`, `'Hörde inget. Försök igen.'`), so messages are
-  unchanged.
-- `const { elapsed, stop, restart } = useAudioRecorder({ maxSeconds: MAX_SECONDS, onResult: handleResult, onError: handleRecordError })`.
-- `handleRetry = () => { setError(null); setStage('recording'); restart() }`
-  (`restart` resets `elapsed` inside the hook).
+## Optional enhancement (nicer UX, larger touch — NOT required to fix the bug)
 
-### Rewire the JSX
-- Backdrop `onClick`, header `×`, results "Avbryt", error "Avbryt", and the
-  Escape-key effect: `handleClose` → **`onClose`** (matches TaskSpeechModal —
-  closing unmounts the modal, and the hook's unmount cleanup releases the mic).
-  Escape effect dep `[handleClose]` → `[onClose]`.
-- "Klar" button `onClick={stopRecording}` → `onClick={stop}`.
-- Error "Försök igen" button inline handler → `onClick={handleRetry}`.
+Make Back skip the dead `/share/[importId]` entry entirely by replacing it in history on success:
+- Change `confirmShareImport` to return `{ listId }` instead of calling server `redirect()`, and have
+  `ShareImportClient.handleConfirm` call `router.replace('/lists/[id]')`; likewise cancel →
+  `router.replace('/lists')`.
+- **Trade-off:** changes the action's success contract and the client success path. The graceful-state
+  fix already removes the 404, so this is pure polish (Back wouldn't even flash the share screen).
+  **Recommend deferring** unless we specifically want that.
 
-Everything else (the `Parsed` type with quantity/measurement/category, `handleAdd`
-with its `findExistingItem` name-merge, all markup/styles) stays untouched —
-that's the grocery-specific logic the hook deliberately doesn't own.
+## Verification
 
-## One behaviour note (equivalent, not a change)
+- `npm run lint` · `npm test` · `npm run build` all green (build is the only thing that catches
+  `'use server'` violations).
+- Manual (the original repro needs the Android share target, so also exercise the route directly):
+  1. Share an image → confirm → on `/lists/[id]` press **Back** → expect the friendly "redan hanterad"
+     page with a working "Till mina listor" link, **not** a 404.
+  2. Same for **cancel**.
+  3. Hard-refresh `/share/[importId]` after an import → friendly page, not 404.
+  4. Visit `/share/<made-up-uuid>` while logged in → friendly page, not 404.
 
-Today `handleClose` stops the recorder synchronously *before* `onClose()`. After
-the refactor, closing calls `onClose()` → the modal unmounts → the hook's
-unmount cleanup (`abortedRef = true`, `recorder.stop()`, `releaseMic`) runs.
-Unmount on close is synchronous, and this is exactly how `TaskSpeechModal` has
-worked in production — so mic-release timing is functionally identical. Calling
-this out so it's a conscious decision, not an accident.
+## Notes
 
-## Tests
-
-`SpeechModal` currently has **no** dedicated test (only `TaskSpeechModal.test.tsx`
-exists). Once it consumes the hook, the same jsdom-friendly mock pattern applies
-(mock `useAudioRecorder` to capture `onResult`/`onError`, drive past the
-browser-only capture stage). **Add `tests/components/SpeechModal.test.tsx`**
-mirroring `TaskSpeechModal.test.tsx`:
-- starts in recording stage,
-- after `onResult` → results render the parsed items,
-- selecting + "Lägg till" calls `muAddItem` / `muUpdateItem` appropriately
-  (incl. the name-merge path via a pre-existing item — the one bit of logic
-  unique to the grocery modal worth locking).
-
-This turns "manual smoke only" into automated coverage and is cheap given the
-existing template. (If the merge-path assertion proves fiddly, ship the two
-basic cases and keep the manual smoke for the merge.)
-
-## Verification (REFACTOR.md checklist)
-
-1. `npm run lint` — clean.
-2. `npm test` — all pass, incl. the new SpeechModal test.
-3. `npm run build` — passes (mandatory).
-4. **Manual browser smoke** (the hook touches real `getUserMedia`, untestable in
-   jsdom): grocery voice add — open mic, speak items, "Klar" → results → "Lägg
-   till"; plus the retry path (deny mic / "Försök igen") and close-mid-recording
-   (confirm the mic indicator turns off, i.e. tracks released).
-
-## Out of scope
-- Any change to `useAudioRecorder` itself or to `TaskSpeechModal`.
-- Touching `handleAdd` / grocery merge logic beyond what's needed to wire the hook.
-
-## Done criteria
-- `SpeechModal.tsx` consumes `useAudioRecorder`; inline copy deleted.
-- New `SpeechModal.test.tsx` added and passing.
-- All verification steps pass (incl. manual smoke).
-- Update the hook's doc comment (lines 42–44) — drop the "(SpeechModal itself
-  still has its own copy for now — see REFACTOR.md.)" caveat.
-- `REFACTOR.md`: mark the item `done — 2026-06-08`, move to Completed, advance
-  "Up next" to **#4 (decouple `engine.ts` from `actions.ts`)**.
-- Tell the user it's ready; do **not** commit/push without explicit go.
+- No DB/schema change. Happy-path import behavior is untouched.
+- On completion: move **BUG-001** to the **Fixed** section in `BUGS.md` with the date + a one-line
+  description of the approach.

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { notFound, redirect } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import ShareImportClient from './ShareImportClient'
+import ShareGone from './ShareGone'
 
 interface Props {
   params: Promise<{ importId: string }>
@@ -19,7 +20,7 @@ export default async function SharePage({ params }: Props) {
     .select('id, items, source')
     .eq('id', importId)
     .single()
-  if (!pending) notFound()
+  if (!pending) return <ShareGone />
 
   const { data: lists } = await supabase
     .from('lists')

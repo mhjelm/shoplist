@@ -15,24 +15,6 @@ Bug tracker for shoplist — the single source of truth for known **functional**
 
 ## Open
 
-### BUG-001 — Share-image import → 404 when navigating Back
-- **Status:** open
-- **Reported:** 2026-06-09
-- **Severity:** low (the import itself succeeds; only the later Back navigation 404s)
-- **Repro:**
-  1. Share an image containing a list of items to the app (Android Web Share Target).
-  2. On the share-import screen, select a target list — observed while picking a **task** list.
-  3. Confirm. The import works and lands on `/lists/[id]`.
-  4. Press Back at some later point → **404 not found**.
-- **Suspected cause:** the Back stack returns to `/share/[importId]`, whose `pending_imports` row
-  was deleted on confirm (`confirmShareImport` in `src/app/share/actions.ts`), so
-  `src/app/share/[importId]/page.tsx` hits `notFound()`. Likely **not** task-specific — probably
-  affects the whole share-confirm flow regardless of target kind; needs confirmation.
-- **Notes / possible fixes:** confirm whether it reproduces for shopping targets too. Candidate
-  fixes: use `redirect`'s replace semantics / strip `/share/[importId]` from history after confirm,
-  or have the `[importId]` page render a friendly "already imported" state instead of `notFound()`
-  when the pending row is gone. Triage before fixing.
-
 ### BUG-002 — Server-side `log.error` doesn't reach the durable `app_logs` table
 - **Status:** open
 - **Reported:** 2026-06-09
@@ -57,4 +39,14 @@ Bug tracker for shoplist — the single source of truth for known **functional**
 
 ## Fixed
 
-_None yet._
+### BUG-001 — Share-image import → 404 when navigating Back
+- **Status:** fixed — 2026-06-10
+- **Reported:** 2026-06-09
+- **Was:** after confirming/cancelling a share-import, the `pending_imports` row is deleted and the user
+  is redirected to `/lists/[id]`; `/share/[importId]` stayed in history, so pressing Back re-rendered
+  `SharePage`, found no row, and called `notFound()` → 404. Also fired on refresh, double-submit, and
+  stale/invalid links. Confirmed kind-agnostic (not task-specific).
+- **Fix:** `src/app/share/[importId]/page.tsx` now renders a graceful `ShareGone` view
+  (`src/app/share/[importId]/ShareGone.tsx` — "Den här delningen är redan hanterad eller hittades inte"
+  + a "Till mina listor" link to `/lists`) instead of `notFound()` when the pending row is missing.
+  Covers Back, refresh, double-confirm, and bogus IDs in one shot. No DB/happy-path change.
