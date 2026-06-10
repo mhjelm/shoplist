@@ -19,11 +19,11 @@ const COPY: Record<Theme, Record<Props['variant'], ThemeCopy>> = {
     'all-shopped': { glyph: null, headline: 'Everything shopped', subline: null },
   },
   shoplist: {
-    'no-items':    { glyph: '🎉', headline: 'Inga varor än.', subline: 'Lägg till något ovan.' },
+    'no-items':    { glyph: '🎉', headline: 'Inga varor än.', subline: 'Lägg till din första vara.' },
     'all-shopped': { glyph: '🎉', headline: 'Allt klart!',    subline: null },
   },
   polar: {
-    'no-items':    { glyph: '❄', headline: 'Tyst lista.',  subline: 'Lägg till något ovan.' },
+    'no-items':    { glyph: '❄', headline: 'Tyst lista.',  subline: 'Lägg till din första vara.' },
     'all-shopped': { glyph: '❄', headline: 'Allt klart.', subline: 'Listan vilar.' },
   },
   dusk: {
