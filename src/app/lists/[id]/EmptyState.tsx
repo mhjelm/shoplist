@@ -27,7 +27,7 @@ const COPY: Record<Theme, Record<Props['variant'], ThemeCopy>> = {
     'all-shopped': { glyph: '❄', headline: 'Allt klart.', subline: 'Listan vilar.' },
   },
   dusk: {
-    'no-items':    { glyph: '☾', headline: 'En lugn lista.',     subline: 'Lägg till något ovan.' },
+    'no-items':    { glyph: '☾', headline: 'Tom lista.',          subline: 'Lägg till din första vara.' },
     'all-shopped': { glyph: '☾', headline: 'Klart för i kväll.', subline: 'Andas ut.' },
   },
 }
