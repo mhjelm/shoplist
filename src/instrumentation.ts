@@ -22,9 +22,14 @@ export async function register() {
 
   registerServerSink((rec) => {
     try {
+      // persistServerLog returns the (never-rejecting) insert promise, so after()
+      // keeps the function alive until the write round-trips. Returning it here is
+      // the whole BUG-002 fix — without it the insert was detached and dropped on
+      // serverless freeze.
       after(() => persistServerLog(rec))
     } catch {
-      persistServerLog(rec)
+      // Outside a request scope (startup/background logs): best-effort, detached.
+      void persistServerLog(rec)
     }
   })
 }

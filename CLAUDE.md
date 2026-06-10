@@ -27,7 +27,9 @@ Functional bugs are tracked in **`BUGS.md`** (single source of truth; e.g. BUG-0
 
 ## Active plan
 
-_None active._ **Task-list polish — done animation, drag-reorder, by-date sort view** executed 2026-06-10 (plan at `C:\Users\mh\.claude\plans\some-things-related-to-dynamic-mochi.md`; design exploration `docs/task-sort-exploration.html`). Needs migration `0028` applied (see Pending manual tasks).
+**Fix BUG-002: server-side `log.error` doesn't reach durable `app_logs`** — plan at `PLAN.md` (created 2026-06-10, awaiting go). Root cause: `after(() => persistServerLog(rec))` in `src/instrumentation.ts` detaches the insert promise (`persistServerLog` is fire-and-forget `void`), so the serverless function freezes before the write round-trips. Fix: make `persistServerLog` return the promise so `after()` awaits it.
+
+_Prior:_ **Task-list polish — done animation, drag-reorder, by-date sort view** executed 2026-06-10 (plan at `C:\Users\mh\.claude\plans\some-things-related-to-dynamic-mochi.md`; design exploration `docs/task-sort-exploration.html`). Needs migration `0028` applied (see Pending manual tasks).
 
 _Prior:_ Fix BUG-001: share-import → 404 on Back executed 2026-06-10 (graceful `ShareGone`; see `BUGS.md` → Fixed). Image Gemini calls routed through the failover chain (503 fix) + BUG-002 recorded — 2026-06-10. Task-list kind on share-import + picture import inside task lists — executed 2026-06-09 (plan at `C:\Users\mh\.claude\plans\some-things-related-to-dynamic-mochi.md`). SpeechModal `useAudioRecorder` dedup executed 2026-06-08 (see `REFACTOR.md` Completed). ESLint mutation-path rule (REFACTOR #3) executed 2026-06-08. Durable log persistence executed 2026-06-08.
 

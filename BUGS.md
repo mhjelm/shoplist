@@ -16,7 +16,13 @@ Bug tracker for shoplist — the single source of truth for known **functional**
 ## Open
 
 ### BUG-002 — Server-side `log.error` doesn't reach the durable `app_logs` table
-- **Status:** open
+- **Status:** open — **fix applied 2026-06-10, awaiting production verification.** `persistServerLog`
+  (`src/lib/serverLogSink.ts`) now **returns** the (never-rejecting) insert promise instead of detaching it
+  with `void`, so `after(() => persistServerLog(rec))` in `src/instrumentation.ts` actually keeps the
+  serverless function alive until the write round-trips. Build + tests green; can't repro locally (it's a
+  serverless-freeze bug). **To close:** after deploy, trigger a failing server action (e.g. a bad
+  task-image import → `extract.tasks_image_http_error`), then `node tools/query-logs.mjs --new --side server`
+  and confirm the row is present. See `PLAN.md`.
 - **Reported:** 2026-06-09
 - **Severity:** medium (observability — silent blind spot, not a user-facing fault)
 - **Symptom:** a server action's `log.error` was visible in **Vercel runtime logs** but **never landed in

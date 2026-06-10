@@ -59,9 +59,14 @@ async function insertRows(rows: AppLogRow[]): Promise<void> {
 
 // Server-side single record. user_id is best-effort null (the server emit path
 // has no user scope).
-export function persistServerLog(rec: IncomingLog): void {
-  // Fire-and-forget: never block emit(), never surface a rejection.
-  void insertRows([toRow(rec, null)]).catch(() => {})
+//
+// Returns the insert promise (resolved, never rejected — insertRows swallows
+// internally and we .catch() the rest) so the caller can `after(() =>
+// persistServerLog(rec))` and have the serverless runtime keep the function
+// alive until the write round-trips. Returning `void` here was BUG-002: the
+// detached promise let Vercel freeze the function before the insert landed.
+export function persistServerLog(rec: IncomingLog): Promise<void> {
+  return insertRows([toRow(rec, null)]).catch(() => {})
 }
 
 // Client batch from /api/log, all tagged with the resolved current user (or
