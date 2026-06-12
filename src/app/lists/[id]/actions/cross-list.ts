@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { CategorySlug } from '@/lib/categories'
 
@@ -122,7 +121,6 @@ export async function copyItemsToList(targetListId: string, incoming: CopyItem[]
     }
   }
 
-  revalidatePath(`/lists/${targetListId}`)
   return { items: resultItems }
 }
 
@@ -146,7 +144,6 @@ export async function moveItemsToList(
     .eq('list_id', sourceListId)
   if (delErr) return { error: delErr.message }
 
-  revalidatePath(`/lists/${sourceListId}`)
   return { items: copyResult.items }
 }
 
@@ -284,7 +281,5 @@ export async function shareItemsToList(
     }
   }
 
-  revalidatePath(`/lists/${sourceListId}`)
-  revalidatePath(`/lists/${targetListId}`)
   return { items: resultItems }
 }

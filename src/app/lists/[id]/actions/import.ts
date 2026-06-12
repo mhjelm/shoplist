@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { type CategorySlug, isValidCategorySlug } from '@/lib/categories'
 import { callGemini, callGeminiWithAudio, callGeminiWithImage } from '@/lib/gemini'
@@ -94,7 +93,6 @@ export async function addItems(listId: string, incoming: Array<{ name: string; c
     }
   }
 
-  revalidatePath(`/lists/${listId}`)
   return { items: resultItems }
 }
 

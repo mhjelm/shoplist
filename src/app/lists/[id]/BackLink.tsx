@@ -20,6 +20,7 @@
 
 import { useEffect } from 'react'
 import type { Theme } from '@/lib/types'
+import { log } from '@/lib/log'
 import { useStoreMode } from './StoreModeContext'
 
 // Error-only fallback: the overlay's real remover is ListsView's pre-paint
@@ -109,9 +110,17 @@ function showBackNavOverlay(theme: Theme) {
   glass.textContent = '⏳'
   overlay.appendChild(glass)
 
+  // Stamp creation time so ListsView can log how long the overlay was visible.
+  overlay.dataset.shownAt = String(Date.now())
+
   document.body.appendChild(overlay)
   // Safety net only: ListsView removes this on mount (its pre-paint
   // useLayoutEffect) the instant /lists is ready. This fires only if that never
   // happens. See OVERLAY_FALLBACK_MS for why it's long, not 1.5s.
-  setTimeout(() => overlay.remove(), OVERLAY_FALLBACK_MS)
+  setTimeout(() => {
+    if (overlay.isConnected) {
+      log.warn('nav.back_overlay_timeout', { ms: OVERLAY_FALLBACK_MS })
+      overlay.remove()
+    }
+  }, OVERLAY_FALLBACK_MS)
 }

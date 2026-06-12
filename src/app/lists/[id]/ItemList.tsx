@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { localDB } from '@/lib/db/local'
 import type { Item, List, ListTextSize, Theme } from '@/lib/types'
 import { type CategorySlug } from '@/lib/categories'
 import { itemToLocalItem, sortItemsByOrder, groupByCategory } from './itemHelpers'
 import { touchListView, clearShoppedItems } from './actions'
+import { touchListViewLocal } from '@/lib/sync/overviewLocal'
 import { muUpdateItem, muDeleteItem, muBulkDelete } from '@/lib/sync/mutations'
 import { hasDecorativeTheme, FIREWORK_PALETTES } from '@/lib/sl-theme'
 import { isNewSinceVisit } from '@/lib/listsUnread'
@@ -70,7 +70,6 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
     ? (effectiveSize === 'x-large' ? 'w-20 h-20' : 'w-16 h-16')
     : (effectiveSize === 'x-large' ? 'w-20 h-20' : effectiveSize === 'large' ? 'w-16 h-16' : 'w-12 h-12')
   const { isOffline } = useSyncState()
-  const router = useRouter()
 
   useEffect(() => {
     if (storeMode) {
@@ -91,22 +90,24 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
 
   useEffect(() => {
     touchListView(listId).catch(() => {})
+    touchListViewLocal(listId)
     const onVis = () => {
-      if (document.visibilityState === 'hidden') touchListView(listId).catch(() => {})
+      if (document.visibilityState === 'hidden') {
+        touchListView(listId).catch(() => {})
+        touchListViewLocal(listId)
+      }
     }
     document.addEventListener('visibilitychange', onVis)
     return () => {
       document.removeEventListener('visibilitychange', onVis)
-      // Touch then force a re-fetch of whatever page is active now (typically
-      // /lists). Without router.refresh the Next router cache happily serves
-      // the stale RSC that was rendered before our own edits, making our own
-      // changes look "unread" on the list overview.
-      void (async () => {
-        await touchListView(listId).catch(() => {})
-        router.refresh()
-      })()
+      // Advance last_viewed_at past items other users added during the visit.
+      // Local write makes it visible to /lists immediately; server write keeps
+      // cross-device state correct. No router.refresh() — the /lists router
+      // cache is intentionally preserved for instant back-nav.
+      touchListView(listId).catch(() => {})
+      touchListViewLocal(listId)
     }
-  }, [listId, router])
+  }, [listId])
 
   const { items, hasLoaded } = useListItemsSync(list, listId)
   // Restore scroll position after a store-mode reload, once the list has height.

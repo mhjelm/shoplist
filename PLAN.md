@@ -1,199 +1,96 @@
-# PLAN — Service-worker resume hardening: kill the "blank page on cold wake-up"
+# Instant back-nav: `/lists/[id]` → `/lists` paints from local cache
 
-**Created:** 2026-06-12
-**Status:** EXECUTED — 2026-06-12 (all three fixes applied: SW timeout race + immutable-asset cache-first
-(fixes 1+2) and `src/app/global-error.tsx` (fix 3); `npm test` green, `npm run build` + `npm run lint`
-clean). Not yet verified on a real device (the `chrome://discards` + offline→online check below is still
-outstanding), and not committed.
-**Source:** Incident 2026-06-12 ~18:48 local — PWA reopened after a long in-store suspend + commute
-showed a blank page with the browser's discarded-tab "sad face" for a long time, then self-healed on
-touch/network-recovery. Investigation + SW-layer reproduction in this session.
+> On "go": copy this file to `PLAN.md` in the repo root and add an "Active plan" entry to `CLAUDE.md` (per workflow rules) before touching code.
 
-> _Prior plan (BUG-002 server-log durability) executed + committed 2026-06-10 (`d61a9c2`); its writeup
-> moved to `docs/PLAN-ARCHIVE.md` if a record is wanted._
+## Context
 
-## Context — what actually happened
+Required behavior: tapping Back from any list returns to `/lists` **instantly from the local cache**. Today a masking overlay (`#backnav-loading`, from `src/app/lists/[id]/BackLink.tsx`) covers the transition until `/lists`'s RSC payload is refetched from the server — seconds on cold serverless + mobile. Multiple past attempts failed (see `docs/known-issues/back-nav-scroll-jump.md`), but they all targeted the *scroll-jump* symptom or the Dexie layer.
 
-The tab was open on a list (`/lists/[id]`) in-store, screen went off, the device was suspended through a
-long screen-off + commute, and the OS/browser **discarded the tab** to reclaim memory. The 1 h Supabase
-JWT expired (~18:06). On reopen (~18:48) the browser tried to **restore/reload** the tab while the Wi-Fi
-radio was still reconnecting, and the page stayed blank for a long time.
+**This is NOT a framework limit.** Next.js docs (staleTimes, v16.2.9) state back/forward navigation reuses the client Router Cache *regardless of staleness*: "This doesn't change back/forward caching behavior to prevent layout shift and to prevent losing the browser scroll position." Instant back-nav is the framework default. Our own code defeats it from three directions, all on the hot path:
 
-Durable logs for the window (UTC; user is CEST = UTC+2):
-```
-18:36:53  realtime.subscribe_error  InvalidJWTToken: Token has expired 1790 seconds ago  (CHANNEL_ERROR)
-18:39:51  realtime.subscribe_error  socket closed: 1000                                  (CHANNEL_ERROR)
-```
-These two are **benign and self-healing** (`applyRealtimeAuth` re-asserts a fresh token on the next
-rejoin). They are *not* the blank-screen cause — there were no `idb.open_failed`, `reconcile.list_failed`,
-or any error rows. The "sad face" is the **browser's own discarded-tab placeholder**, not anything the app
-draws (the header chrome is text-only — no `<img>`/icon top-right).
+1. **`touchListView`** (`src/app/lists/[id]/actions/views.ts:17`) calls `revalidatePath('/lists')` → purges the `/lists` router-cache entry. Fired on list mount (`ItemList.tsx:93`), on visibilitychange-hidden (`:95`), on unmount (`:105`), after **every outbox mutation** (`src/lib/sync/engine.ts:181`), and mirrored in `TaskList.tsx:91-94`.
+2. **`router.refresh()`** in the unmount cleanup of `ItemList.tsx:104-107` and `TaskList.tsx:92-97` — fires exactly during the back transition. The comment admits why it exists: the cached RSC would re-seed Dexie with stale `last_viewed_at`, making the user's own edits look "NEW" on `/lists`.
+3. **`revalidatePath('/lists/${listId}')`** in every outbox-dispatched action in `src/app/lists/[id]/actions/items.ts` (11 sites).
 
-## Root cause (reproduced this session at the SW layer)
+These purges were added deliberately to keep the NEW/unread marker honest — they fixed that bug by trading away instant back-nav. The fix: solve unread-marker freshness **locally in Dexie** instead of by nuking the router cache.
 
-Two independent gaps in `public/sw.js` combine so a cold wake-up onto a still-reconnecting radio hangs
-blank instead of painting from cache:
+**Root enabler that must be fixed first:** `ListsView.tsx:39-66` unconditionally `bulkPut`s SSR props into Dexie on mount. Once stale cached RSC is intentionally served on back-nav, that seed would regress fresher Dexie rows (older `last_viewed_at` → NEW dots wrongly reappear; could resurrect a just-deleted list until reconcile prunes it). The seed must become non-regressive **before** the purges are removed.
 
-### Gap 1 — `handleNavigate` awaits a fetch that can hang forever, with no timeout
+User decisions (2026-06-12): ship instrumentation + fix together (one change); accept that NEW markers for *other* users' changes settle ~0.5–1 s after the instant paint (standard local-first pattern already used for items).
 
-```js
-async function handleNavigate(req, url) {
-  if (shouldCacheNav(url)) {
-    const cached = await caches.match(req.url)
-    if (cached) { revalidateShell(req, url); return cached }   // cached → instant (good)
-  }
-  try {
-    const res = await fetch(req)                                // <-- HANGS on reconnecting radio
-    ...
-    return res
-  } catch {
-    return (await caches.match(req.url)) ?? (await caches.match('/lists'))
-        ?? (await caches.match('/')) ?? new Response('Offline', { status: 503 })
-  }
-}
-```
+## Phase A — Timing instrumentation (permanent; user explicitly asked for log-based evidence)
 
-The offline fallback only runs when `fetch` **rejects**. A reconnecting radio makes `fetch` *hang*
-(pending, never rejects), so for any URL **not** already in the cache we wait indefinitely.
+Files: `src/app/lists/[id]/BackLink.tsx`, `src/app/lists/ListsView.tsx`, `docs/logging.md`
 
-**Reproduced:** drove the SW `fetch` handler through the existing harness
-(`tests/sw/navigation-cache.test.ts` style) with a never-resolving `fetch`:
-- `/lists` **in** cache → response settles instantly from cache.
-- `/lists` **not** in cache → `respondWith` promise **never settles** (blank persists). ✅ matches incident.
+1. In `showBackNavOverlay` (BackLink.tsx:97): `overlay.dataset.shownAt = String(Date.now())` (covers both onClick and popstate triggers; dedup means first stamp wins).
+2. In the 8 s fallback timeout (BackLink.tsx:116): if `overlay.isConnected`, `log.warn('nav.back_overlay_timeout', { ms: OVERLAY_FALLBACK_MS })` before removing.
+3. At the ListsView removal site: read `Number(el.dataset.shownAt)`, log `log.info('nav.back_overlay_ms', { ms: Date.now() - shownAt })` (guard `shownAt > 0`). PII-safe (ms only).
+4. Add both event keys to the catalogue in `docs/logging.md`.
 
-When is the resumed URL uncached? Most often right after a **SW version bump** — `activate` deletes all
-non-current caches (`sw.js` activate handler), so the first hanging-radio resume after a deploy starts
-empty. A specific `/lists/[id]` only gets cached via a prior successful nav or the RSC side-fetch.
+Production evidence after deploy: `node tools/query-logs.mjs --ev nav.back_overlay_ms` → expect p50 < ~150 ms; `nav.back_overlay_timeout` ≈ 0.
 
-### Gap 2 — the SW caches HTML navigations but **not** the JS/CSS chunks
+## Phase B — Local-first unread freshness + non-regressive seed
 
-`/_next/static/*` requests are GET, non-navigate, non-RSC, so they fall to the bare passthrough
-`event.respondWith(fetch(req))` (end of the `fetch` listener) and are **never cached**. So even when the
-HTML shell *is* served from cache and paints, it cannot **hydrate** while the radio hangs — the chunk
-fetches hang too. Result is a dead, non-interactive page, not just a slow one. This is why it stayed blank
-rather than showing an interactive shell.
+**New file `src/lib/sync/overviewLocal.ts`** (no Supabase import → unit-testable). Two exports:
 
-## Fix
+- `touchListViewLocal(listId)` — max-merge put into `localDB.list_views`: write `{ list_id, last_viewed_at: nowISO }` only if missing or `existing.last_viewed_at < now` (so a server-clock-ahead value pulled by reconcile is never regressed by a skewed device clock). `.catch` → `log.error('idb.write_failed', ...)` per convention.
+- `seedListsOverview(catalogRows, viewRows)` — one Dexie `rw` transaction on `list_catalog` + `list_views`:
+  - **Cold path** (Dexie `list_catalog` empty — first visit / wiped IndexedDB): `bulkPut` catalog verbatim; views via max-merge.
+  - **Warm path** (Dexie non-empty — every back-nav): **never insert** catalog rows missing from Dexie (prevents resurrecting just-deleted lists; a list created on another device arrives ~1 s later via `reconcileListsOverview` — accepted). For rows present in both: forward-bump **only** the `last_add_at`/`last_add_by` **pair together** when SSR's `last_add_at` is newer; never touch `name`/`kind`/`has_members`/`owner_id`/`created_at` (Dexie is at least as fresh; reconcile heals edge cases).
+  - **`list_views`: per-row max-merge always** (keep `max(last_viewed_at)`; never delete). This is the core non-regression that replaces `router.refresh()`.
 
-Three changes in `public/sw.js`, plus tests. Bump `CACHE` `shoplist-v5` → `shoplist-v6` so the new logic
-and any newly-cached assets roll out (activate already prunes the old cache).
+**`src/app/lists/ListsView.tsx`:**
+- Replace the seeding `useLayoutEffect` body (lines 45-64) with `seedListsOverview(...)` (same row mapping, moved behind the helper).
+- **Move overlay removal out of the mount effect** into a `useLayoutEffect` gated on `liveCatalog !== undefined && liveViews !== undefined` (the existing `useLiveQuery`s at lines 92-93). Rationale: otherwise the first revealed frame paints the `useMemo` fallback built from **stale SSR props** (wrong NEW markers, possibly a deleted list) for a frame or two — the exact flicker class `router.refresh` masked. Cost ≈ one IndexedDB read (tens of ms). If IndexedDB never resolves, BackLink's 8 s fallback still clears the overlay (now logged).
 
-### 1. Timeout the navigation fetch; fall back to the cached shell
+**`src/app/lists/[id]/ItemList.tsx` (effect at 92-109) and `TaskList.tsx` (90-98):**
+- Mount + visibilitychange-hidden: keep server `touchListView(listId).catch(() => {})`, add fire-and-forget `touchListViewLocal(listId)`.
+- Unmount: replace the awaited `touchListView` + `router.refresh()` IIFE with fire-and-forget `touchListView(...)` + `touchListViewLocal(...)`. (Unmount touch still wanted: advances `last_viewed_at` past items other users added live during the visit.) Drop the now-unused `useRouter` import/variable in both files (it was only used for `.refresh()`; TaskList's `LeaveListButton` has its own router).
+- `baselineViewedAt` (ItemList.tsx:128) unaffected — captured from the SSR prop before any touch.
+- **No change to `engine.ts`** — its per-mutation server `touchListView` stays (cross-device + cold-load SSR correctness; `engine.test.ts` asserts it). It becomes cheap once Phase C strips its `revalidatePath`.
 
-Add a bounded race so a hung fetch can't pin the page. Keep stale-while-revalidate for cached pages
-unchanged.
+## Phase C — Remove the cache purges (same commit as B; C without B reintroduces the wrong-NEW-marker bug)
 
-```js
-// Fall back to a cached shell if the network doesn't answer fast. A reconnecting
-// radio makes fetch() HANG (never reject), so the catch below alone isn't enough.
-const NAV_TIMEOUT_MS = 3000
+| Call site | Action | Why |
+|---|---|---|
+| `actions/views.ts:17` `revalidatePath('/lists')` in `touchListView` | **Remove** (keep the upsert) | The main purge. `/lists` is Dexie-first; reconcile heals drift. |
+| `ItemList.tsx` / `TaskList.tsx` unmount `router.refresh()` | **Remove** | Replaced by Phase B at the source. |
+| `actions/items.ts` — all 11 `revalidatePath('/lists/${listId}')` (`addItem` ×2, `categorizeItem`, `setItemCategory`, `updateItem`, `toggleItem`, `reorderItem`, `clearShoppedItems`, `deleteItem`, `mergeItems`, `clearAllItems`) | **Remove all** | `/lists/[id]` does not SSR items (local-first). Nothing in its RSC payload is correctness-critical to an items write. Under whole-cache purge semantics these nuke `/lists` per mutation. |
+| `actions/cross-list.ts:125, 149, 287-288` | **Remove all four** | Copy/move writes only `items` rows — never SSR'd; propagates via trigger + realtime/reconcile. Fires while user sits on a list about to go back — hot path. |
+| `actions/import.ts:97` | **Remove** | Import inserts items only; reaches UI via outbox/realtime/reconcile. |
+| `src/app/lists/actions.ts` (create/delete/rename/invite/remove/leave) | **Keep** | These mutate SSR'd data (list set/names/members), are rare explicit actions on the page they invalidate, never fire during a back transition. |
+| `settings/actions.ts`, `auth/actions.ts` (`revalidatePath('/', 'layout')`) | **Keep** | Theme/prefs are layout-SSR'd; rare. |
+| `next.config.ts` `staleTimes: { dynamic: 30 }` | **Keep unchanged** | Back/forward ignores staleness; this only governs forward-nav reuse. |
 
-function timeout(ms) {
-  return new Promise((_, reject) => setTimeout(() => reject(new Error('nav-timeout')), ms))
-}
+Assumption (non-load-bearing, note in a code comment): we don't know if Next 16's `revalidatePath` in a server action purges the whole client router cache or just that path — the plan removes every hot-path call so it doesn't matter.
 
-async function handleNavigate(req, url) {
-  if (shouldCacheNav(url)) {
-    const cached = await caches.match(req.url)
-    if (cached) { revalidateShell(req, url); return cached }
-  }
-  try {
-    const res = await Promise.race([fetch(req), timeout(NAV_TIMEOUT_MS)])
-    if (shouldStore(url, res)) {
-      const copy = res.clone()
-      caches.open(CACHE).then((c) => c.put(req.url, copy))
-    }
-    return res
-  } catch {
-    // Reject OR timeout: serve the best cached shell. '/' is precached at install,
-    // so there is (almost) always something to paint; the client heals freshness.
-    return (
-      (await caches.match(req.url)) ??
-      (await caches.match('/lists')) ??
-      (await caches.match('/')) ??
-      new Response('Offline', { status: 503 })
-    )
-  }
-}
-```
+## Phase D — Verification
 
-Note: on timeout we abandon the in-flight `fetch` (it keeps running harmlessly; if `shouldStore`, the
-existing `revalidateShell` path on the *next* SWR serve will re-cache). Serving a generic shell for a
-specific `/lists/[id]` URL is acceptable — the app is local-first and the client router + Dexie reconcile
-to the right list on hydrate (this is exactly what the current offline `catch` already does).
+Automated:
+1. `npm run build` (**mandatory** — lint/tests don't catch `'use server'` issues), `npm run lint`, `npm test`.
+2. New unit tests `tests/lib/sync/overviewLocal.test.ts` (mock `@/lib/db/local` like `reconcileListsOverview.test.ts`): cold seed verbatim; `last_viewed_at` max-merge both directions; `last_add_*` pair forward-bump only when newer; warm path never inserts missing catalog rows (deleted-list non-resurrection); warm path leaves `name`/`kind`/`has_members` untouched; `touchListViewLocal` max-merge.
+3. Test updates: `tests/components/ListsView.test.tsx` — mock `@/lib/sync/overviewLocal` instead of the Dexie bulkPuts; add overlay-removal tests (removed when `liveCatalog`/`liveViews` defined + `dataset.shownAt` logged; kept while undefined). `ItemList.test.tsx` / `TaskList.test.tsx` — mock `overviewLocal`; add unmount asserts: `touchListView` called, `refresh` **not** called. `engine.test.ts` / `flushOutbox.test.ts` / `outbox.test.ts` unaffected.
 
-### 2. Cache-first the immutable static assets so a cached shell can hydrate offline
+Manual (prod build: `npm run build && npm run start`; ideally also on a real phone):
+- Enter list, add/edit items, idle > 30 s, Back → `/lists` paints instantly (overlay gone ≤ ~150 ms); own adds show **no** NEW marker.
+- Second account adds to the list you're on (seen live) → Back → no NEW marker.
+- Second account adds to a *different* shared list → Back → NEW marker appears within ~1 s of the instant paint (accepted trade-off).
+- Store mode: hardware Back exits store mode — no overlay, no navigation (BackLink pathname guard + StoreModeContext sentinel untouched — verify explicitly).
+- Delete a list, enter another list, Back → deleted list never reappears, not even a frame.
+- Kill network mid-visit, Back → `/lists` paints from Dexie; overlay clears.
 
-Add a branch in the `fetch` listener, before the final passthrough:
+Production evidence (the logging ask): after deploy, `node tools/query-logs.mjs --ev nav.back_overlay_ms` — p50 should drop from seconds to < ~150 ms; `nav.back_overlay_timeout` stays ≈ 0; no new `idb.write_failed` for `list_views`.
 
-```js
-// Content-hashed, immutable build assets: cache-first. Lets a cached shell
-// hydrate with zero network on a cold/again-online wake-up. Hashed filenames
-// mean a cache hit is never stale; new deploys ship new hashes (new keys).
-function isImmutableAsset(url) {
-  return url.origin === self.location.origin && url.pathname.startsWith('/_next/static/')
-}
+## Docs to update on completion
 
-// ...inside the fetch listener, after the RSC branch, before the final passthrough:
-if (req.method === 'GET' && isImmutableAsset(url)) {
-  event.respondWith(
-    caches.match(req.url).then((hit) =>
-      hit ?? fetch(req).then((res) => {
-        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req.url, copy)) }
-        return res
-      })
-    )
-  )
-  return
-}
-```
+- `docs/known-issues/back-nav-scroll-jump.md` + `CLAUDE.md` "Known issues": record that the *slow* back-nav (RSC refetch) was self-inflicted router-cache purging, now fixed; the masking overlay stays (still hides the scroll-jump for the now-short transition).
+- `docs/logging.md`: the two new event keys.
+- Do **not** commit/push without explicit instruction.
 
-Trade-off: the cache accumulates hashed chunks across deploys. Acceptable for this app's size; the `v6`
-activate prune clears the previous generation on each version bump. If growth ever matters, add a
-prefix-scoped prune later — out of scope here.
+## Risks
 
-### 3. (Optional, lower priority) in-app fallback UI
-
-There is currently **no** `error.tsx` / `global-error.tsx`. Adding a minimal `global-error.tsx` with a
-"Något gick fel — tryck för att försöka igen" + reload button gives an in-app recovery surface instead of
-the browser's sad-tab when a restore-time render genuinely fails. Independent of 1–2; can be a follow-up.
-
-## Verification
-
-1. **SW unit tests** (`tests/sw/navigation-cache.test.ts`) — extend the existing harness:
-   - hung `fetch` (never-resolving promise) + **no** cache → after `NAV_TIMEOUT_MS` (use `vi.useFakeTimers`)
-     `handleNavigate` resolves to the cached `/` or `/lists` shell, not a hang. (This is the repro, asserted
-     the *fixed* way.)
-   - hung `fetch` + cached exact URL → still instant from cache (unchanged).
-   - immutable-asset request → second call served from cache without hitting `fetch`.
-2. `npm test` — full suite green (no regressions in the existing nav-cache cases).
-3. `npm run build` — confirm nothing else broke (SW is plain JS, but build is the gate per project memo).
-4. **Manual / device** (the real proof — can't be fully automated here):
-   - Chrome desktop: install the PWA, load `/lists/[id]`, then DevTools → Application → Service Workers,
-     and/or `chrome://discards` → **Discard** the tab; set Network to **Offline**, reopen the tab, then
-     flip to **Online** with a few seconds' throttle. Confirm it paints the cached shell within ~3 s and
-     hydrates once assets resolve, instead of hanging blank.
-   - After deploy, repeat the original real-world flow (suspend in-store, resume on Wi-Fi) and confirm no
-     long blank.
-
-## Scope / files touched
-
-- `public/sw.js` — `CACHE` bump to `v6`, `NAV_TIMEOUT_MS` + `timeout()` helper, `handleNavigate` race,
-  `isImmutableAsset` cache-first branch. (~25 lines.)
-- `tests/sw/navigation-cache.test.ts` — 3 new cases (timeout fallback, cached-still-instant, asset
-  cache-first).
-- `src/app/global-error.tsx` — only if we include fix 3.
-- `docs/architecture/pwa.md` — note the timeout + asset-cache behavior.
-- No DB/migration change. No server/runtime change.
-
-## Risk
-
-Low–moderate, isolated to the SW.
-- The timeout can serve a **stale shell** when the network is merely slow (>3 s) but working. Mitigated by
-  the existing client-side heal (Dexie `useLiveQuery` + `reconcileList` + realtime) — the app is built to
-  reconcile a stale shell. 3 s is comfortably above a healthy network's TTFB.
-- Caching `/_next/static/*` is safe because filenames are content-hashed (cache hits can't be stale).
-- The `v6` bump means the **first** load after deploy repopulates from network (one-time), same as every
-  prior cache bump.
-- All changes degrade to current behavior if `caches`/`fetch` misbehave (the `catch`/`?? 503` chain and
-  passthrough are preserved).
+- NEW-marker latency for other-user changes: ~1 s after paint (accepted).
+- New/renamed lists from another device surface via reconcile (~1 s) on warm Dexie instead of the SSR seed; fresh hard loads still show them instantly.
+- Clock skew on local `last_viewed_at`: bounded by max-merge + reconcile pulling server rows.
+- Quick re-entry (< 30 s) into a list now serves a cached `/lists/[id]` RSC (no longer purged per-mutation): in-list NEW dots may briefly over-fire for already-seen items. Minor, time-boxed, pre-existing mechanism.
+- B and C must land as one change; A can ride along.

@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { type CategorySlug, isValidCategorySlug } from '@/lib/categories'
 import { categorizeNames } from '@/lib/gemini'
@@ -65,7 +64,6 @@ export async function addItem(
       .select()
       .single()
     if (error) return { error: error.message }
-    revalidatePath(`/lists/${listId}`)
     return { item: data, merged: true }
   }
 
@@ -85,7 +83,6 @@ export async function addItem(
     .single()
 
   if (error) return { error: error.message }
-  revalidatePath(`/lists/${listId}`)
   return { item: data, merged: false }
 }
 
@@ -113,7 +110,6 @@ export async function categorizeItem(itemId: string): Promise<{ category?: Categ
         .ilike('name', item.name),
     ])
 
-    revalidatePath(`/lists/${item.list_id}`)
     return { category: cat }
   } catch {
     return { category: 'ovrigt' }
@@ -160,7 +156,6 @@ export async function setItemCategory(itemId: string, listId: string, category: 
     .ilike('name', item.name)
     .neq('id', itemId)
 
-  revalidatePath(`/lists/${listId}`)
   return {}
 }
 
@@ -175,7 +170,6 @@ export async function updateItem(
   const supabase = await createClient()
   const { error } = await supabase.from('items').update(update).eq('id', itemId)
   if (error) return { error: error.message }
-  revalidatePath(`/lists/${listId}`)
 }
 
 export async function toggleItem(itemId: string, listId: string, checked: boolean) {
@@ -186,7 +180,6 @@ export async function toggleItem(itemId: string, listId: string, checked: boolea
     .eq('id', itemId)
 
   if (error) return { error: error.message }
-  revalidatePath(`/lists/${listId}`)
 }
 
 export async function reorderItem(itemId: string, listId: string, sortOrder: number) {
@@ -196,7 +189,6 @@ export async function reorderItem(itemId: string, listId: string, sortOrder: num
     .update({ sort_order: sortOrder })
     .eq('id', itemId)
   if (error) return { error: error.message }
-  revalidatePath(`/lists/${listId}`)
 }
 
 export async function clearShoppedItems(listId: string) {
@@ -206,17 +198,15 @@ export async function clearShoppedItems(listId: string) {
   // one CTE-DELETE — avoids fragile PostgREST .or(and(...)) string composition.
   const { error } = await supabase.rpc('clear_shopped_items', { p_list_id: listId })
   if (error) return { error: error.message }
-  revalidatePath(`/lists/${listId}`)
 }
 
-export async function deleteItem(itemId: string, listId: string) {
+export async function deleteItem(itemId: string, _listId: string) {
   const supabase = await createClient()
   const { error } = await supabase.from('items').delete().eq('id', itemId)
   if (error) return { error: error.message }
-  revalidatePath(`/lists/${listId}`)
 }
 
-export async function mergeItems(sourceId: string, targetId: string, listId: string) {
+export async function mergeItems(sourceId: string, targetId: string, _listId: string) {
   const supabase = await createClient()
   const { data: rows } = await supabase
     .from('items')
@@ -237,7 +227,6 @@ export async function mergeItems(sourceId: string, targetId: string, listId: str
   const { error: delErr } = await supabase.from('items').delete().eq('id', sourceId)
   if (delErr) return { error: delErr.message }
 
-  revalidatePath(`/lists/${listId}`)
   return { target: { id: targetId, measurement, quantity } }
 }
 
@@ -249,5 +238,4 @@ export async function clearAllItems(listId: string) {
     .eq('list_id', listId)
 
   if (error) return { error: error.message }
-  revalidatePath(`/lists/${listId}`)
 }

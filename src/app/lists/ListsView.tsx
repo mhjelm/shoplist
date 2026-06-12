@@ -7,6 +7,7 @@ import { localDB } from '@/lib/db/local'
 import type { LocalListCatalog, LocalListView } from '@/lib/db/types'
 import { subscribeToListsOverview } from '@/lib/sync/realtime'
 import { reconcileListsOverview } from '@/lib/sync/reconcile'
+import { seedListsOverview } from '@/lib/sync/overviewLocal'
 import { computeUnread } from '@/lib/listsUnread'
 import { useSyncState } from '@/lib/sync/engine'
 import type { List, Theme } from '@/lib/types'
@@ -34,14 +35,11 @@ export default function ListsView({ initialLists, memberCounts, lastAdd, lastAdd
   const [openEditListId, setOpenEditListId] = useState<string | null>(null)
   const [renamedLists, setRenamedLists] = useState<Record<string, string>>({})
 
-  // Seed list_catalog and list_views from SSR data before the first paint so
-  // useLiveQuery has data on the very first frame after hydration.
+  // Seed list_catalog and list_views from SSR data using non-regressive merge
+  // semantics (see src/lib/sync/overviewLocal.ts). On a warm back-nav this
+  // preserves live Dexie state (notably last_viewed_at) so the NEW marker
+  // stays correct without requiring a router.refresh() cache-purge.
   useLayoutEffect(() => {
-    // Remove the back-nav loading overlay (if any) the moment /lists is ready
-    // to paint — BackLink.tsx leaves a detached #backnav-loading node on <body>
-    // when navigating here from a list. Doing it here (pre-paint) reveals
-    // /lists without a flash of the leaving page's scroll-jump.
-    document.getElementById('backnav-loading')?.remove()
     const catalogRows: LocalListCatalog[] = initialLists.map(list => ({
       id: list.id,
       name: list.name,
@@ -56,12 +54,7 @@ export default function ListsView({ initialLists, memberCounts, lastAdd, lastAdd
       list_id,
       last_viewed_at,
     }))
-    localDB.list_catalog.bulkPut(catalogRows).catch(err => {
-      log.error('idb.write_failed', { table: 'list_catalog', op: 'bulkPut', error: String(err?.message ?? err) })
-    })
-    if (viewRows.length > 0) localDB.list_views.bulkPut(viewRows).catch(err => {
-      log.error('idb.write_failed', { table: 'list_views', op: 'bulkPut', error: String(err?.message ?? err) })
-    })
+    seedListsOverview(catalogRows, viewRows)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // intentionally only seeds from first-mount SSR values; realtime keeps Dexie fresh after
 
@@ -91,6 +84,19 @@ export default function ListsView({ initialLists, memberCounts, lastAdd, lastAdd
   // Falls back to the SSR seed when undefined (first frame before IndexedDB hydrates).
   const liveCatalog = useLiveQuery(() => localDB.list_catalog.toArray(), [])
   const liveViews = useLiveQuery(() => localDB.list_views.toArray(), [])
+
+  // Remove the back-nav loading overlay (#backnav-loading) once Dexie has
+  // resolved — so the first revealed frame is the correct local-first one,
+  // not a stale-SSR fallback built before useLiveQuery has hydrated.
+  // If Dexie never resolves, BackLink's 8 s fallback timeout clears it.
+  useLayoutEffect(() => {
+    if (liveCatalog === undefined || liveViews === undefined) return
+    const el = document.getElementById('backnav-loading')
+    if (!el) return
+    const shownAt = Number(el.dataset.shownAt)
+    if (shownAt > 0) log.info('nav.back_overlay_ms', { ms: Date.now() - shownAt })
+    el.remove()
+  }, [liveCatalog, liveViews])
 
   const { myLists, sharedLists, computedMemberCounts, computedUnread } = useMemo(() => {
     const catalog: LocalListCatalog[] = liveCatalog ?? initialLists.map(l => ({

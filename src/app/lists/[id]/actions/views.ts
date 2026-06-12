@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
 export async function touchListView(listId: string): Promise<{ error?: string }> {
@@ -14,7 +13,9 @@ export async function touchListView(listId: string): Promise<{ error?: string }>
       { onConflict: 'user_id,list_id' },
     )
   if (error) return { error: error.message }
-  revalidatePath('/lists')
+  // No revalidatePath — /lists paints instantly from the local Dexie cache
+  // (seedListsOverview + touchListViewLocal keep it fresh). Purging the router
+  // cache here would make every back-nav block on a server refetch.
   return {}
 }
 

@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import type { Item, List, ListPerson, Theme } from '@/lib/types'
 import {
@@ -16,6 +15,7 @@ import { useListItemsSync } from './useListItemsSync'
 import { buildLocalItem } from './itemHelpers'
 import { muAddItem, muUpdateItem, muDeleteItem, muBulkDelete, muReorderItem } from '@/lib/sync/mutations'
 import { touchListView, setTaskSort } from './actions'
+import { touchListViewLocal } from '@/lib/sync/overviewLocal'
 import { TaskRow } from './TaskRow'
 import { SortableTaskRow } from './SortableTaskRow'
 import { TaskEditModal } from './TaskEditModal'
@@ -62,7 +62,6 @@ interface Props {
 }
 
 export default function TaskList({ list, listId, people, currentUserId, lastViewedAt, theme, initialSort }: Props) {
-  const router = useRouter()
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState<Item | null>(null)
   const [confirmingClear, setConfirmingClear] = useState(false)
@@ -85,17 +84,17 @@ export default function TaskList({ list, listId, people, currentUserId, lastView
   useEffect(() => { itemsRef.current = items }, [items])
 
   // Touch last_viewed on mount and unmount so the /lists NEW marker clears for
-  // this user (mirrors ItemList). router.refresh on leave re-fetches /lists so
-  // our own just-added tasks don't show as NEW.
+  // this user. Local write makes it visible immediately; server write keeps
+  // cross-device state correct. No router.refresh() — /lists router cache is
+  // intentionally preserved for instant back-nav.
   useEffect(() => {
     touchListView(listId).catch(() => {})
+    touchListViewLocal(listId)
     return () => {
-      void (async () => {
-        await touchListView(listId).catch(() => {})
-        router.refresh()
-      })()
+      touchListView(listId).catch(() => {})
+      touchListViewLocal(listId)
     }
-  }, [listId, router])
+  }, [listId])
 
   const undone = useMemo(() => items.filter(i => !i.is_checked), [items])
   const manualTodo = useMemo(() => sortTasksManual(undone), [undone])
