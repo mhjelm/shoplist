@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import type { List } from '@/lib/types'
 import type { LocalItem, LocalList, LocalListCatalog, LocalListView } from '@/lib/db/types'
@@ -23,6 +23,13 @@ const actions = vi.hoisted(() => ({
   renameList: vi.fn().mockResolvedValue({ error: null }),
   inviteMember: vi.fn().mockResolvedValue({ error: null }),
   removeMember: vi.fn().mockResolvedValue({ error: null }),
+}))
+const overviewLocal = vi.hoisted(() => ({
+  seedListsOverview: vi.fn().mockResolvedValue(undefined),
+  touchListViewLocal: vi.fn().mockResolvedValue(undefined),
+}))
+const logMock = vi.hoisted(() => ({
+  error: vi.fn(), warn: vi.fn(), info: vi.fn(), fallback: vi.fn(),
 }))
 
 vi.mock('dexie-react-hooks', () => ({
@@ -49,6 +56,10 @@ vi.mock('@/lib/db/local', () => ({
     },
   },
 }))
+
+vi.mock('@/lib/sync/overviewLocal', () => overviewLocal)
+
+vi.mock('@/lib/log', () => ({ log: logMock }))
 
 vi.mock('@/lib/sync/realtime', () => ({
   subscribeToListsOverview: vi.fn().mockReturnValue(() => {}),
@@ -105,6 +116,8 @@ const NO_VIEWS: Record<string, string> = {}
 beforeEach(() => {
   live.lists = undefined
   live.items = undefined
+  live.catalog = undefined
+  live.views = undefined
   sync.isOffline = false
   vi.clearAllMocks()
   mockFetchMembers.mockResolvedValue([])
@@ -310,5 +323,62 @@ describe('ListsView', () => {
     expect(screen.getByText('Shared with me')).toBeInTheDocument()
     expect(screen.getByLabelText('delete-mine')).toBeInTheDocument()
     expect(screen.queryByLabelText('delete-theirs')).not.toBeInTheDocument()
+  })
+
+  it('seeds Dexie via seedListsOverview (non-regressive merge) on mount', () => {
+    render(<ListsView initialLists={[mkList('a')]} memberCounts={{ a: true }} lastAdd={{ a: '2026-01-02T00:00:00Z' }} lastAddBy={{ a: 'other' }} lastViewed={{ a: '2026-01-01T00:00:00Z' }} theme="light" currentUserId="me" />)
+    expect(overviewLocal.seedListsOverview).toHaveBeenCalledTimes(1)
+    const [catalogRows, viewRows] = overviewLocal.seedListsOverview.mock.calls[0]
+    expect(catalogRows).toEqual([expect.objectContaining({ id: 'a', has_members: true, last_add_at: '2026-01-02T00:00:00Z', last_add_by: 'other' })])
+    expect(viewRows).toEqual([{ list_id: 'a', last_viewed_at: '2026-01-01T00:00:00Z' }])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Back-nav overlay removal — gated on Dexie (useLiveQuery) readiness so the
+// first revealed frame is local-first, never the stale-SSR fallback.
+// ---------------------------------------------------------------------------
+
+describe('ListsView back-nav overlay removal', () => {
+  function addOverlay(shownAt?: number) {
+    const el = document.createElement('div')
+    el.id = 'backnav-loading'
+    if (shownAt !== undefined) el.dataset.shownAt = String(shownAt)
+    document.body.appendChild(el)
+    return el
+  }
+
+  afterEach(() => {
+    document.getElementById('backnav-loading')?.remove()
+  })
+
+  function renderView() {
+    return render(<ListsView initialLists={[mkList('a')]} memberCounts={NO_COUNTS} lastAdd={NO_ACTIVITY} lastAddBy={NO_ACTIVITY_BY} lastViewed={NO_VIEWS} theme="light" currentUserId="me" />)
+  }
+
+  it('removes the overlay once Dexie has resolved and logs nav.back_overlay_ms', () => {
+    addOverlay(Date.now() - 50)
+    live.catalog = []
+    live.views = []
+    renderView()
+    expect(document.getElementById('backnav-loading')).toBeNull()
+    expect(logMock.info).toHaveBeenCalledWith('nav.back_overlay_ms', expect.objectContaining({ ms: expect.any(Number) }))
+  })
+
+  it('keeps the overlay while Dexie has not resolved (liveCatalog/liveViews undefined)', () => {
+    addOverlay(Date.now())
+    live.catalog = undefined
+    live.views = undefined
+    renderView()
+    expect(document.getElementById('backnav-loading')).not.toBeNull()
+  })
+
+  it('removes the overlay without logging when there is no shownAt stamp', () => {
+    addOverlay()
+    live.catalog = []
+    live.views = []
+    renderView()
+    expect(document.getElementById('backnav-loading')).toBeNull()
+    expect(logMock.info).not.toHaveBeenCalledWith('nav.back_overlay_ms', expect.anything())
   })
 })

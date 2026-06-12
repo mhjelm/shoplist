@@ -1,6 +1,6 @@
 # Instant back-nav: `/lists/[id]` → `/lists` paints from local cache
 
-> On "go": copy this file to `PLAN.md` in the repo root and add an "Active plan" entry to `CLAUDE.md` (per workflow rules) before touching code.
+**Status: EXECUTED — 2026-06-12.** First pass committed `f7985ee` (Phases A–C + overviewLocal unit tests; build/lint/564 tests green). Gap-closing follow-up same day: SW plan archived to `docs/PLAN-ARCHIVE.md` (this file had overwritten it), component-test updates (overviewLocal mocks, overlay-removal tests, unmount refresh-not-called asserts), known-issues doc + CLAUDE.md updated. **Remaining: manual prod-build verification (Phase D manual script below) + check `nav.back_overlay_ms` p50 in `app_logs` after deploy.**
 
 ## Context
 

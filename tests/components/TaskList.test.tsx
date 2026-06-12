@@ -21,8 +21,16 @@ vi.mock('@/app/lists/[id]/actions', () => ({
   touchListView: vi.fn().mockResolvedValue(undefined),
   setTaskSort: vi.fn().mockResolvedValue(undefined),
 }))
+const overviewLocal = vi.hoisted(() => ({
+  seedListsOverview: vi.fn().mockResolvedValue(undefined),
+  touchListViewLocal: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock('@/lib/sync/overviewLocal', () => overviewLocal)
 vi.mock('@/lib/useRevealFx', () => ({ useRevealFx: () => '' }))
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
+// Shared router mock so tests can assert refresh is NOT called (the unmount
+// router.refresh() was removed for instant back-nav).
+const routerMock = vi.hoisted(() => ({ refresh: vi.fn() }))
+vi.mock('next/navigation', () => ({ useRouter: () => routerMock }))
 
 import TaskList from '@/app/lists/[id]/TaskList'
 const { muAddItem, muUpdateItem, muBulkDelete } = await import('@/lib/sync/mutations')
@@ -146,5 +154,23 @@ describe('TaskList', () => {
     expect(screen.getByText('No date')).toBeInTheDocument()
     expect(screen.getByText('Overdue thing')).toBeInTheDocument()
     expect(screen.getByText('Someday thing')).toBeInTheDocument()
+  })
+
+  // Guards the instant-back-nav fix: unmount must touch last_viewed (server +
+  // local Dexie) but must NOT call router.refresh() — that purged the /lists
+  // router cache and made every back-nav block on a server refetch.
+  it('touches last_viewed on mount and unmount without calling router.refresh', async () => {
+    const { touchListView } = await import('@/app/lists/[id]/actions')
+    const mockTouch = vi.mocked(touchListView)
+
+    const { unmount } = renderList()
+    expect(mockTouch).toHaveBeenCalledWith('l1')
+    expect(overviewLocal.touchListViewLocal).toHaveBeenCalledWith('l1')
+    const callsBeforeUnmount = mockTouch.mock.calls.length
+
+    unmount()
+    expect(mockTouch.mock.calls.length).toBeGreaterThan(callsBeforeUnmount)
+    expect(overviewLocal.touchListViewLocal.mock.calls.length).toBeGreaterThan(1)
+    expect(routerMock.refresh).not.toHaveBeenCalled()
   })
 })
