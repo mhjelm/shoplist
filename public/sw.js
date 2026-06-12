@@ -1,5 +1,16 @@
-const CACHE = 'shoplist-v5'
+const CACHE = 'shoplist-v6'
 const SHELL = ['/']
+
+// Cap how long a navigation waits on the network before we paint a cached shell.
+// A reconnecting radio makes fetch() HANG (pending, never rejects) rather than
+// fail fast, so the catch-fallback in handleNavigate alone never fires — the page
+// stays blank until the radio actually comes up. Racing a timeout closes that
+// window. The client heals freshness after (Dexie useLiveQuery + reconcileList).
+const NAV_TIMEOUT_MS = 3000
+
+function timeout(ms) {
+  return new Promise((_, reject) => setTimeout(() => reject(new Error('nav-timeout')), ms))
+}
 
 // Stateful or one-shot routes that must never be served from cache.
 function shouldCacheNav(url) {
@@ -64,13 +75,18 @@ async function handleNavigate(req, url) {
     }
   }
   try {
-    const res = await fetch(req)
+    // Race the network against NAV_TIMEOUT_MS. On timeout the rejection drops us
+    // into the catch below (serve a cached shell) instead of hanging blank. The
+    // abandoned fetch keeps running harmlessly; the next SWR serve re-caches.
+    const res = await Promise.race([fetch(req), timeout(NAV_TIMEOUT_MS)])
     if (shouldStore(url, res)) {
       const copy = res.clone()
       caches.open(CACHE).then((c) => c.put(req.url, copy))
     }
     return res
   } catch {
+    // Reject OR timeout: serve the best cached shell. '/' is precached at install,
+    // so there is (almost) always something to paint; the client heals freshness.
     return (
       (await caches.match(req.url)) ??
       (await caches.match('/lists')) ??
@@ -118,6 +134,26 @@ self.addEventListener('fetch', (event) => {
   // offline visit has something to serve. Without this, Link-clicking into a
   // list page never caches its HTML, and offline navigation bounces back to
   // /lists.
+  // Content-hashed, immutable build assets: cache-first. Without this the SW
+  // caches HTML navigations but NOT the JS/CSS chunks, so a cached shell served
+  // on a hanging radio can't HYDRATE (the chunk fetches hang too) and the page
+  // stays dead-blank. Hashed filenames mean a cache hit is never stale; new
+  // deploys ship new hashes (new keys), and the v6 activate prunes the old gen.
+  if (req.method === 'GET' && url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(
+      caches.match(req.url).then((hit) =>
+        hit ?? fetch(req).then((res) => {
+          if (res.ok) {
+            const copy = res.clone()
+            caches.open(CACHE).then((c) => c.put(req.url, copy))
+          }
+          return res
+        })
+      )
+    )
+    return
+  }
+
   const isRsc = req.method === 'GET'
     && (req.headers.get('RSC') === '1' || url.searchParams.has('_rsc'))
   if (isRsc) {

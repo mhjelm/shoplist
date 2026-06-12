@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -55,6 +55,22 @@ function navEvent(url: string): FetchEvent & { _response?: Response | Promise<Re
   return event
 }
 
+// A plain (non-navigate) GET — e.g. a hashed build asset.
+function assetEvent(url: string): FetchEvent & { _response?: Response | Promise<Response> } {
+  const req = new Request(url, { method: 'GET' })
+  const event = {
+    request: req,
+    _response: undefined as Response | Promise<Response> | undefined,
+    respondWith(r: Response | Promise<Response>) { this._response = r },
+  }
+  return event
+}
+
+// A fetch that never settles — models a reconnecting radio (hangs, doesn't reject).
+function hangingFetch(): Promise<Response> {
+  return new Promise<Response>(() => { /* never resolves */ })
+}
+
 async function awaitResponse(ev: { _response?: Response | Promise<Response> }): Promise<Response> {
   return await Promise.resolve(ev._response!)
 }
@@ -67,6 +83,10 @@ let sw: SwHandle
 
 beforeEach(() => {
   sw = loadSW()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('service worker — navigation cache', () => {
@@ -148,5 +168,61 @@ describe('service worker — navigation cache', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(sw.cachePut).not.toHaveBeenCalled()
+  })
+})
+
+describe('service worker — resume / hanging-radio recovery', () => {
+  it('hung fetch + no cached URL: serves a cached shell after NAV_TIMEOUT_MS (no infinite blank)', async () => {
+    vi.useFakeTimers()
+    const shell = new Response('<root/>', { status: 200 })
+    sw.fetchMock.mockReturnValue(hangingFetch())                  // radio still reconnecting
+    sw.cacheMatch.mockImplementation(async (url: string) =>
+      url === '/' ? shell : null                                 // only the precached '/' shell exists
+    )
+
+    const ev = navEvent('https://shoplist.test/lists/abc')
+    sw.fetchListener(ev)
+    const p = Promise.resolve(ev._response)
+    await vi.advanceTimersByTimeAsync(3000)                       // NAV_TIMEOUT_MS elapses → timeout rejects
+    const res = await p
+    expect(res).toBe(shell)                                       // fell back to cache instead of hanging
+  })
+
+  it('hung fetch + cached exact URL: still paints instantly from cache', async () => {
+    const cached = new Response('<lists/>', { status: 200 })
+    sw.fetchMock.mockReturnValue(hangingFetch())
+    sw.cacheMatch.mockImplementation(async (url: string) =>
+      url === 'https://shoplist.test/lists' ? cached : null
+    )
+
+    const ev = navEvent('https://shoplist.test/lists')
+    sw.fetchListener(ev)
+    const res = await awaitResponse(ev)                           // resolves without waiting on the network
+    expect(res).toBe(cached)
+  })
+
+  it('immutable build asset: served from cache without touching the network', async () => {
+    const chunk = new Response('/*js*/', { status: 200 })
+    sw.cacheMatch.mockResolvedValue(chunk)
+
+    const ev = assetEvent('https://shoplist.test/_next/static/chunks/abc.js')
+    sw.fetchListener(ev)
+    const res = await awaitResponse(ev)
+    expect(res).toBe(chunk)
+    expect(sw.fetchMock).not.toHaveBeenCalled()                  // cache-first: no hanging chunk fetch
+  })
+
+  it('immutable build asset: on a cache miss, fetches and caches it', async () => {
+    sw.cacheMatch.mockResolvedValue(null)
+    sw.fetchMock.mockResolvedValueOnce(new Response('/*js*/', { status: 200 }))
+
+    const ev = assetEvent('https://shoplist.test/_next/static/chunks/xyz.js')
+    sw.fetchListener(ev)
+    await awaitResponse(ev)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(sw.fetchMock).toHaveBeenCalled()
+    const [key] = sw.cachePut.mock.calls[0]
+    expect(key).toBe('https://shoplist.test/_next/static/chunks/xyz.js')
   })
 })

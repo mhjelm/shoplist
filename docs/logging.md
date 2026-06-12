@@ -61,6 +61,7 @@ Client events appear in the **same Vercel Runtime Logs** as server logs, attribu
 | `share.extract_failed` / `share.insert_failed` | warn / error | share/route.ts | Web Share Target extraction or DB insert failed |
 | `sw.register_failed` | warn | ServiceWorkerRegister | service worker registration failed |
 | `picture.upload_failed` | warn | PictureInput | image upload/resize threw |
+| `ui.global_error` | error | global-error.tsx | a render crash escaped every route boundary (`detail.digest`/`error`) |
 
 **Convention:** any new swallowed `catch {}` / `.catch(() => {})` should add a `log.*` event key instead of silently discarding — so the failure is diagnosable.
 
