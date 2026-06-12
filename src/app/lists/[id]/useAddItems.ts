@@ -25,13 +25,14 @@ export function useAddItems({
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [urlInput, setUrlInput] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const deletedNamesRef = useRef<Set<string>>(new Set())
 
   function handleInputChange(value: string) {
     setInput(value)
     setHighlightIdx(-1)
     if (value.trim().length < 1 || /[,\n\d]/.test(value)) { setFiltered([]); return }
     const lower = value.toLowerCase()
-    setFiltered(suggestions.filter(s => s.toLowerCase().includes(lower)).slice(0, 6))
+    setFiltered(suggestions.filter(s => !deletedNamesRef.current.has(s) && s.toLowerCase().includes(lower)).slice(0, 6))
   }
 
   function selectSuggestion(name: string) {
@@ -41,6 +42,7 @@ export function useAddItems({
   }
 
   function handleDeleteSuggestion(name: string) {
+    deletedNamesRef.current.add(name)
     setFiltered(f => f.filter(s => s !== name))
     if (!isOffline) deleteHistoryItem(name)
     inputRef.current?.focus()
