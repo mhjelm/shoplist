@@ -104,12 +104,6 @@ function showBackNavOverlay(theme: Theme) {
   overlay.className = `loading-overlay fixed inset-0 flex items-center justify-center ${bgClassFor(theme)}`
   overlay.style.zIndex = '9999'
 
-  const glass = document.createElement('span')
-  glass.className = 'backnav-glass select-none'
-  glass.setAttribute('aria-hidden', 'true')
-  glass.textContent = '⏳'
-  overlay.appendChild(glass)
-
   // Stamp creation time so ListsView can log how long the overlay was visible.
   overlay.dataset.shownAt = String(Date.now())
 
