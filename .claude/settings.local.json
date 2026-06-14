@@ -59,7 +59,23 @@
       "Bash(grep *)",
       "Bash(awk 'NR>=15 && NR<=47' CLAUDE.md)",
       "Bash(awk 'NR>=48 && NR<=73' CLAUDE.md)",
-      "Bash(awk 'NR>=103 && NR<=292' CLAUDE.md)"
+      "Bash(awk 'NR>=103 && NR<=292' CLAUDE.md)",
+      "Skill(update-config)",
+      "Bash(command -v jq)",
+      "Bash(jq --version)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(echo \"[exit=$? | end]\")",
+      "Bash(echo \"--- exit $? ---\")",
+      "Bash(git -C C:\\\\proj\\\\shoplist diff --stat HEAD)",
+      "Bash(git -C C:\\\\proj\\\\shoplist log --oneline -8)",
+      "Bash(Select-Object -Last 20)",
+      "Bash(Select-Object -Last 25)",
+      "PowerShell(git *)",
+      "PowerShell($line = \\(Get-Content -LiteralPath \"src\\\\app\\\\lists\\\\[id]\\\\EmptyState.tsx\"\\)[29]; Write-Output $line; Write-Output \"---- chars ----\"; $idx = $line.IndexOf\\(\"Tom\"\\); $seg = $line.Substring\\($idx, 12\\); \\($seg.ToCharArray\\(\\) | ForEach-Object { \"{0} U+{1:X4}\" -f $_, [int]$_ }\\) -join \"  \")",
+      "Read(//c/Program Files/Google/Chrome/Application/**)",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(git fetch *)",
+      "Bash(git rebase *)"
     ]
   }
 }

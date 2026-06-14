@@ -1,10 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CLAUDE.md — phosphor build</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  :root {
+    --bg:        #04080a;
+    --bg-2:      #06101180;
+    --ink:       #b9f4ea;
+    --ink-dim:   #6fa89f;
+    --phos:      #45f5d8;   /* primary phosphor cyan */
+    --phos-soft: #45f5d855;
+    --magenta:   #ff5bb0;
+    --amber:     #ffc24b;
+    --line:      #103c3a;
+    --glow:      0 0 4px var(--phos-soft), 0 0 11px var(--phos-soft);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(120% 90% at 50% -10%, #0a1d1f 0%, transparent 55%),
+      radial-gradient(80% 70% at 110% 110%, #16092099 0%, transparent 60%),
+      var(--bg);
+    color: var(--ink);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 15px;
+    line-height: 1.7;
+    letter-spacing: .1px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ---- CRT overlays ---- */
+  body::before {  /* scanlines */
+    content: "";
+    position: fixed; inset: 0;
+    pointer-events: none; z-index: 9000;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0 2px,
+      #00000040 2px 3px
+    );
+    mix-blend-mode: multiply;
+    opacity: .55;
+  }
+  body::after {   /* vignette + flicker */
+    content: "";
+    position: fixed; inset: 0;
+    pointer-events: none; z-index: 9001;
+    background: radial-gradient(130% 120% at 50% 45%, transparent 60%, #000 140%);
+    animation: flicker 6s infinite steps(60);
+  }
+  @keyframes flicker {
+    0%, 97%, 100% { opacity: 1; }
+    98% { opacity: .86; }
+    99% { opacity: .94; }
+  }
+
+  /* ---- layout ---- */
+  .wrap {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 72px 28px 140px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ---- masthead ---- */
+  .mast {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 30px 32px 26px;
+    margin-bottom: 54px;
+    background:
+      linear-gradient(180deg, #07181a 0%, #050d0e 100%);
+    box-shadow: inset 0 0 60px #0a282633, 0 0 30px #0a282622;
+    position: relative;
+    overflow: hidden;
+  }
+  .mast::before {
+    content: "● ● ●";
+    position: absolute; top: 12px; left: 16px;
+    letter-spacing: 6px; font-size: 9px;
+    color: var(--line);
+  }
+  .mast .sys {
+    font-size: 11px; color: var(--ink-dim);
+    text-transform: uppercase; letter-spacing: 3px;
+    margin: 14px 0 16px;
+  }
+  .mast h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(46px, 9vw, 92px);
+    line-height: .92;
+    margin: 0;
+    color: #eafffb;
+    text-shadow:
+      0 0 6px #45f5d8aa,
+      0 0 22px #45f5d877,
+      0 0 48px #45f5d844;
+    animation: bootglow 1.1s ease-out both;
+  }
+  .mast h1 .dot { color: var(--magenta); text-shadow: 0 0 14px var(--magenta); }
+  @keyframes bootglow {
+    0%   { opacity: 0; filter: brightness(2.4) blur(6px); letter-spacing: 8px; }
+    60%  { opacity: 1; filter: brightness(1.2) blur(0);   letter-spacing: 0; }
+    100% { opacity: 1; filter: brightness(1);   }
+  }
+  .mast .tag {
+    margin: 20px 0 0; max-width: 60ch;
+    color: var(--ink-dim); font-size: 13.5px;
+  }
+  .mast .cursor::after {
+    content: "▋"; color: var(--phos);
+    animation: blink 1.05s steps(1) infinite;
+    margin-left: 4px;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---- rendered markdown ---- */
+  #doc > * { animation: rise .6s ease-out both; }
+  @keyframes rise { from { opacity:0; transform: translateY(10px);} to {opacity:1;transform:none;} }
+
+  #doc h2 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 27px;
+    color: #d6fff7;
+    margin: 64px 0 8px;
+    padding-bottom: 8px;
+    text-shadow: 0 0 12px #45f5d855;
+    position: relative;
+  }
+  #doc h2::before {
+    content: "§ ";
+    color: var(--magenta);
+    text-shadow: 0 0 10px var(--magenta);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+  }
+  #doc h2::after {
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+    background: linear-gradient(90deg, var(--phos), transparent 75%);
+    box-shadow: 0 0 8px var(--phos-soft);
+  }
+  #doc h3 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    color: var(--phos);
+    margin: 40px 0 6px;
+    text-shadow: 0 0 9px #45f5d844;
+  }
+  #doc h3::before { content: "▸ "; color: var(--ink-dim); }
+
+  #doc p { margin: 12px 0; }
+  #doc a {
+    color: var(--magenta);
+    text-decoration: none;
+    border-bottom: 1px dotted #ff5bb066;
+    text-shadow: 0 0 6px #ff5bb044;
+  }
+  #doc a:hover { color: #ffa6d6; border-bottom-color: var(--magenta); }
+
+  #doc strong { color: #eafffb; font-weight: 700; text-shadow: 0 0 7px #45f5d855; }
+  #doc em { color: var(--amber); font-style: italic; }
+  #doc del { color: var(--ink-dim); opacity: .6; }
+
+  #doc ul, #doc ol { padding-left: 24px; margin: 12px 0; }
+  #doc li { margin: 7px 0; }
+  #doc ul li::marker { color: var(--phos); }
+  #doc ol li::marker { color: var(--magenta); }
+
+  #doc code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.8px;
+    background: #0a201e;
+    border: 1px solid var(--line);
+    color: var(--phos);
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-shadow: 0 0 6px #45f5d833;
+    white-space: nowrap;
+  }
+  #doc pre {
+    background: linear-gradient(180deg,#071614,#050f0e);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--phos);
+    border-radius: 4px;
+    padding: 18px 20px;
+    overflow-x: auto;
+    box-shadow: inset 0 0 40px #0a282633, var(--glow);
+    margin: 18px 0;
+  }
+  #doc pre code {
+    background: none; border: none; padding: 0;
+    color: var(--ink); white-space: pre;
+    text-shadow: 0 0 5px #45f5d822;
+    font-size: 13px;
+  }
+
+  #doc blockquote {
+    margin: 18px 0;
+    padding: 12px 20px;
+    border: 1px solid #5a3a18;
+    border-left: 3px solid var(--amber);
+    border-radius: 4px;
+    background: #1a120640;
+    color: var(--amber);
+    box-shadow: 0 0 16px #ffc24b15;
+  }
+  #doc blockquote code { color: var(--amber); border-color:#5a3a18; background:#1a1206; }
+
+  #doc hr {
+    border: none; height: 1px; margin: 40px 0;
+    background: linear-gradient(90deg, transparent, var(--phos), transparent);
+    box-shadow: 0 0 10px var(--phos-soft);
+  }
+
+  /* tables */
+  #doc table {
+    width: 100%; border-collapse: collapse; margin: 20px 0;
+    font-size: 13px;
+    box-shadow: var(--glow);
+  }
+  #doc th, #doc td {
+    border: 1px solid var(--line);
+    padding: 9px 12px; text-align: left; vertical-align: top;
+  }
+  #doc th {
+    background: #0a201e;
+    color: var(--phos);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 11px;
+    text-shadow: 0 0 8px #45f5d855;
+  }
+  #doc tr:nth-child(even) td { background: #06100f80; }
+
+  /* footer */
+  .foot {
+    margin-top: 90px; padding-top: 22px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-dim); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 2px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .foot .blip { color: var(--phos); text-shadow: var(--glow); }
+
+  ::selection { background: #45f5d833; color: #eafffb; }
+  ::-webkit-scrollbar { height: 8px; width: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="mast">
+      <div class="sys">// guidance file · shoplist repo · phosphor render</div>
+      <h1>CLAUDE<span class="dot">.</span>md</h1>
+      <p class="tag cursor">Operating manual for the agent working this codebase — pending tasks, architecture, mutation rules, and the data model. Rendered in glowing phosphor.</p>
+    </header>
+
+    <main id="doc"><!-- rendered by marked --></main>
+
+    <footer class="foot">
+      <span><span class="blip">◉</span> SHOPLIST // NEXT.JS 16 · REACT 19 · SUPABASE</span>
+      <span>CRT-PHOSPHOR BUILD · next migration 0029_</span>
+    </footer>
+  </div>
+
+<script id="md" type="text/markdown">
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Pending manual tasks
-
-- **Apply migration `0029_notes_lists.sql`** — adds the `'notes'` list kind (extends the `lists.kind` CHECK) plus `items.url` + `items.note` for scrapbook lists, and extends the `bump_item_history` guard to skip notes too. Without it, creating/opening a scrapbook list errors (CHECK rejects the insert; `select('*')` won't return `url`/`note`).
 
 - **Apply migration `0028_list_views_task_sort.sql`** — adds `list_views.task_sort` (`'manual' | 'date'`, default `'manual'`); persists the per-user-per-list task-list sort view. Without it, the By-date toggle won't survive a reload (and `page.tsx`'s `list_views` select of `task_sort` will error).
 
@@ -25,19 +309,11 @@ Functional bugs are tracked in **`BUGS.md`** (single source of truth; e.g. BUG-0
 
 ### Back-nav from `/lists/[id]` visibly scrolls to top before `/lists` appears
 
-**MASKED, not fixed** (overlay in `BackLink.tsx`). Full history — 8 failed fix attempts, untested hypotheses, what's confirmed working, and the store-mode Back interception — lives in **`docs/known-issues/back-nav-scroll-jump.md`**. **Read it before attempting another fix** (every attempt so far either failed or fixed the symptom while introducing a worse one). **Update 2026-06-12:** the *slowness* of the masked transition (seconds-long overlay) was a separate, self-inflicted issue — our own `revalidatePath`/`router.refresh()` calls purged the Next.js router cache that makes back/forward instant by default — fixed by the instant-back-nav plan (`f7985ee`); the overlay stays to hide the (now very brief) scroll-jump.
+**MASKED, not fixed** (overlay in `BackLink.tsx`). Full history — 8 failed fix attempts, untested hypotheses, what's confirmed working, and the store-mode Back interception — lives in **`docs/known-issues/back-nav-scroll-jump.md`**. **Read it before attempting another fix** (every attempt so far either failed or fixed the symptom while introducing a worse one).
 
 ## Active plan
 
-**Scrapbook (notes) lists** — plan at `PLAN.md`, **executed 2026-06-15**. A third `lists.kind` value `'notes'` (UI name "Scrapbook"): a freeform feed of saved scraps — typed notes, voice memos, and links auto-unfurled into rich cards. Reuses the entire sync substrate like task lists; page-level branch in `page.tsx` renders `NoteList`. See "Scrapbook (notes) lists" under Architecture. Needs migration `0029` applied (see Pending manual tasks).
-
-_Prior:_ **Instant back-nav: /lists/[id] → /lists paints from local cache** — plan archived to `docs/PLAN-ARCHIVE.md` (was at `PLAN.md`), **executed 2026-06-12**, first pass committed `f7985ee`, **verified 2026-06-13** (`app_logs` `nav.back_overlay_ms` p50 ~75ms, range 59–86ms — down from the old seconds-long overlay). Root cause: Next.js serves back/forward from the client router cache even when stale, but our own `revalidatePath('/lists')` (in `touchListView`, fired on every list mount/hide/unmount + after every outbox mutation), `router.refresh()` on ItemList/TaskList unmount, and per-mutation `revalidatePath('/lists/${id}')` purged it. Fix: unread-marker freshness moved local — `src/lib/sync/overviewLocal.ts` (`seedListsOverview` non-regressive Dexie merge + `touchListViewLocal`) — and all 17 hot-path revalidates removed (rare direct flows in `lists/actions.ts`, settings, auth keep theirs). Overlay removal now gated on Dexie readiness; logs `nav.back_overlay_ms` / `nav.back_overlay_timeout`.
-
-_Prior:_ **Service-worker resume hardening — kill the "blank page on cold wake-up"** — executed + committed 2026-06-12 (`8e61117`); archived → `docs/PLAN-ARCHIVE.md`. Still awaiting on-device verification of the in-store suspend/resume scenario.
-
-_Prior:_ **Fix BUG-002: server-side `log.error` doesn't reach durable `app_logs`** executed + committed 2026-06-10 (`d61a9c2`) — `persistServerLog` now returns its promise so `after()` awaits the insert.
-
-_Prior:_ **Task-list polish — done animation, drag-reorder, by-date sort view** executed 2026-06-10 (plan at `C:\Users\mh\.claude\plans\some-things-related-to-dynamic-mochi.md`; design exploration `docs/task-sort-exploration.html`). Needs migration `0028` applied (see Pending manual tasks).
+_None active._ **Task-list polish — done animation, drag-reorder, by-date sort view** executed 2026-06-10 (plan at `C:\Users\mh\.claude\plans\some-things-related-to-dynamic-mochi.md`; design exploration `docs/task-sort-exploration.html`). Needs migration `0028` applied (see Pending manual tasks).
 
 _Prior:_ Fix BUG-001: share-import → 404 on Back executed 2026-06-10 (graceful `ShareGone`; see `BUGS.md` → Fixed). Image Gemini calls routed through the failover chain (503 fix) + BUG-002 recorded — 2026-06-10. Task-list kind on share-import + picture import inside task lists — executed 2026-06-09 (plan at `C:\Users\mh\.claude\plans\some-things-related-to-dynamic-mochi.md`). SpeechModal `useAudioRecorder` dedup executed 2026-06-08 (see `REFACTOR.md` Completed). ESLint mutation-path rule (REFACTOR #3) executed 2026-06-08. Durable log persistence executed 2026-06-08.
 
@@ -141,18 +417,6 @@ A list is either a grocery `'shopping'` list (default) or a `'task'` list — th
 - **`/lists` (Mixed·A):** both kinds share one recency-sorted stream; `ListsView`'s `ListRow` renders a 🛒/✓ `KindIcon` + `SHOP`/`TASK` `KindPill` from `list.kind`. `kind` rides along on `LocalListCatalog` (seeded in `page.tsx`, refreshed by `reconcileListsOverview`). The NEW marker / `last_add_*` logic is kind-agnostic and unchanged.
 - Copy/move is shopping-only: `page.tsx` filters the `availableLists` passed to `ItemList` to `kind !== 'task'`.
 
-### Scrapbook (notes) lists (`kind === 'notes'`)
-
-The third `lists.kind` value (migration `0029`), UI name **"Scrapbook"**: a freeform feed of saved scraps — typed notes, voice memos, and links. Like task lists it reuses the whole sync substrate unchanged and is a **page-level branch** in `page.tsx` (no store/edit-mode, no AI/category/measurement, no assignees/due dates).
-
-- **Two new `items` columns (0029):** `url` (the link) and `note` (a longer typed/spoken body). `name` is the title/short label. `picture_url` (existing) holds the link's unfurled preview image or a photo. A scrap is a link (`url` set) or a plain note; both render as a `NoteCard`.
-- **UI:** `NoteList.tsx` (feed + add textarea + voice button), `NoteCard.tsx` (title/link + body + host pill + thumbnail), `NoteEditModal.tsx` (title/body/url/remove-image), `NoteSpeechModal.tsx` (record → `transcribeNote` → editable transcript → add). Pure helpers in `src/lib/notesView.ts` (`isUrl`, `splitNoteText`, `noteHostname`). Sorted newest-first (no reorder, no done-section).
-- **GOTCHA enforced:** `url`/`note` are in the `ItemUpdatePatch` whitelist (`itemUpdate.ts`) and the `muAddItem` `item.insert` payload (conditional spread — shopping/task payloads byte-unchanged) and the `addItem` dispatch args. Same rule as task fields — miss any and the server write silently no-ops.
-- **Link unfurling:** adding a bare URL calls the `unfurlLink` server action (fetch + OpenGraph `og:title`/`og:description`/`og:image`, `<title>` fallback) → fills `name`/`note`/`picture_url`. Best-effort: skipped offline or on failure, the raw link is still saved.
-- **No Gemini-categorize / no history:** notes adds use `muAddItem(item, { skipCategorize: true })`; the `bump_item_history` guard (0029) skips `'notes'` too, so scraps stay out of grocery autocomplete.
-- **`addItem` merge gate:** the name-merge + cached-category fast path in `addItem` (`actions/items.ts`) now runs **only for `kind === 'shopping'`** (one cheap kind read) — notes (and tasks) must never dedupe by name, since titles can repeat or be empty.
-- **`/lists`:** `ListsView` renders a 📎 `NoteMarker` and a 📎 glyph in the nav loading overlay (`navGlyph`). `CreateListForm` offers a third "📎 Scrapbook" kind.
-
 ### Optimistic UI + Realtime
 
 Logic is split across focused hooks in `src/app/lists/[id]/`:
@@ -248,9 +512,9 @@ All diagnostic logging goes through **`src/lib/log.ts`** — `log.error / warn /
 
 Six tables. Initial schema in `supabase/migrations/0001_init.sql`; subsequent migrations add columns and tables:
 
-- `lists` (id, name, owner_id, created_at, kind, last_activity, last_add_at, last_add_by) — `kind` (`'shopping' | 'task' | 'notes'`, default `'shopping'`; `'task'` migration 0025, `'notes'` migration 0029) discriminates grocery vs. task vs. scrapbook lists (see "Task lists" / "Scrapbook (notes) lists" above). `is_shared` was dropped in migration 0012; shared status is now derived from `list_members` having rows. `last_activity` (added in 0017) is a monotonic timestamp bumped by a trigger on every items INSERT/UPDATE/DELETE; it powers the `list_activity` view's sync precheck and **must stay monotonic across deletes**. `last_add_at`/`last_add_by` (added in 0024) are the **add-only** signal for the `/lists` NEW marker — bumped by an INSERT-only trigger (`bump_list_add_activity`), so deletes, edits, clear-shopped, and move-from never raise the marker; only a genuine add (including a move/copy *into* the list) does. `computeUnread` (`src/lib/listsUnread.ts`) reads `last_add_*`, not `last_activity`. Don't conflate the two: `last_activity` = "did anything change?" (sync), `last_add_*` = "was something added?" (marker).
+- `lists` (id, name, owner_id, created_at, kind, last_activity, last_add_at, last_add_by) — `kind` (`'shopping' | 'task'`, default `'shopping'`, migration 0025) discriminates grocery vs. task lists (see "Task lists" above). `is_shared` was dropped in migration 0012; shared status is now derived from `list_members` having rows. `last_activity` (added in 0017) is a monotonic timestamp bumped by a trigger on every items INSERT/UPDATE/DELETE; it powers the `list_activity` view's sync precheck and **must stay monotonic across deletes**. `last_add_at`/`last_add_by` (added in 0024) are the **add-only** signal for the `/lists` NEW marker — bumped by an INSERT-only trigger (`bump_list_add_activity`), so deletes, edits, clear-shopped, and move-from never raise the marker; only a genuine add (including a move/copy *into* the list) does. `computeUnread` (`src/lib/listsUnread.ts`) reads `last_add_*`, not `last_activity`. Don't conflate the two: `last_activity` = "did anything change?" (sync), `last_add_*` = "was something added?" (marker).
 - `list_members` (list_id, user_id, added_at) — join table for sharing
-- `items` (id, list_id, added_by, name, is_checked, created_at, picture_url, sort_order, quantity, category, measurement, shared_group_id, assignee_id, due_date, url, note) — `assignee_id`/`due_date` (migration 0025) are task-list-only; `url`/`note` (migration 0029) are notes-list-only (all null/ignored for shopping items)
+- `items` (id, list_id, added_by, name, is_checked, created_at, picture_url, sort_order, quantity, category, measurement, shared_group_id, assignee_id, due_date) — `assignee_id`/`due_date` (migration 0025) are task-list-only (null/ignored for shopping items)
 - `user_item_history` (user_id, name, last_used_at, use_count, category) — autocomplete source
 - `user_preferences` (user_id, theme, list_text_size, category_order, high_contrast, reduce_motion, updated_at) — `theme` is `'light' | 'dark' | 'shoplist' | 'polar' | 'dusk'`
 - `pending_imports` (id, user_id, items jsonb, created_at) — transient store for Web Share Target payloads
@@ -281,4 +545,28 @@ Realtime publication includes `items`, `lists`, and `list_members`. `items` uses
 
 - **`@/...` imports** resolve to `src/...` (Next.js default).
 - **Tailwind v4** — uses `@tailwindcss/postcss`; no `tailwind.config.js`.
-- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0030_`.
+- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0029_`.
+</script>
+
+<script>
+  const src = document.getElementById('md').textContent;
+  const target = document.getElementById('doc');
+  function render() {
+    if (window.marked) {
+      target.innerHTML = marked.parse(src, { gfm: true, breaks: false });
+    } else {
+      // graceful fallback: show raw text in a glowing pre
+      const pre = document.createElement('pre');
+      pre.textContent = src;
+      target.appendChild(pre);
+    }
+    // stagger the reveal of top-level blocks
+    [...target.children].forEach((el, i) => {
+      el.style.animationDelay = Math.min(i * 45, 900) + 'ms';
+    });
+  }
+  if (document.readyState !== 'loading') render();
+  else document.addEventListener('DOMContentLoaded', render);
+</script>
+</body>
+</html>
