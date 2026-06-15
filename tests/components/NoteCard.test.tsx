@@ -27,14 +27,14 @@ function makeNote(overrides: Partial<Item> = {}): Item {
 
 describe('NoteCard', () => {
   it('renders a plain note as text (not a link)', () => {
-    render(<NoteCard item={makeNote({ note: 'the body' })} onEdit={vi.fn()} />)
+    render(<NoteCard item={makeNote({ note: 'the body' })} onEdit={vi.fn()} onDelete={vi.fn()} />)
     expect(screen.getByText('A saved thought')).toBeInTheDocument()
     expect(screen.getByText('the body')).toBeInTheDocument()
     expect(screen.queryByRole('link')).toBeNull()
   })
 
   it('renders a link with its title, href, and host pill', () => {
-    render(<NoteCard item={makeNote({ name: 'Cool gadget', url: 'https://www.shop.test/item' })} onEdit={vi.fn()} />)
+    render(<NoteCard item={makeNote({ name: 'Cool gadget', url: 'https://www.shop.test/item' })} onEdit={vi.fn()} onDelete={vi.fn()} />)
     const link = screen.getByRole('link', { name: 'Cool gadget' })
     expect(link).toHaveAttribute('href', 'https://www.shop.test/item')
     expect(link).toHaveAttribute('target', '_blank')
@@ -51,6 +51,7 @@ describe('NoteCard', () => {
           note: 'Saknar din dator kortläsare?',
         })}
         onEdit={vi.fn()}
+        onDelete={vi.fn()}
       />,
     )
     const link = screen.getByRole('link', { name: /Kortläsare med USB C-kontakt/ })
@@ -61,13 +62,31 @@ describe('NoteCard', () => {
   })
 
   it('falls back to the URL as the link label when there is no title', () => {
-    render(<NoteCard item={makeNote({ name: '', url: 'https://x.test/y' })} onEdit={vi.fn()} />)
+    render(<NoteCard item={makeNote({ name: '', url: 'https://x.test/y' })} onEdit={vi.fn()} onDelete={vi.fn()} />)
     expect(screen.getByRole('link', { name: 'https://x.test/y' })).toBeInTheDocument()
+  })
+
+  it('deletes only after a two-step confirm', () => {
+    const onDelete = vi.fn()
+    render(<NoteCard item={makeNote()} onEdit={vi.fn()} onDelete={onDelete} />)
+
+    // First tap reveals confirm; nothing deleted yet.
+    fireEvent.click(screen.getByLabelText('Delete A saved thought'))
+    expect(onDelete).not.toHaveBeenCalled()
+
+    // Cancel backs out without deleting.
+    fireEvent.click(screen.getByLabelText('Cancel delete'))
+    expect(onDelete).not.toHaveBeenCalled()
+
+    // Tap again, then confirm.
+    fireEvent.click(screen.getByLabelText('Delete A saved thought'))
+    fireEvent.click(screen.getByLabelText('Confirm delete A saved thought'))
+    expect(onDelete).toHaveBeenCalledTimes(1)
   })
 
   it('shows the NEW dot when isNew and calls onEdit', () => {
     const onEdit = vi.fn()
-    render(<NoteCard item={makeNote()} isNew onEdit={onEdit} />)
+    render(<NoteCard item={makeNote()} isNew onEdit={onEdit} onDelete={vi.fn()} />)
     expect(screen.getByLabelText('Tillagd sedan ditt senaste besök')).toBeInTheDocument()
     fireEvent.click(screen.getByLabelText('Edit A saved thought'))
     expect(onEdit).toHaveBeenCalled()

@@ -207,6 +207,7 @@ export default function NoteList({ list, listId, currentUserId, lastViewedAt }: 
               item={item}
               isNew={isNewSinceVisit(item, currentUserId, lastViewedAt)}
               onEdit={() => setEditing(item)}
+              onDelete={() => muDeleteItem(listId, item.id)}
             />
           ))}
         </ul>
