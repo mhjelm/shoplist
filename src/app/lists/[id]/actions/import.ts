@@ -286,15 +286,19 @@ export async function transcribeNote(audioBase64: string, mimeType: string) {
   }
 }
 
-// Decode the handful of HTML entities that show up in OpenGraph/<title> text.
+// Decode the HTML entities that show up in OpenGraph/<title> text — named ones
+// plus numeric character references (decimal `&#228;` and hex `&#xE4;`), which
+// Swedish sites like biltema.se use for å/ä/ö.
 function decodeEntities(s: string): string {
   return s
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&apos;/g, "'")
     .replace(/&nbsp;/g, ' ')
+    .replace(/&#x([0-9a-f]+);/gi, (m, h) => { try { return String.fromCodePoint(parseInt(h, 16)) } catch { return m } })
+    .replace(/&#(\d+);/g, (m, d) => { try { return String.fromCodePoint(parseInt(d, 10)) } catch { return m } })
 }
 
 // Pull a single meta tag's `content` by property/name, tolerating attribute
@@ -324,9 +328,18 @@ export async function unfurlLink(url: string): Promise<{
   if (!/^https?:\/\/\S+$/i.test(trimmed)) return { error: 'Not a URL' }
 
   try {
+    // Use a realistic browser User-Agent + Accept headers. A bot-flavoured UA
+    // (e.g. "ShoplistBot") gets a 403 from CDN bot filters on many sites
+    // (biltema.se among them), which used to make the unfurl silently fall back
+    // to saving the raw link.
     const res = await fetch(trimmed, {
       signal: AbortSignal.timeout(10000),
-      headers: { 'User-Agent': 'Mozilla/5.0 ShoplistBot' },
+      redirect: 'follow',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'sv-SE,sv;q=0.9,en;q=0.8',
+      },
     })
     if (!res.ok) return { error: `Failed to fetch URL (${res.status})` }
     const html = (await res.text()).slice(0, 200000)

@@ -41,6 +41,25 @@ describe('NoteCard', () => {
     expect(screen.getByText('shop.test')).toBeInTheDocument()
   })
 
+  it('renders a rich preview (image + title + description + host) for a link with an image', () => {
+    render(
+      <NoteCard
+        item={makeNote({
+          name: 'Kortläsare med USB C-kontakt',
+          url: 'https://www.biltema.se/x',
+          picture_url: 'https://img.test/p.jpg',
+          note: 'Saknar din dator kortläsare?',
+        })}
+        onEdit={vi.fn()}
+      />,
+    )
+    const link = screen.getByRole('link', { name: /Kortläsare med USB C-kontakt/ })
+    expect(link).toHaveAttribute('href', 'https://www.biltema.se/x')
+    expect(document.querySelector('img')).toHaveAttribute('src', 'https://img.test/p.jpg')
+    expect(screen.getByText('Saknar din dator kortläsare?')).toBeInTheDocument()
+    expect(screen.getByText('biltema.se')).toBeInTheDocument()
+  })
+
   it('falls back to the URL as the link label when there is no title', () => {
     render(<NoteCard item={makeNote({ name: '', url: 'https://x.test/y' })} onEdit={vi.fn()} />)
     expect(screen.getByRole('link', { name: 'https://x.test/y' })).toBeInTheDocument()

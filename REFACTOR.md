@@ -26,6 +26,11 @@ A refactor is not "verified" or "behaviour-neutral" until **all** of these pass:
 
 ## Pending
 
+### 10. Fix the `tsc --noEmit` test-fixture errors from the scrapbook merge
+- **Smell**: the scrapbook PR (#3) added `url` / `note` to the `Item` type but didn't update every test fixture, so `npx tsc --noEmit` now reports errors in `tests/lib/taskView.test.ts` (Item literal missing `url`/`note`), `tests/lib/sync/reconcileLists.test.ts` (`LocalList` not assignable to `Record<string, unknown>`), and `tests/sw/navigation-cache.test.ts` (call-arity mismatch). `npm test` (vitest, esbuild — no typecheck) and `npm run build` (app only, skips test files) are both green, so these are invisible to the normal gates but make a full `tsc` dirty.
+- **Scope**: add `url: null` / `note: null` to the affected Item fixtures (or a shared `makeItem` factory), fix the `LocalList` cast in `reconcileLists.test.ts`, and reconcile the `navigation-cache.test.ts` call signature. Then `npx tsc --noEmit` should be clean.
+- **Status**: pending. Low priority — test-only, no runtime/build impact.
+
 ### 4. Decouple `src/lib/sync/engine.ts` from `actions.ts`
 - **Smell**: `engine.ts` uses dynamic `import('@/app/lists/[id]/actions')` and `import('./reconcile')` to escape a circular dep. Indicates a tangled dep graph; the sync layer shouldn't know route paths.
 - **Scope**: introduce a `dispatchers` map keyed by outbox `type` (registered at module init) so `engine` only knows the interface. Same shape for `triggerSync → reconcile`. Static imports become possible; tests can inject fakes.

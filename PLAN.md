@@ -1,6 +1,6 @@
 # Plan — Scrapbook list (`kind = 'notes'`)
 
-**Status: EXECUTING — 2026-06-15.**
+**Status: DONE — 2026-06-15.** Merged via PR #3; migrations `0029` (and the older `0028`) applied 2026-06-15.
 
 A third list kind alongside `'shopping'` and `'task'`: a freeform collection of
 saved scraps — typed notes, voice memos, and links (auto-unfurled into rich
@@ -55,4 +55,4 @@ measurement.
    - `NoteCard` component smoke test.
 
 ## Pending manual task after merge
-- Apply `0029_notes_lists.sql` (also still-pending: `0028`).
+- ~~Apply `0029_notes_lists.sql` (also still-pending: `0028`).~~ — both applied 2026-06-15.

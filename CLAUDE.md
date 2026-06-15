@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Pending manual tasks
 
-- **Apply migration `0029_notes_lists.sql`** — adds the `'notes'` list kind (extends the `lists.kind` CHECK) plus `items.url` + `items.note` for scrapbook lists, and extends the `bump_item_history` guard to skip notes too. Without it, creating/opening a scrapbook list errors (CHECK rejects the insert; `select('*')` won't return `url`/`note`).
+- ~~**Apply migration `0029_notes_lists.sql`**~~ — done 2026-06-15 (adds the `'notes'` list kind to the `lists.kind` CHECK, `items.url` + `items.note` for scrapbook lists, and extends the `bump_item_history` guard to skip notes too).
 
-- **Apply migration `0028_list_views_task_sort.sql`** — adds `list_views.task_sort` (`'manual' | 'date'`, default `'manual'`); persists the per-user-per-list task-list sort view. Without it, the By-date toggle won't survive a reload (and `page.tsx`'s `list_views` select of `task_sort` will error).
+- ~~**Apply migration `0028_list_views_task_sort.sql`**~~ — done (applied earlier, noted 2026-06-15; adds `list_views.task_sort` `'manual' | 'date'`, default `'manual'`, persisting the per-user-per-list task-list sort view).
 
 - ~~**Apply migration `0025_task_lists.sql`**~~ — done 2026-06-08 (adds `lists.kind`, `items.assignee_id` + `items.due_date`, and the `get_list_people` RPC; required for the task-lists feature).
 - ~~**Apply migration `0026_skip_task_history.sql`**~~ — done 2026-06-08 (guards `bump_item_history` so task-list items don't pollute the grocery autocomplete history).
@@ -29,7 +29,7 @@ Functional bugs are tracked in **`BUGS.md`** (single source of truth; e.g. BUG-0
 
 ## Active plan
 
-**Scrapbook (notes) lists** — plan at `PLAN.md`, **executed 2026-06-15**. A third `lists.kind` value `'notes'` (UI name "Scrapbook"): a freeform feed of saved scraps — typed notes, voice memos, and links auto-unfurled into rich cards. Reuses the entire sync substrate like task lists; page-level branch in `page.tsx` renders `NoteList`. See "Scrapbook (notes) lists" under Architecture. Needs migration `0029` applied (see Pending manual tasks).
+**Scrapbook (notes) lists** — plan at `PLAN.md`, **executed 2026-06-15**. A third `lists.kind` value `'notes'` (UI name "Scrapbook"): a freeform feed of saved scraps — typed notes, voice memos, and links auto-unfurled into rich cards. Reuses the entire sync substrate like task lists; page-level branch in `page.tsx` renders `NoteList`. See "Scrapbook (notes) lists" under Architecture. Migration `0029` applied 2026-06-15.
 
 _Prior:_ **Instant back-nav: /lists/[id] → /lists paints from local cache** — plan archived to `docs/PLAN-ARCHIVE.md` (was at `PLAN.md`), **executed 2026-06-12**, first pass committed `f7985ee`, **verified 2026-06-13** (`app_logs` `nav.back_overlay_ms` p50 ~75ms, range 59–86ms — down from the old seconds-long overlay). Root cause: Next.js serves back/forward from the client router cache even when stale, but our own `revalidatePath('/lists')` (in `touchListView`, fired on every list mount/hide/unmount + after every outbox mutation), `router.refresh()` on ItemList/TaskList unmount, and per-mutation `revalidatePath('/lists/${id}')` purged it. Fix: unread-marker freshness moved local — `src/lib/sync/overviewLocal.ts` (`seedListsOverview` non-regressive Dexie merge + `touchListViewLocal`) — and all 17 hot-path revalidates removed (rare direct flows in `lists/actions.ts`, settings, auth keep theirs). Overlay removal now gated on Dexie readiness; logs `nav.back_overlay_ms` / `nav.back_overlay_timeout`.
 

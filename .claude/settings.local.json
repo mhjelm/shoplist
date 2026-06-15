@@ -75,7 +75,11 @@
       "Read(//c/Program Files/Google/Chrome/Application/**)",
       "Bash(npx --no-install playwright --version)",
       "Bash(git fetch *)",
-      "Bash(git rebase *)"
+      "Bash(git rebase *)",
+      "Bash(echo \"=== With ShoplistBot UA ===\")",
+      "Bash(echo \"=== og: tags \\(bot\\) ===\")",
+      "Read(//tmp/**)",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -Last 15)"
     ]
   }
 }
