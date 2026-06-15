@@ -85,11 +85,18 @@ export async function confirmShareLink(
   if ('error' in resolved) return resolved
   const listId = resolved.listId
 
-  // Best-effort unfurl; fall back to raw link on failure.
-  const meta = await unfurlLink(link)
-  const name = meta.title || link
-  const note = meta.description ?? null
-  const picture_url = meta.image ?? null
+  // Reuse the unfurl captured at the route (stored on the pending row) — no second
+  // fetch. Fall back to a fresh unfurl only if it's missing (e.g. older row).
+  const { data: pending } = await supabase
+    .from('pending_imports')
+    .select('unfurl')
+    .eq('id', importId)
+    .single()
+  const meta = (pending?.unfurl as { title: string | null; description: string | null; image: string | null } | null)
+    ?? await unfurlLink(link)
+  const name = meta?.title || link
+  const note = meta?.description ?? null
+  const picture_url = meta?.image ?? null
 
   const { error: insertError } = await supabase
     .from('items')

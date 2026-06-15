@@ -8,6 +8,7 @@ interface Props {
 }
 
 type StoredItem = { name: string; category: string | null; measurement: string | null }
+type UnfurlMeta = { title: string | null; description: string | null; image: string | null }
 
 export default async function SharePage({ params }: Props) {
   const { importId } = await params
@@ -17,7 +18,7 @@ export default async function SharePage({ params }: Props) {
 
   const { data: pending } = await supabase
     .from('pending_imports')
-    .select('id, items, source, url, title')
+    .select('id, items, source, url, title, unfurl')
     .eq('id', importId)
     .single()
   if (!pending) return <ShareGone />
@@ -34,6 +35,7 @@ export default async function SharePage({ params }: Props) {
       source={pending.source as 'image' | 'url' | 'text' | 'link'}
       url={(pending.url as string | null) ?? null}
       title={(pending.title as string | null) ?? null}
+      unfurl={(pending.unfurl as UnfurlMeta | null) ?? null}
       lists={lists ?? []}
       currentUserId={user.id}
     />

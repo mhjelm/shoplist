@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Pending manual tasks
 
+- **Apply migration `0031_pending_import_unfurl.sql`** — adds nullable `unfurl jsonb` to `pending_imports` so a shared link's unfurl (title/description/image) is captured at the route, shown in the picker preview, and reused by `confirmShareLink` without a second fetch.
+
 - ~~**Apply migration `0030_share_link_payload.sql`**~~ — done 2026-06-15 (extends `pending_imports.source` CHECK to include `'link'`; adds nullable `url`/`title` columns. Required for the share-link-as-scrap plan).
 
 - **Reinstall PWA on family member's phone** — code + manifest are correct; share target was lost device-side (WebAPK dropped). Uninstall + reinstall to get share target back. Confirm with `share.received` log entries.
@@ -289,4 +291,4 @@ Realtime publication includes `items`, `lists`, and `list_members`. `items` uses
 
 - **`@/...` imports** resolve to `src/...` (Next.js default).
 - **Tailwind v4** — uses `@tailwindcss/postcss`; no `tailwind.config.js`.
-- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0030_`.
+- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0032_`.

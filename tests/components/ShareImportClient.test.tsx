@@ -225,6 +225,14 @@ describe('ShareImportClient — link mode', () => {
     expect(screen.getByText('recept.se')).toBeInTheDocument()
   })
 
+  it('shows the unfurled image + description in the preview when provided', () => {
+    renderLink({
+      unfurl: { title: 'Köttbullar', description: 'Klassiska svenska köttbullar', image: 'https://img.test/k.jpg' },
+    })
+    expect(document.querySelector('img')).toHaveAttribute('src', 'https://img.test/k.jpg')
+    expect(screen.getByText('Klassiska svenska köttbullar')).toBeInTheDocument()
+  })
+
   it('offers shopping and notes lists as destinations', () => {
     renderLink()
     expect(screen.getByText('Veckohandling')).toBeInTheDocument()

@@ -18,12 +18,19 @@ interface ShareList {
   kind: string
 }
 
+interface UnfurlMeta {
+  title: string | null
+  description: string | null
+  image: string | null
+}
+
 interface Props {
   importId: string
   items: SharedItem[]
   source: 'image' | 'url' | 'text' | 'link'
   url?: string | null
   title?: string | null
+  unfurl?: UnfurlMeta | null
   lists: ShareList[]
   currentUserId: string
 }
@@ -51,6 +58,7 @@ function LinkImportMode({
   items,
   url,
   title,
+  unfurl,
   lists,
   currentUserId,
 }: {
@@ -58,6 +66,7 @@ function LinkImportMode({
   items: SharedItem[]
   url: string
   title: string | null
+  unfurl: UnfurlMeta | null
   lists: ShareList[]
   currentUserId: string
 }) {
@@ -73,6 +82,7 @@ function LinkImportMode({
   const newNameTrimmed = newListName.trim()
   const destinationReady = isCreatingNew ? newNameTrimmed.length > 0 : selectedListId !== null
   const host = noteHostname(url)
+  const displayTitle = unfurl?.title || title || url
 
   // The kind we're targeting drives whether we add reviewed items or save a scrap.
   const targetKind: ListKind | undefined = isCreatingNew
@@ -133,22 +143,35 @@ function LinkImportMode({
       </header>
 
       <main className="mx-auto max-w-lg space-y-5 px-4 py-6">
-        {/* Link preview */}
-        <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-          <p className="break-words text-sm font-medium text-gray-900 dark:text-gray-100">
-            {title || url}
-          </p>
-          {title && (
+        {/* Link preview — rich (unfurled image + title + description) when available. */}
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+          {unfurl?.image && (
+            <img
+              src={unfurl.image}
+              alt=""
+              className="max-h-56 w-full bg-gray-50 object-contain dark:bg-gray-800"
+              loading="lazy"
+            />
+          )}
+          <div className="p-4">
+            <p className="break-words text-sm font-medium text-gray-900 dark:text-gray-100">
+              {displayTitle}
+            </p>
+            {unfurl?.description && (
+              <p className="mt-1 line-clamp-3 break-words text-xs text-gray-500 dark:text-gray-400">
+                {unfurl.description}
+              </p>
+            )}
             <p className="mt-1 break-all text-xs text-gray-400 dark:text-gray-500">{url}</p>
-          )}
-          {host && (
-            <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-gray-400 dark:text-gray-500">
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-              </svg>
-              {host}
-            </span>
-          )}
+            {host && (
+              <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-gray-400 dark:text-gray-500">
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+                </svg>
+                {host}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Destination picker: all lists */}
@@ -491,7 +514,7 @@ function ItemsImportMode({
 
 // ── Router ────────────────────────────────────────────────────────────────────
 
-export default function ShareImportClient({ importId, items, source, url, title, lists, currentUserId }: Props) {
+export default function ShareImportClient({ importId, items, source, url, title, unfurl, lists, currentUserId }: Props) {
   // Task lists are not valid share targets (product decision) — never offer them.
   const targetLists = lists.filter(l => l.kind !== 'task')
 
@@ -502,6 +525,7 @@ export default function ShareImportClient({ importId, items, source, url, title,
         items={items}
         url={url}
         title={title ?? null}
+        unfurl={unfurl ?? null}
         lists={targetLists}
         currentUserId={currentUserId}
       />

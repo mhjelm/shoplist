@@ -5,7 +5,7 @@
 Flow:
 1. **`src/app/share/route.ts`** — POST handler. Auth-checks, parses FormData, logs `share.received` (booleans only), then branches by payload type:
    - **image** → `extractListItemsFromImage` → items checklist (grocery).
-   - **link** (the `url` field, OR a URL found anywhere in `text` via `firstUrlIn`) → `extractRecipeItems` **best-effort** (no bail on empty) → store `source:'link'` with the extracted `items` + the raw `url`/`title`.
+   - **link** (the `url` field, OR a URL found anywhere in `text` via `firstUrlIn`) → `extractRecipeItems` **and** `unfurlLink` run **in parallel** (both parse the same page; latency is bounded to the slower) → store `source:'link'` with the extracted `items`, the raw `url`/`title`, and the `unfurl` jsonb (`{title,description,image}`, migration `0031`). The stored unfurl powers the picker's rich preview (image) immediately and is reused by `confirmShareLink` so the scrap insert needs no second fetch.
    - **plain text** (no URL) → `extractRecipeItems` → items checklist (grocery).
 2. The payload (items blob or raw link) is stored in `pending_imports` (`supabase/migrations/0010` + `0030` for the `'link'` source and `url`/`title` columns). RLS scopes rows to the inserting user.
 3. The handler 303-redirects to `/share/[importId]`.

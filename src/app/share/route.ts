@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { extractRecipeItems, extractListItemsFromImage } from '@/app/lists/[id]/actions'
+import { extractRecipeItems, extractListItemsFromImage, unfurlLink } from '@/app/lists/[id]/actions'
 import { firstUrlIn } from '@/lib/notesView'
 import { log } from '@/lib/log'
 
@@ -56,17 +56,24 @@ export async function POST(req: NextRequest) {
   }
 
   // --- Link path ---
-  // Extract recipe/list items best-effort so a recipe link still lands on the
-  // reviewable item checklist (the picker shows it for shopping/task targets).
-  // A non-recipe link just yields [] — no bail; the picker offers saving it as a
-  // scrap instead. The raw url/title ride along so the scrap option can unfurl.
+  // Recipe extraction (for shopping/task targets — the reviewable checklist) and
+  // unfurl (for the picker's rich preview + the scrap) run in PARALLEL: both parse
+  // the same page, so this bounds latency to the slower of the two. A non-recipe
+  // link yields [] items (no bail) and just becomes a scrap; the unfurl is stored
+  // so the picker shows a preview immediately and confirm needn't re-fetch.
   if (linkUrl) {
-    const result = await extractRecipeItems(linkUrl)
-    if (result.error) log.warn('share.extract_failed', { source: 'link', error: result.error })
-    const items = result.items ?? []
+    const [recipe, meta] = await Promise.all([
+      extractRecipeItems(linkUrl),
+      unfurlLink(linkUrl),
+    ])
+    if (recipe.error) log.warn('share.extract_failed', { source: 'link', error: recipe.error })
+    const items = recipe.items ?? []
+    const unfurl = (!meta.error && (meta.title || meta.description || meta.image))
+      ? { title: meta.title ?? null, description: meta.description ?? null, image: meta.image ?? null }
+      : null
     const { data: row, error: insertError } = await supabase
       .from('pending_imports')
-      .insert({ user_id: user.id, items, source: 'link', url: linkUrl, title: title || null })
+      .insert({ user_id: user.id, items, source: 'link', url: linkUrl, title: unfurl?.title || title || null, unfurl })
       .select('id')
       .single()
     if (insertError || !row) {
