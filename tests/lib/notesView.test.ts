@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isUrl, splitNoteText, noteHostname } from '@/lib/notesView'
+import { isUrl, firstUrlIn, splitNoteText, noteHostname } from '@/lib/notesView'
 
 describe('isUrl', () => {
   it('accepts a bare http(s) URL', () => {
@@ -14,6 +14,32 @@ describe('isUrl', () => {
     expect(isUrl('https://example.com and more')).toBe(false)
     expect(isUrl('ftp://example.com')).toBe(false)
     expect(isUrl('')).toBe(false)
+  })
+})
+
+describe('firstUrlIn', () => {
+  it('returns a bare URL', () => {
+    expect(firstUrlIn('https://example.com/x')).toBe('https://example.com/x')
+  })
+
+  it('extracts a URL embedded in surrounding text', () => {
+    expect(firstUrlIn('Check this out https://example.com/x cool')).toBe('https://example.com/x')
+    expect(firstUrlIn('Titel — https://www.biltema.se/p/123')).toBe('https://www.biltema.se/p/123')
+  })
+
+  it('returns the first URL when several are present', () => {
+    expect(firstUrlIn('a http://one.test b https://two.test')).toBe('http://one.test')
+  })
+
+  it('strips trailing punctuation that clings to a shared link', () => {
+    expect(firstUrlIn('see (https://example.com/x).')).toBe('https://example.com/x')
+    expect(firstUrlIn('link: https://example.com/x!')).toBe('https://example.com/x')
+  })
+
+  it('returns null when there is no URL or a non-http scheme', () => {
+    expect(firstUrlIn('buy milk')).toBeNull()
+    expect(firstUrlIn('ftp://example.com')).toBeNull()
+    expect(firstUrlIn('')).toBeNull()
   })
 })
 

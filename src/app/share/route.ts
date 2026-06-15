@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { extractRecipeItems, extractListItemsFromImage } from '@/app/lists/[id]/actions'
+import { firstUrlIn } from '@/lib/notesView'
 import { log } from '@/lib/log'
 
 export async function POST(req: NextRequest) {
@@ -16,47 +17,80 @@ export async function POST(req: NextRequest) {
   const title = (form.get('title') ?? '').toString().trim()
   const image = form.get('image')
 
-  let items: Array<{ name: string; category: string | null; measurement: string | null }> = []
-  let source: 'image' | 'url' | 'text' = 'text'
-  let extractError: string | undefined
+  const hasImage = image instanceof File && image.size > 0
+  // A link share: the `url` field, or the first URL found anywhere in `text`
+  // (many apps share "some text https://…" with the url field empty).
+  const linkUrl = url || firstUrlIn(text)
 
-  if (image instanceof File && image.size > 0) {
-    source = 'image'
+  log.info('share.received', {
+    hasImage,
+    hasUrl: !!url,
+    hasText: !!text,
+    hasTitle: !!title,
+    textHasUrl: !!firstUrlIn(text),
+  })
+
+  // --- Image path: grocery extraction (unchanged) ---
+  if (hasImage) {
     const fd = new FormData()
-    fd.append('image', image)
+    fd.append('image', image as File)
     const result = await extractListItemsFromImage(fd)
-    if (result.error) extractError = result.error
-    else items = result.items ?? []
-  } else {
-    const payload = url || text || title
-    if (!payload) {
+    if (result.error) {
+      log.warn('share.extract_failed', { source: 'image', error: result.error })
+      return NextResponse.redirect(new URL('/lists?shareError=extract', req.url), 303)
+    }
+    const items = result.items ?? []
+    if (items.length === 0) {
       return NextResponse.redirect(new URL('/lists?shareError=empty', req.url), 303)
     }
-    source = url ? 'url' : 'text'
-    const result = await extractRecipeItems(payload)
-    if (result.error) extractError = result.error
-    else items = result.items ?? []
+    const { data: row, error: insertError } = await supabase
+      .from('pending_imports')
+      .insert({ user_id: user.id, items, source: 'image' })
+      .select('id')
+      .single()
+    if (insertError || !row) {
+      log.error('share.insert_failed', { code: insertError?.code, error: insertError?.message })
+      return NextResponse.redirect(new URL('/lists?shareError=db', req.url), 303)
+    }
+    return NextResponse.redirect(new URL(`/share/${row.id}`, req.url), 303)
   }
 
-  if (extractError) {
-    log.warn('share.extract_failed', { source, error: extractError })
+  // --- Link path: store raw link, no extraction, never bail on "empty" ---
+  if (linkUrl) {
+    const { data: row, error: insertError } = await supabase
+      .from('pending_imports')
+      .insert({ user_id: user.id, items: [], source: 'link', url: linkUrl, title: title || null })
+      .select('id')
+      .single()
+    if (insertError || !row) {
+      log.error('share.insert_failed', { code: insertError?.code, error: insertError?.message })
+      return NextResponse.redirect(new URL('/lists?shareError=db', req.url), 303)
+    }
+    return NextResponse.redirect(new URL(`/share/${row.id}`, req.url), 303)
+  }
+
+  // --- Plain text path: grocery extraction ---
+  const payload = text || title
+  if (!payload) {
+    return NextResponse.redirect(new URL('/lists?shareError=empty', req.url), 303)
+  }
+  const result = await extractRecipeItems(payload)
+  if (result.error) {
+    log.warn('share.extract_failed', { source: 'text', error: result.error })
     return NextResponse.redirect(new URL('/lists?shareError=extract', req.url), 303)
   }
-
+  const items = result.items ?? []
   if (items.length === 0) {
     return NextResponse.redirect(new URL('/lists?shareError=empty', req.url), 303)
   }
-
   const { data: row, error: insertError } = await supabase
     .from('pending_imports')
-    .insert({ user_id: user.id, items, source })
+    .insert({ user_id: user.id, items, source: 'text' })
     .select('id')
     .single()
-
   if (insertError || !row) {
     log.error('share.insert_failed', { code: insertError?.code, error: insertError?.message })
     return NextResponse.redirect(new URL('/lists?shareError=db', req.url), 303)
   }
-
   return NextResponse.redirect(new URL(`/share/${row.id}`, req.url), 303)
 }

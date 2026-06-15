@@ -4,6 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Pending manual tasks
 
+- ~~**Apply migration `0030_share_link_payload.sql`**~~ — done 2026-06-15 (extends `pending_imports.source` CHECK to include `'link'`; adds nullable `url`/`title` columns. Required for the share-link-as-scrap plan).
+
+- **Reinstall PWA on family member's phone** — code + manifest are correct; share target was lost device-side (WebAPK dropped). Uninstall + reinstall to get share target back. Confirm with `share.received` log entries.
+
 - ~~**Apply migration `0029_notes_lists.sql`**~~ — done 2026-06-15 (adds the `'notes'` list kind to the `lists.kind` CHECK, `items.url` + `items.note` for scrapbook lists, and extends the `bump_item_history` guard to skip notes too).
 
 - ~~**Apply migration `0028_list_views_task_sort.sql`**~~ — done (applied earlier, noted 2026-06-15; adds `list_views.task_sort` `'manual' | 'date'`, default `'manual'`, persisting the per-user-per-list task-list sort view).
@@ -29,7 +33,11 @@ Functional bugs are tracked in **`BUGS.md`** (single source of truth; e.g. BUG-0
 
 ## Active plan
 
-**Scrapbook (notes) lists** — plan at `PLAN.md`, **executed 2026-06-15**. A third `lists.kind` value `'notes'` (UI name "Scrapbook"): a freeform feed of saved scraps — typed notes, voice memos, and links auto-unfurled into rich cards. Reuses the entire sync substrate like task lists; page-level branch in `page.tsx` renders `NoteList`. See "Scrapbook (notes) lists" under Architecture. Migration `0029` applied 2026-06-15.
+No active plan. Needs `0030` applied + PWA reinstall on family phone (see Pending manual tasks above).
+
+_Prior:_ **Fix sharing + share a link as a scrap (Web Share Target)** — plan at `PLAN.md`, **executed 2026-06-15**. Route now branches: image → grocery; URL/bare-URL text → link path (stores raw link, no extraction, no empty-bail) → `LinkImportMode` picker (notes lists only, `confirmShareLink` unfurls on confirm); plain text → grocery. `shareError` surfaced as dismissible toast on `/lists`. `share.received` log added for Bug #3 observability. Awaiting migration `0030` + PWA reinstall.
+
+_Prior:_ **Scrapbook (notes) lists** — plan archived in git history (was at `PLAN.md`), **executed 2026-06-15**. A third `lists.kind` value `'notes'` (UI name "Scrapbook"): a freeform feed of saved scraps — typed notes, voice memos, and links auto-unfurled into rich cards. Reuses the entire sync substrate like task lists; page-level branch in `page.tsx` renders `NoteList`. See "Scrapbook (notes) lists" under Architecture. Migration `0029` applied 2026-06-15. Follow-ups (link unfurl UA/entity fix, rich preview card, clipboard auto-paste, inline trash) shipped `bf816dd`/`0cc9c1e`.
 
 _Prior:_ **Instant back-nav: /lists/[id] → /lists paints from local cache** — plan archived to `docs/PLAN-ARCHIVE.md` (was at `PLAN.md`), **executed 2026-06-12**, first pass committed `f7985ee`, **verified 2026-06-13** (`app_logs` `nav.back_overlay_ms` p50 ~75ms, range 59–86ms — down from the old seconds-long overlay). Root cause: Next.js serves back/forward from the client router cache even when stale, but our own `revalidatePath('/lists')` (in `touchListView`, fired on every list mount/hide/unmount + after every outbox mutation), `router.refresh()` on ItemList/TaskList unmount, and per-mutation `revalidatePath('/lists/${id}')` purged it. Fix: unread-marker freshness moved local — `src/lib/sync/overviewLocal.ts` (`seedListsOverview` non-regressive Dexie merge + `touchListViewLocal`) — and all 17 hot-path revalidates removed (rare direct flows in `lists/actions.ts`, settings, auth keep theirs). Overlay removal now gated on Dexie readiness; logs `nav.back_overlay_ms` / `nav.back_overlay_timeout`.
 

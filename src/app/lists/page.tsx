@@ -5,10 +5,16 @@ import { logout } from '../auth/actions'
 import CreateListForm from './CreateListForm'
 import ListsView from './ListsView'
 import OfflineBadge from '@/components/OfflineBadge'
+import { ShareErrorToast } from './ShareErrorToast'
 import { getUserPreferences } from '@/lib/preferences'
 import type { List } from '@/lib/types'
 
-export default async function ListsPage() {
+interface Props {
+  searchParams: Promise<{ shareError?: string }>
+}
+
+export default async function ListsPage({ searchParams }: Props) {
+  const { shareError } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -49,6 +55,8 @@ export default async function ListsPage() {
   const { theme } = await getUserPreferences()
 
   return (
+    <>
+    {shareError && <ShareErrorToast code={shareError} />}
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between">
         <h1 className="font-semibold text-gray-900 dark:text-gray-100">Lists</h1>
@@ -66,5 +74,6 @@ export default async function ListsPage() {
         <ListsView initialLists={lists} memberCounts={memberCounts} lastAdd={lastAdd} lastAddBy={lastAddBy} lastViewed={lastViewed} theme={theme} currentUserId={user.id} />
       </main>
     </div>
+    </>
   )
 }

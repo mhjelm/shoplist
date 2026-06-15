@@ -4,11 +4,13 @@ import ShareImportClient from '@/app/share/[importId]/ShareImportClient'
 
 vi.mock('@/app/share/actions', () => ({
   confirmShareImport: vi.fn(),
+  confirmShareLink: vi.fn(),
   cancelShareImport: vi.fn(),
 }))
 
-const { confirmShareImport, cancelShareImport } = await import('@/app/share/actions')
+const { confirmShareImport, confirmShareLink, cancelShareImport } = await import('@/app/share/actions')
 const mockConfirm = vi.mocked(confirmShareImport)
+const mockConfirmLink = vi.mocked(confirmShareLink)
 const mockCancel = vi.mocked(cancelShareImport)
 
 const baseItems = [
@@ -17,8 +19,12 @@ const baseItems = [
 ]
 
 const baseLists = [
-  { id: 'list-a', name: 'Veckohandling', owner_id: 'me' },
-  { id: 'list-b', name: 'Fest', owner_id: 'someone-else' },
+  { id: 'list-a', name: 'Veckohandling', owner_id: 'me', kind: 'shopping' },
+  { id: 'list-b', name: 'Fest', owner_id: 'someone-else', kind: 'shopping' },
+]
+
+const notesLists = [
+  { id: 'notes-1', name: 'Min scrapbook', owner_id: 'me', kind: 'notes' },
 ]
 
 function renderClient(overrides: Partial<React.ComponentProps<typeof ShareImportClient>> = {}) {
@@ -38,7 +44,7 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
-describe('ShareImportClient', () => {
+describe('ShareImportClient — items mode', () => {
   it('renders both lists', () => {
     renderClient()
     expect(screen.getByText('Veckohandling')).toBeInTheDocument()
@@ -187,5 +193,105 @@ describe('ShareImportClient', () => {
   it('renders the source label', () => {
     renderClient({ source: 'image' })
     expect(screen.getByText(/från bild/i)).toBeInTheDocument()
+  })
+})
+
+describe('ShareImportClient — link mode', () => {
+  function renderLink(overrides: Partial<React.ComponentProps<typeof ShareImportClient>> = {}) {
+    return render(
+      <ShareImportClient
+        importId="imp-2"
+        items={[]}
+        source="link"
+        url="https://www.biltema.se/x"
+        title="Kortläsare med USB C-kontakt"
+        lists={[...baseLists, ...notesLists]}
+        currentUserId="me"
+        {...overrides}
+      />,
+    )
+  }
+
+  it('shows "Spara länk" header and scrapbook subtitle', () => {
+    renderLink()
+    expect(screen.getByText('Spara länk')).toBeInTheDocument()
+    expect(screen.getByText(/sparas som ett klipp/i)).toBeInTheDocument()
+  })
+
+  it('displays the link title and host pill', () => {
+    renderLink()
+    expect(screen.getByText('Kortläsare med USB C-kontakt')).toBeInTheDocument()
+    expect(screen.getByText('biltema.se')).toBeInTheDocument()
+  })
+
+  it('shows the raw url when no title given', () => {
+    renderLink({ title: null })
+    expect(screen.getByText('https://www.biltema.se/x')).toBeInTheDocument()
+  })
+
+  it('does not render the item checklist', () => {
+    renderLink()
+    expect(screen.queryByText(/varor att lägga till/i)).toBeNull()
+  })
+
+  it('only shows notes lists as destinations (not shopping/task)', () => {
+    renderLink()
+    expect(screen.getByText('Min scrapbook')).toBeInTheDocument()
+    expect(screen.queryByText('Veckohandling')).toBeNull()
+    expect(screen.queryByText('Fest')).toBeNull()
+  })
+
+  it('auto-selects the single notes list so Spara is enabled immediately', () => {
+    renderLink()
+    expect(screen.getByRole('button', { name: /^spara$/i })).not.toBeDisabled()
+  })
+
+  it('defaults to create-new when no notes lists exist, and Spara is disabled until name typed', () => {
+    renderLink({ lists: baseLists }) // only shopping lists
+    expect(screen.getByPlaceholderText(/namn på scrapbook/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^spara$/i })).toBeDisabled()
+    fireEvent.change(screen.getByPlaceholderText(/namn på scrapbook/i), { target: { value: 'Klipp' } })
+    expect(screen.getByRole('button', { name: /^spara$/i })).not.toBeDisabled()
+  })
+
+  it('confirm calls confirmShareLink with existing list destination', async () => {
+    mockConfirmLink.mockResolvedValue(undefined as unknown as { error?: string })
+    renderLink()
+    fireEvent.click(screen.getByRole('button', { name: /^spara$/i }))
+    await waitFor(() =>
+      expect(mockConfirmLink).toHaveBeenCalledWith(
+        'imp-2',
+        { kind: 'existing', listId: 'notes-1' },
+        'https://www.biltema.se/x',
+      ),
+    )
+  })
+
+  it('confirm calls confirmShareLink with new list when creating', async () => {
+    mockConfirmLink.mockResolvedValue(undefined as unknown as { error?: string })
+    renderLink({ lists: baseLists })
+    fireEvent.change(screen.getByPlaceholderText(/namn på scrapbook/i), { target: { value: 'Ny scrap' } })
+    fireEvent.click(screen.getByRole('button', { name: /^spara$/i }))
+    await waitFor(() =>
+      expect(mockConfirmLink).toHaveBeenCalledWith(
+        'imp-2',
+        { kind: 'new', name: 'Ny scrap' },
+        'https://www.biltema.se/x',
+      ),
+    )
+  })
+
+  it('surfaces an error from confirmShareLink', async () => {
+    mockConfirmLink.mockResolvedValue({ error: 'Something broke' } as unknown as void)
+    renderLink()
+    fireEvent.click(screen.getByRole('button', { name: /^spara$/i }))
+    await waitFor(() => expect(screen.getByText(/something broke/i)).toBeInTheDocument())
+  })
+
+  it('cancel calls cancelShareImport', async () => {
+    mockCancel.mockResolvedValue(undefined as unknown as { error?: string })
+    renderLink()
+    fireEvent.click(screen.getByRole('button', { name: /avbryt/i }))
+    await waitFor(() => expect(mockCancel).toHaveBeenCalledWith('imp-2'))
   })
 })

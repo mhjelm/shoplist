@@ -12,6 +12,17 @@ export function isUrl(text: string): boolean {
   return /^https?:\/\/\S+$/i.test(text.trim())
 }
 
+// Extract the first http(s) URL found anywhere in a string — handles links with
+// surrounding text (e.g. shared "Check this out https://example.com/x"), which
+// many Android apps send as `text` with the `url` field empty. Strips trailing
+// punctuation that commonly clings to a pasted/shared link. Returns null when
+// there's no URL.
+export function firstUrlIn(text: string): string | null {
+  const m = text.match(/https?:\/\/[^\s]+/i)
+  if (!m) return null
+  return m[0].replace(/[.,;:!?)\]}'"]+$/, '')
+}
+
 // Split typed/spoken freeform text into a title + body. The first non-empty
 // line becomes the title (`name`), trimmed to a sane length; everything after
 // it becomes the body (`note`), or null when there's nothing left.

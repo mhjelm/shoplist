@@ -17,21 +17,23 @@ export default async function SharePage({ params }: Props) {
 
   const { data: pending } = await supabase
     .from('pending_imports')
-    .select('id, items, source')
+    .select('id, items, source, url, title')
     .eq('id', importId)
     .single()
   if (!pending) return <ShareGone />
 
   const { data: lists } = await supabase
     .from('lists')
-    .select('id, name, owner_id')
+    .select('id, name, owner_id, kind')
     .order('created_at', { ascending: false })
 
   return (
     <ShareImportClient
       importId={pending.id}
       items={(pending.items as StoredItem[]) ?? []}
-      source={pending.source as 'image' | 'url' | 'text'}
+      source={pending.source as 'image' | 'url' | 'text' | 'link'}
+      url={(pending.url as string | null) ?? null}
+      title={(pending.title as string | null) ?? null}
       lists={lists ?? []}
       currentUserId={user.id}
     />
