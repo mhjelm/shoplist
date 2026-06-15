@@ -14,6 +14,9 @@ export interface ItemUpdatePatch {
   // Task-list fields (migration 0025). Explicit null clears the column.
   assignee_id?: string | null
   due_date?: string | null
+  // Notes-list fields (migration 0029). Explicit null clears the column.
+  url?: string | null
+  note?: string | null
 }
 
 export function buildItemUpdatePayload(patch: ItemUpdatePatch): Record<string, unknown> {
@@ -26,5 +29,8 @@ export function buildItemUpdatePayload(patch: ItemUpdatePatch): Record<string, u
   // Empty string → null so "Unassigned" / "no due date" clears the column.
   if ('assignee_id' in patch) update.assignee_id = patch.assignee_id || null
   if ('due_date' in patch) update.due_date = patch.due_date || null
+  // Notes fields: trim, empty → null (clears the link / body).
+  if ('url' in patch) update.url = patch.url?.trim() || null
+  if ('note' in patch) update.note = patch.note?.trim() || null
   return update
 }

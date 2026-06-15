@@ -25,6 +25,8 @@ export {
   extractRecipeItems,
   extractListItemsFromImage,
   extractTasksFromImage,
+  transcribeNote,
+  unfurlLink,
 } from './import'
 
 export {

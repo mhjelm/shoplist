@@ -33,6 +33,11 @@ export async function muAddItem(
       quantity: item.quantity,
       measurement: item.measurement,
       category: item.category,
+      // Notes-list fields — forwarded only when present so shopping/task
+      // payloads stay byte-for-byte unchanged. The server insert (addItem)
+      // and engine dispatch read these only when set.
+      ...(item.url ? { url: item.url } : {}),
+      ...(item.note ? { note: item.note } : {}),
       // Task adds opt out of the background Gemini categorize fallback — tasks
       // aren't groceries. Omitted (not false) for shopping so payloads are
       // byte-for-byte unchanged there.

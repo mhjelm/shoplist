@@ -39,14 +39,14 @@ export default function CreateListForm() {
     <form action={handleSubmit} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 space-y-3">
       <input type="hidden" name="kind" value={kind} />
 
-      {/* Kind toggle: shopping list (🛒) vs task list (✓). */}
-      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="List kind">
+      {/* Kind toggle: shopping list (🛒) vs task list (✓) vs scrapbook (📎). */}
+      <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="List kind">
         <button
           type="button"
           role="radio"
           aria-checked={kind === 'shopping'}
           onClick={() => setKind('shopping')}
-          className={`flex items-center justify-center gap-2 rounded-lg border py-2 text-sm font-medium transition-colors ${
+          className={`flex items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium transition-colors ${
             kind === 'shopping'
               ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
               : 'border-gray-300 text-gray-500 dark:border-gray-700 dark:text-gray-400'
@@ -59,7 +59,7 @@ export default function CreateListForm() {
           role="radio"
           aria-checked={kind === 'task'}
           onClick={() => setKind('task')}
-          className={`flex items-center justify-center gap-2 rounded-lg border py-2 text-sm font-medium transition-colors ${
+          className={`flex items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium transition-colors ${
             kind === 'task'
               ? 'border-indigo-400 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300'
               : 'border-gray-300 text-gray-500 dark:border-gray-700 dark:text-gray-400'
@@ -67,12 +67,25 @@ export default function CreateListForm() {
         >
           ✓ Tasks
         </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={kind === 'notes'}
+          onClick={() => setKind('notes')}
+          className={`flex items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium transition-colors ${
+            kind === 'notes'
+              ? 'border-amber-400 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+              : 'border-gray-300 text-gray-500 dark:border-gray-700 dark:text-gray-400'
+          }`}
+        >
+          📎 Scrapbook
+        </button>
       </div>
 
       <input
         name="name"
         type="text"
-        placeholder={kind === 'task' ? 'Task list name' : 'List name'}
+        placeholder={kind === 'task' ? 'Task list name' : kind === 'notes' ? 'Scrapbook name' : 'List name'}
         required
         autoFocus
         className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"

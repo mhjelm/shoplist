@@ -40,6 +40,10 @@ class LocalDB extends Dexie {
     // `assignee_id`/`due_date`. All non-indexed, so no index change; rows are
     // overwritten on the next seed/reconcile.
     this.version(6).stores({})
+    // v7: notes/scrapbook lists (migration 0029) — items gain `url`/`note`.
+    // Non-indexed, so no index change; rows are overwritten on the next
+    // seed/reconcile.
+    this.version(7).stores({})
   }
 }
 

@@ -157,11 +157,15 @@ export default function ListsView({ initialLists, memberCounts, lastAdd, lastAdd
     setRenamedLists(prev => ({ ...prev, [listId]: name }))
   }
 
-  // Which kind is being opened — so the nav loading overlay shows a task glyph
-  // instead of the shopping cart when entering a task list.
-  const navIsTask = navigatingToListId
-    ? (myLists.find(l => l.id === navigatingToListId) ?? sharedLists.find(l => l.id === navigatingToListId))?.kind === 'task'
-    : false
+  // Which kind is being opened — so the nav loading overlay shows the right
+  // glyph (task / scrapbook) instead of the shopping cart.
+  const navKind = navigatingToListId
+    ? (myLists.find(l => l.id === navigatingToListId) ?? sharedLists.find(l => l.id === navigatingToListId))?.kind
+    : undefined
+  const navIsTask = navKind === 'task'
+  const navIsNote = navKind === 'notes'
+  // Emoji glyph for the non-shopping kinds (shopping uses the cart image).
+  const navGlyph = navIsTask ? '📋' : navIsNote ? '📎' : null
 
   return (
     // revealFx is one of six subtle entrance animations, chosen at random on
@@ -175,14 +179,14 @@ export default function ListsView({ initialLists, memberCounts, lastAdd, lastAdd
         >
           {theme === 'polar' || theme === 'dusk' ? (
             <div className={`loading-plate ${theme === 'polar' ? 'loading-plate-polar' : 'loading-plate-dusk'} w-64 h-64 sm:w-80 sm:h-80 loading-cart`} aria-hidden>
-              <span className="text-[7rem] sm:text-[9rem] leading-none select-none">{navIsTask ? '📋' : '🛒'}</span>
+              <span className="text-[7rem] sm:text-[9rem] leading-none select-none">{navGlyph ?? '🛒'}</span>
             </div>
-          ) : navIsTask ? (
+          ) : navGlyph ? (
             <span
               aria-hidden
               className="w-64 h-64 sm:w-80 sm:h-80 loading-cart select-none flex items-center justify-center text-[7rem] sm:text-[9rem] leading-none"
             >
-              📋
+              {navGlyph}
             </span>
           ) : (
             <>
@@ -295,6 +299,7 @@ function ListRow({ list, hasMembers, unread, theme, cached, isOffline, onNavigat
       )}
       <span className="truncate">{list.name}</span>
       {list.kind === 'task' && <TaskMarker />}
+      {list.kind === 'notes' && <NoteMarker />}
       {hasMembers && <span className="text-xs text-gray-400 dark:text-gray-500">shared</span>}
     </>
   )
@@ -375,6 +380,15 @@ function TaskMarker() {
   return (
     <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold tracking-wide rounded-full px-2 py-0.5 border text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800">
       <span aria-hidden>✓</span>TASK
+    </span>
+  )
+}
+
+// Scrapbook (notes) lists carry a 📎 NOTE chip, mirroring TaskMarker.
+function NoteMarker() {
+  return (
+    <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold tracking-wide rounded-full px-2 py-0.5 border text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800">
+      <span aria-hidden>📎</span>NOTE
     </span>
   )
 }

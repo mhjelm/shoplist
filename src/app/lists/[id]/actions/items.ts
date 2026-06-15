@@ -13,6 +13,8 @@ export async function addItem(
   quantity?: number,
   measurement?: string | null,
   category?: CategorySlug | null,
+  url?: string | null,
+  note?: string | null,
 ) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -26,45 +28,55 @@ export async function addItem(
     if (already) return { item: already, merged: false }
   }
 
-  // Look up cached category from user's history (fast path — avoids Gemini).
-  const { data: histEntry } = await supabase
-    .from('user_item_history')
-    .select('category')
-    .eq('user_id', user.id)
-    .ilike('name', trimmed)
-    .maybeSingle()
-  const cachedCategory = (histEntry?.category && isValidCategorySlug(histEntry.category))
-    ? histEntry.category
-    : null
+  // The name-merge + cached-category fast path is grocery-specific: two scraps
+  // (or tasks) may legitimately share a title, and notes can have empty names —
+  // merging by name would be wrong. So it only runs on shopping lists. Other
+  // kinds always do a fresh insert. (One cheap kind read.)
+  const { data: listRow } = await supabase.from('lists').select('kind').eq('id', listId).single()
+  const isShopping = (listRow?.kind ?? 'shopping') === 'shopping'
 
-  // Prefer active match, then shopped match (revive), then fresh insert.
-  const { data: existing } = await supabase
-    .from('items')
-    .select('*')
-    .eq('list_id', listId)
-    .ilike('name', trimmed)
-    .order('is_checked', { ascending: true }) // false (active) comes first
-    .limit(1)
-    .single()
+  let cachedCategory: CategorySlug | null = null
+  if (isShopping) {
+    // Look up cached category from user's history (fast path — avoids Gemini).
+    const { data: histEntry } = await supabase
+      .from('user_item_history')
+      .select('category')
+      .eq('user_id', user.id)
+      .ilike('name', trimmed)
+      .maybeSingle()
+    cachedCategory = (histEntry?.category && isValidCategorySlug(histEntry.category))
+      ? histEntry.category
+      : null
 
-  if (existing) {
-    const incomingMeasurement = measurement?.trim() || null
-    const mergedMeasurement = incomingMeasurement
-      ? (existing.measurement ? `${existing.measurement} + ${incomingMeasurement}` : incomingMeasurement)
-      : existing.measurement
-    const patch: Record<string, unknown> = {
-      quantity: existing.quantity + (quantity ?? 1),
-      measurement: mergedMeasurement,
-    }
-    if (existing.is_checked) patch.is_checked = false
-    const { data, error } = await supabase
+    // Prefer active match, then shopped match (revive), then fresh insert.
+    const { data: existing } = await supabase
       .from('items')
-      .update(patch)
-      .eq('id', existing.id)
-      .select()
+      .select('*')
+      .eq('list_id', listId)
+      .ilike('name', trimmed)
+      .order('is_checked', { ascending: true }) // false (active) comes first
+      .limit(1)
       .single()
-    if (error) return { error: error.message }
-    return { item: data, merged: true }
+
+    if (existing) {
+      const incomingMeasurement = measurement?.trim() || null
+      const mergedMeasurement = incomingMeasurement
+        ? (existing.measurement ? `${existing.measurement} + ${incomingMeasurement}` : incomingMeasurement)
+        : existing.measurement
+      const patch: Record<string, unknown> = {
+        quantity: existing.quantity + (quantity ?? 1),
+        measurement: mergedMeasurement,
+      }
+      if (existing.is_checked) patch.is_checked = false
+      const { data, error } = await supabase
+        .from('items')
+        .update(patch)
+        .eq('id', existing.id)
+        .select()
+        .single()
+      if (error) return { error: error.message }
+      return { item: data, merged: true }
+    }
   }
 
   const { data, error } = await supabase
@@ -78,6 +90,8 @@ export async function addItem(
       category: category ?? cachedCategory,
       quantity: quantity ?? 1,
       measurement: measurement ?? null,
+      url: url?.trim() || null,
+      note: note?.trim() || null,
     })
     .select()
     .single()

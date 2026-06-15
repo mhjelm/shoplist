@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import ItemList from './ItemList'
 import TaskList from './TaskList'
+import NoteList from './NoteList'
 import LeaveListButton from './LeaveListButton'
 import { getUserPreferences } from '@/lib/preferences'
 import { EditModeProvider, EditModeToggle } from './EditModeContext'
@@ -76,6 +77,31 @@ export default async function ListPage({ params }: Props) {
             lastViewedAt={view?.last_viewed_at ?? null}
             theme={theme}
             initialSort={view?.task_sort === 'date' ? 'date' : 'manual'}
+          />
+        </main>
+      </div>
+    )
+  }
+
+  // Scrapbook (notes) lists get their own simple feed view — no store mode /
+  // edit-merge / AI, no assignees or due dates. Typed notes, voice memos, links.
+  if (list.kind === 'notes') {
+    return (
+      <div data-route-root className="min-h-screen bg-gray-50 dark:bg-gray-950">
+        <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center gap-3">
+          <BackLink theme={theme} />
+          <h1 className="font-semibold text-gray-900 dark:text-gray-100 flex-1 min-w-0 truncate">{list.name}</h1>
+          <OfflineBadge />
+          {!isOwner && <LeaveListButton listId={id} />}
+        </header>
+
+        <main className="w-full max-w-lg mx-auto px-4 py-6">
+          <NoteList
+            list={list}
+            listId={id}
+            currentUserId={user.id}
+            lastViewedAt={view?.last_viewed_at ?? null}
+            theme={theme}
           />
         </main>
       </div>

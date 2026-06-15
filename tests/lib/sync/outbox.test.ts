@@ -209,7 +209,7 @@ describe('flushOutbox', () => {
 
     await mod.flushOutbox()
 
-    expect(mockAddItem).toHaveBeenCalledWith('list-1', 'Mjölk', null, 'client-uuid-123', undefined, undefined, undefined)
+    expect(mockAddItem).toHaveBeenCalledWith('list-1', 'Mjölk', null, 'client-uuid-123', undefined, undefined, undefined, undefined, undefined)
     expect(entries).toHaveLength(0)
   })
 })

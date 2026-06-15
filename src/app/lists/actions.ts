@@ -12,7 +12,8 @@ export async function createList(formData: FormData) {
   const name = (formData.get('name') as string)?.trim()
   if (!name) return { error: 'Name is required' }
 
-  const kind = formData.get('kind') === 'task' ? 'task' : 'shopping'
+  const rawKind = formData.get('kind')
+  const kind = rawKind === 'task' || rawKind === 'notes' ? rawKind : 'shopping'
 
   const { data: list, error } = await supabase.from('lists').insert({
     name,
