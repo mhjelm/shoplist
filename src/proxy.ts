@@ -8,5 +8,6 @@ export async function proxy(request: NextRequest) {
 export const config = {
   // Exclude /manifest.webmanifest and /sw.js so PWA fetches by Chrome's
   // installability checker (which is uncookied) don't get redirected to login.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // Exclude welcome.html so the public marketing page is shareable without auth.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|welcome.html|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }

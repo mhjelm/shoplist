@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Shoplist — the family list that keeps up with the family</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --pink:   #EC4899;
+    --teal:   #14B8A6;
+    --orange: #F97316;
+    --yellow: #FACC15;
+    --blue:   #3B82F6;
+    --select: #2563EB;
+
+    --ink:    #221a26;
+    --ink-soft: #5d5566;
+    --cream:  #fdf8f3;
+    --paper:  #ffffff;
+
+    --tint-pink:   #fce4ef;
+    --tint-teal:   #d8f3ef;
+    --tint-orange: #fde6d3;
+    --tint-yellow: #fdf3cf;
+
+    --display: "Fraunces", Georgia, serif;
+    --body: "Hanken Grotesk", system-ui, sans-serif;
+    --mono: "Space Mono", ui-monospace, monospace;
+
+    --shadow-soft: 0 1px 2px rgba(60,30,40,.05), 0 12px 30px -12px rgba(120,40,80,.18);
+    --shadow-lift: 0 2px 4px rgba(60,30,40,.06), 0 40px 80px -28px rgba(120,40,80,.32);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--body);
+    color: var(--ink);
+    background: var(--cream);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* ---------- atmospheric gradient mesh, straight from the app's Shoplist theme ---------- */
+  .mesh {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    background:
+      radial-gradient(80% 60% at 0% 0%,    color-mix(in oklab, var(--pink)   30%, transparent), transparent 70%),
+      radial-gradient(80% 60% at 100% 4%,  color-mix(in oklab, var(--teal)   24%, transparent), transparent 70%),
+      radial-gradient(90% 70% at 50% 100%, color-mix(in oklab, var(--yellow) 26%, transparent), transparent 72%),
+      radial-gradient(70% 50% at 90% 80%,  color-mix(in oklab, var(--orange) 18%, transparent), transparent 70%),
+      var(--cream);
+  }
+  .grain {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: .35;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  }
+
+  ::selection { background: color-mix(in oklab, var(--pink) 35%, white); }
+
+  /* ---------- layout ---------- */
+  .wrap { width: min(1140px, 92vw); margin: 0 auto; }
+  section { position: relative; }
+
+  /* ---------- nav ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(14px) saturate(1.3);
+    background: color-mix(in oklab, var(--cream) 72%, transparent);
+    border-bottom: 1px solid color-mix(in oklab, var(--pink) 14%, transparent);
+  }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; }
+  .brand { display: flex; align-items: center; gap: 11px; font-weight: 800; font-size: 1.16rem; letter-spacing: -.02em; }
+  .brand .cart { width: 34px; height: 34px; }
+  .navlinks { display: flex; gap: 30px; align-items: center; }
+  .navlinks a { color: var(--ink-soft); text-decoration: none; font-weight: 600; font-size: .95rem; transition: color .2s; }
+  .navlinks a:hover { color: var(--pink); }
+  .nav-cta {
+    background: var(--ink); color: var(--cream) !important;
+    padding: 9px 18px; border-radius: 999px; font-weight: 700 !important;
+    transition: transform .18s, background .2s;
+  }
+  .nav-cta:hover { transform: translateY(-1px); background: var(--pink); }
+  @media (max-width: 720px){ .navlinks a:not(.nav-cta){ display:none; } }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 86px 0 60px; }
+  .hero-grid {
+    display: grid; grid-template-columns: 1.05fr .95fr; gap: 40px; align-items: center;
+  }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--pink); font-weight: 700;
+    padding: 7px 14px; border-radius: 999px;
+    background: color-mix(in oklab, var(--pink) 10%, white);
+    border: 1px solid color-mix(in oklab, var(--pink) 24%, transparent);
+  }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 0 color-mix(in oklab, var(--teal) 60%, transparent); animation: pulse 2.2s infinite; }
+  @keyframes pulse { 0%{ box-shadow:0 0 0 0 color-mix(in oklab,var(--teal) 55%,transparent);} 70%{ box-shadow:0 0 0 9px transparent;} 100%{ box-shadow:0 0 0 0 transparent;} }
+
+  h1 {
+    font-family: var(--display);
+    font-optical-sizing: auto;
+    font-weight: 600;
+    font-size: clamp(2.7rem, 6vw, 4.6rem);
+    line-height: 1.02;
+    letter-spacing: -.025em;
+    margin: 22px 0 0;
+  }
+  h1 em { font-style: italic; font-weight: 500; color: var(--pink); position: relative; }
+  h1 .swap {
+    background: linear-gradient(100deg, var(--pink), var(--orange) 55%, var(--teal));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .lede { font-size: clamp(1.05rem, 1.5vw, 1.22rem); color: var(--ink-soft); margin: 22px 0 0; max-width: 30em; }
+  .hero-cta { display: flex; gap: 14px; margin-top: 32px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 14px 26px; border-radius: 999px; font-weight: 700; font-size: 1rem;
+    text-decoration: none; cursor: pointer; border: none; transition: transform .18s, box-shadow .2s;
+  }
+  .btn-primary { background: var(--ink); color: var(--cream); box-shadow: var(--shadow-soft); }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); }
+  .btn-ghost { background: transparent; color: var(--ink); border: 1.5px solid color-mix(in oklab, var(--ink) 22%, transparent); }
+  .btn-ghost:hover { border-color: var(--pink); color: var(--pink); transform: translateY(-2px); }
+
+  .hero-stats { display: flex; gap: 30px; margin-top: 40px; flex-wrap: wrap; }
+  .stat .n { font-family: var(--display); font-weight: 600; font-size: 1.9rem; line-height: 1; }
+  .stat .l { font-size: .82rem; color: var(--ink-soft); margin-top: 4px; }
+  .stat .n.pink { color: var(--pink); } .stat .n.teal { color: var(--teal); } .stat .n.orange { color: var(--orange); }
+
+  .hero-phone-stage { display: flex; justify-content: center; position: relative; }
+  .hero-phone-stage::before {
+    content:""; position:absolute; width: 340px; height: 340px; border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in oklab, var(--pink) 30%, transparent), transparent 70%);
+    filter: blur(8px); z-index: 0;
+  }
+
+  /* ---------- phone frame ---------- */
+  .phone {
+    position: relative; z-index: 1;
+    width: 286px; flex: none;
+    border-radius: 42px;
+    background: #12101a;
+    padding: 11px;
+    box-shadow: var(--shadow-lift), inset 0 0 0 1.5px rgba(255,255,255,.08);
+  }
+  .phone.sm { width: 230px; border-radius: 36px; padding: 9px; }
+  .phone .screen {
+    position: relative; border-radius: 32px; overflow: hidden; height: 580px;
+    background:
+      radial-gradient(70% 50% at 0% 0%,   color-mix(in oklab, var(--pink) 22%, transparent), transparent 70%),
+      radial-gradient(70% 50% at 100% 0%, color-mix(in oklab, var(--teal) 16%, transparent), transparent 70%),
+      radial-gradient(80% 60% at 50% 100%,color-mix(in oklab, var(--yellow) 18%, transparent), transparent 72%),
+      var(--cream);
+    display: flex; flex-direction: column;
+  }
+  .phone.sm .screen { height: 470px; border-radius: 26px; }
+  .notch { position: absolute; top: 9px; left: 50%; transform: translateX(-50%); width: 92px; height: 22px; background: #12101a; border-radius: 999px; z-index: 5; }
+
+  /* in-app chrome */
+  .app-head {
+    padding: 30px 16px 12px; display: flex; align-items: center; gap: 10px;
+    backdrop-filter: blur(8px);
+  }
+  .app-head .back { color: var(--ink-soft); font-size: 1.2rem; }
+  .app-head h3 { font-family: var(--display); font-weight: 600; font-size: 1.15rem; letter-spacing: -.01em; flex: 1; }
+  .app-head .av { display:flex; }
+  .app-body { flex: 1; overflow: hidden; padding: 4px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
+
+  .cat-label { font-family: var(--mono); font-size: .6rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); margin: 7px 0 1px 4px; }
+
+  .item {
+    display: flex; align-items: center; gap: 11px;
+    padding: 11px 13px; border-radius: 16px;
+    background: var(--paper); border: 1.5px solid transparent;
+    box-shadow: 0 1px 2px rgba(80,40,60,.04);
+    font-weight: 600; font-size: .92rem;
+  }
+  .item .tick { width: 21px; height: 21px; border-radius: 7px; border: 2px solid color-mix(in oklab, var(--ink) 22%, transparent); flex: none; display:grid; place-items:center; }
+  .item .tick.on { background: var(--teal); border-color: var(--teal); color: #fff; font-size: .7rem; }
+  .item .q { margin-left: auto; font-family: var(--mono); font-size: .72rem; color: var(--ink-soft); background: color-mix(in oklab, var(--ink) 6%, white); padding: 2px 7px; border-radius: 7px; }
+  .item .thumb { width: 30px; height: 30px; border-radius: 9px; flex:none; }
+  .item.done { opacity: .5; }
+  .item.done .name { text-decoration: line-through; }
+  .item.t-pink   { background: var(--tint-pink);   border-color: color-mix(in oklab, var(--pink) 40%, transparent); }
+  .item.t-teal   { background: var(--tint-teal);   border-color: color-mix(in oklab, var(--teal) 40%, transparent); }
+  .item.t-orange { background: var(--tint-orange); border-color: color-mix(in oklab, var(--orange) 40%, transparent); }
+  .item.t-yellow { background: var(--tint-yellow); border-color: color-mix(in oklab, var(--yellow) 50%, transparent); }
+
+  .add-bar { margin-top: auto; display: flex; align-items: center; gap: 9px; padding: 11px 13px; border-radius: 16px; background: var(--paper); box-shadow: var(--shadow-soft); color: var(--ink-soft); font-size: .88rem; }
+  .add-bar .plus { width: 26px; height: 26px; border-radius: 50%; background: var(--pink); color: #fff; display:grid; place-items:center; font-weight:700; flex:none; }
+  .add-bar .mic, .add-bar .cam { font-size: 1rem; }
+
+  /* avatars */
+  .av span { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: .68rem; font-weight: 800; border: 2px solid var(--cream); margin-left: -7px; }
+  .av span:first-child { margin-left: 0; }
+
+  /* task rows */
+  .task { display:flex; align-items:center; gap:11px; padding: 12px 13px; border-radius: 16px; background: var(--paper); box-shadow: 0 1px 2px rgba(80,40,60,.04); font-weight: 600; font-size: .92rem; }
+  .pill { font-family: var(--mono); font-size: .58rem; letter-spacing: .04em; padding: 3px 8px; border-radius: 999px; font-weight: 700; }
+  .pill.over { background: #fde0e0; color: #c0392b; }
+  .pill.today { background: var(--tint-yellow); color: #9a7b00; }
+  .pill.soon { background: var(--tint-teal); color: #0f766e; }
+
+  /* note cards */
+  .note { border-radius: 16px; background: var(--paper); box-shadow: 0 1px 2px rgba(80,40,60,.05); overflow: hidden; }
+  .note .nimg { height: 78px; background: linear-gradient(120deg, var(--tint-teal), var(--tint-pink)); display:grid; place-items:center; font-size:1.5rem; }
+  .note .nbody { padding: 10px 12px; }
+  .note .nt { font-weight: 700; font-size: .88rem; }
+  .note .nh { font-family: var(--mono); font-size: .62rem; color: var(--ink-soft); margin-top: 3px; }
+  .note.txt { padding: 12px; font-size: .86rem; color: var(--ink); }
+
+  /* ---------- section heading ---------- */
+  .sec { padding: 70px 0; }
+  .sec-tag { font-family: var(--mono); font-size: .72rem; letter-spacing: .2em; text-transform: uppercase; color: var(--teal); font-weight: 700; }
+  h2 { font-family: var(--display); font-weight: 600; font-size: clamp(2rem, 4vw, 3rem); letter-spacing: -.02em; line-height: 1.05; margin: 12px 0 0; }
+  .sec-lede { color: var(--ink-soft); font-size: 1.08rem; max-width: 34em; margin: 16px 0 0; }
+  .center { text-align: center; }
+  .center .sec-lede { margin-left: auto; margin-right: auto; }
+
+  /* ---------- three list types ---------- */
+  .triptych { display: grid; grid-template-columns: repeat(3,1fr); gap: 22px; margin-top: 48px; align-items: start; }
+  .type-card {
+    background: var(--paper); border-radius: 28px; padding: 26px 24px 30px;
+    box-shadow: var(--shadow-soft); border: 1px solid color-mix(in oklab, var(--ink) 6%, transparent);
+    transition: transform .25s, box-shadow .25s;
+  }
+  .type-card:hover { transform: translateY(-6px); box-shadow: var(--shadow-lift); }
+  .type-ico { width: 56px; height: 56px; border-radius: 18px; display:grid; place-items:center; font-size: 1.7rem; margin-bottom: 16px; }
+  .type-card h3 { font-family: var(--display); font-weight: 600; font-size: 1.45rem; letter-spacing: -.01em; }
+  .type-card .kp { font-family: var(--mono); font-size: .6rem; letter-spacing: .12em; padding: 3px 9px; border-radius: 999px; font-weight: 700; display:inline-block; margin-top: 8px; }
+  .type-card p { color: var(--ink-soft); margin-top: 14px; font-size: .96rem; }
+  .mini { margin-top: 20px; display:flex; flex-direction: column; gap: 7px; }
+  .mini .item, .mini .task { padding: 8px 10px; font-size: .8rem; border-radius: 12px; box-shadow:none; }
+  .mini .item .tick { width: 16px; height: 16px; border-radius: 5px; }
+
+  /* ---------- feature rows ---------- */
+  .feature { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; padding: 56px 0; }
+  .feature.flip .copy { order: 2; }
+  .feature .visual { display:flex; justify-content:center; }
+  .feature h3 { font-family: var(--display); font-weight: 600; font-size: clamp(1.7rem, 3vw, 2.4rem); letter-spacing: -.02em; line-height: 1.08; }
+  .feature .copy p { color: var(--ink-soft); font-size: 1.08rem; margin-top: 16px; max-width: 30em; }
+  .feature .kicker { font-family: var(--mono); font-size: .72rem; letter-spacing: .18em; text-transform: uppercase; font-weight: 700; }
+  .feat-list { list-style: none; margin-top: 22px; display: flex; flex-direction: column; gap: 11px; }
+  .feat-list li { display: flex; gap: 11px; align-items: flex-start; font-weight: 600; font-size: .98rem; }
+  .feat-list .ck { width: 22px; height: 22px; border-radius: 7px; flex:none; display:grid; place-items:center; color:#fff; font-size:.72rem; font-weight: 800; }
+
+  /* card visual (non-phone) */
+  .vcard { background: var(--paper); border-radius: 26px; box-shadow: var(--shadow-lift); padding: 22px; width: min(100%, 420px); border: 1px solid color-mix(in oklab,var(--ink) 6%, transparent); }
+  .vcard .vhead { display:flex; align-items:center; justify-content:space-between; margin-bottom: 16px; }
+  .vcard .vtitle { font-weight: 800; }
+
+  /* offline badge */
+  .ob { display:inline-flex; align-items:center; gap:7px; font-family: var(--mono); font-size:.68rem; letter-spacing:.08em; padding: 5px 11px; border-radius: 999px; background: #eee6da; color: #7a6a55; font-weight: 700; }
+  .ob .od { width:7px; height:7px; border-radius:50%; background:#b58b3a; }
+  .queued { font-family: var(--mono); font-size:.62rem; color: var(--ink-soft); background: color-mix(in oklab,var(--ink) 6%, white); padding: 1px 7px; border-radius:6px; }
+
+  /* sync dots */
+  .sync-row { display:flex; align-items:center; gap:10px; padding: 10px 12px; border-radius: 14px; background: var(--tint-teal); border:1.5px solid color-mix(in oklab,var(--teal) 35%, transparent); font-weight:600; font-size:.9rem; margin-bottom: 9px; }
+  .who { margin-left:auto; display:flex; align-items:center; gap:6px; font-size:.72rem; color:#0f766e; }
+  .who .ww { width:18px;height:18px;border-radius:50%; color:#fff; display:grid;place-items:center; font-size:.6rem; font-weight:800; }
+  @keyframes ping { 0%{transform:scale(.6);opacity:.9} 80%,100%{transform:scale(2.2);opacity:0} }
+  .live { position:relative; width:9px;height:9px;border-radius:50%;background:var(--teal); }
+  .live::after{ content:""; position:absolute; inset:0; border-radius:50%; background:var(--teal); animation: ping 1.8s infinite; }
+
+  /* recipe import accept/reject */
+  .imp-row { display:flex; align-items:center; gap:11px; padding: 10px 12px; border-radius: 13px; background: var(--paper); box-shadow:0 1px 2px rgba(80,40,60,.05); font-weight:600; font-size:.9rem; margin-bottom: 8px; }
+  .imp-row .acc { margin-left:auto; width:24px;height:24px;border-radius:8px; background: var(--teal); color:#fff; display:grid;place-items:center; font-size:.78rem;font-weight:800; }
+  .imp-row.off { opacity:.45; }
+  .imp-row.off .acc { background: #ddd; color:#999; }
+  .imp-row .iq { font-family:var(--mono); font-size:.7rem; color:var(--ink-soft); }
+
+  /* ---------- "more" grid ---------- */
+  .more-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 46px; }
+  .mcard {
+    background: color-mix(in oklab, var(--paper) 86%, transparent);
+    border:1px solid color-mix(in oklab,var(--ink) 8%, transparent);
+    border-radius: 22px; padding: 24px; transition: transform .22s, box-shadow .22s, border-color .22s;
+    backdrop-filter: blur(6px);
+  }
+  .mcard:hover { transform: translateY(-4px); box-shadow: var(--shadow-soft); border-color: color-mix(in oklab,var(--pink) 30%, transparent); }
+  .mcard .mi { font-size: 1.6rem; }
+  .mcard h4 { font-family: var(--display); font-weight: 600; font-size: 1.18rem; margin-top: 12px; letter-spacing:-.01em; }
+  .mcard p { color: var(--ink-soft); font-size: .92rem; margin-top: 8px; }
+
+  /* theme swatches */
+  .swatches { display:flex; gap:9px; margin-top: 14px; flex-wrap: wrap; }
+  .sw { width: 34px; height: 34px; border-radius: 10px; box-shadow: inset 0 0 0 1.5px rgba(0,0,0,.06); }
+
+  /* ---------- big CTA ---------- */
+  .cta {
+    margin: 30px 0 80px;
+    border-radius: 38px; padding: 70px 40px; text-align: center; position: relative; overflow: hidden;
+    background:
+      radial-gradient(60% 80% at 15% 10%, color-mix(in oklab,var(--pink) 60%, transparent), transparent 70%),
+      radial-gradient(60% 80% at 90% 30%, color-mix(in oklab,var(--teal) 50%, transparent), transparent 70%),
+      radial-gradient(70% 90% at 50% 120%, color-mix(in oklab,var(--yellow) 55%, transparent), transparent 70%),
+      #1c1622;
+    color: #fff;
+    box-shadow: var(--shadow-lift);
+  }
+  .cta h2 { color: #fff; }
+  .cta p { color: rgba(255,255,255,.82); max-width: 32em; margin: 16px auto 0; font-size: 1.1rem; }
+  .cta .btn-primary { background: #fff; color: var(--ink); margin-top: 30px; }
+  .cta .btn-primary:hover { background: var(--yellow); }
+
+  footer { padding: 40px 0 60px; color: var(--ink-soft); font-size: .9rem; }
+  footer .wrap { display:flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+  footer .fbrand { display:flex; align-items:center; gap:10px; font-weight: 800; color: var(--ink); }
+
+  /* ---------- reveal animation ---------- */
+  .reveal { opacity: 0; transform: translateY(26px); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in { opacity: 1; transform: none; }
+  .reveal.d1 { transition-delay: .08s; } .reveal.d2 { transition-delay: .16s; } .reveal.d3 { transition-delay: .24s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity:1 !important; transform:none !important; }
+    .live::after, .eyebrow .dot { animation: none; }
+  }
+
+  @media (max-width: 880px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 50px; }
+    .hero-phone-stage { order: -1; }
+    .feature, .feature.flip .copy { grid-template-columns: 1fr; order: 0; }
+    .feature .visual { order: -1; }
+    .triptych { grid-template-columns: 1fr; }
+    .more-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="mesh"></div>
+<div class="grain"></div>
+
+<!-- ===== NAV ===== -->
+<nav>
+  <div class="wrap">
+    <div class="brand">
+      <svg class="cart" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+        <rect x="3" y="3" width="42" height="42" rx="12" fill="#fff"/>
+        <path d="M11 13h5l3.4 16.2a2 2 0 0 0 2 1.6h11.3a2 2 0 0 0 2-1.5L37.5 18H18" stroke="#EC4899" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="21" cy="36" r="2.4" fill="#14B8A6"/>
+        <circle cx="33" cy="36" r="2.4" fill="#F97316"/>
+        <path d="M23 22h11M22 26h13" stroke="#FACC15" stroke-width="2.4" stroke-linecap="round"/>
+      </svg>
+      Shoplist
+    </div>
+    <div class="navlinks">
+      <a href="#types">Lists</a>
+      <a href="#collab">Collaboration</a>
+      <a href="#smart">Smart import</a>
+      <a href="#more">More</a>
+      <a href="#get" class="nav-cta">Get started</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ===== HERO ===== -->
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div class="copy">
+      <span class="eyebrow reveal in"><span class="dot"></span> For the whole family · works offline</span>
+      <h1 class="reveal in d1">The family list<br>that <em class="swap">keeps up</em><br>with the family.</h1>
+      <p class="lede reveal in d2">Groceries, chores, and bits worth saving — in one shared app that syncs the instant anyone makes a change, and never stalls when the signal drops in aisle seven.</p>
+      <div class="hero-cta reveal in d3">
+        <a href="#get" class="btn btn-primary">Start a list →</a>
+        <a href="#types" class="btn btn-ghost">See the three list types</a>
+      </div>
+      <div class="hero-stats reveal in d3">
+        <div class="stat"><div class="n pink">3</div><div class="l">list types in one app</div></div>
+        <div class="stat"><div class="n teal">~75ms</div><div class="l">to reopen a cached list</div></div>
+        <div class="stat"><div class="n orange">0</div><div class="l">bars of signal needed</div></div>
+      </div>
+    </div>
+
+    <!-- HERO PHONE: a real-looking shopping list -->
+    <div class="hero-phone-stage reveal in d2">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="app-head">
+            <span class="back">‹</span>
+            <h3>Veckohandling</h3>
+            <div class="av">
+              <span style="background:var(--pink)">M</span>
+              <span style="background:var(--teal)">A</span>
+              <span style="background:var(--orange)">J</span>
+            </div>
+          </div>
+          <div class="app-body">
+            <div class="cat-label">Frukt &amp; grönt</div>
+            <div class="item t-teal"><span class="tick"></span><span class="name">Avokado</span><span class="q">3 st</span></div>
+            <div class="item t-pink"><span class="tick"></span><span class="name">Jordgubbar</span><span class="q">2 ask</span></div>
+            <div class="cat-label">Mejeri</div>
+            <div class="item t-yellow"><span class="tick"></span><span class="name">Smör</span><span class="q">500 g</span></div>
+            <div class="item t-orange"><span class="tick"></span><span class="name">Halloumi</span><span class="q">2 förp</span></div>
+            <div class="cat-label">Avklarat</div>
+            <div class="item done"><span class="tick on">✓</span><span class="name">Mjölk</span><span class="q">2 l</span></div>
+            <div class="add-bar"><span class="plus">+</span> Lägg till vara… <span style="margin-left:auto" class="cam">📷</span> <span class="mic">🎙️</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ===== THREE LIST TYPES ===== -->
+<section id="types" class="sec wrap">
+  <div class="center reveal">
+    <span class="sec-tag">One app, three jobs</span>
+    <h2>Shop. Do. Save.</h2>
+    <p class="sec-lede">Every list is one of three kinds, chosen when you create it — and they all share the same sharing, sync, and offline engine underneath.</p>
+  </div>
+
+  <div class="triptych">
+    <!-- SHOPPING -->
+    <div class="type-card reveal d1">
+      <div class="type-ico" style="background:var(--tint-pink)">🛒</div>
+      <h3>Shopping</h3>
+      <span class="kp" style="background:var(--tint-pink);color:#be2d72">SHOP</span>
+      <p>Groceries that sort themselves into aisles, with quantities, photos and a one-tap store mode.</p>
+      <div class="mini">
+        <div class="item t-teal"><span class="tick"></span>Bananer<span class="q" style="margin-left:auto">1 klase</span></div>
+        <div class="item t-yellow"><span class="tick"></span>Ägg<span class="q" style="margin-left:auto">12 st</span></div>
+        <div class="item done"><span class="tick on">✓</span>Pasta</div>
+      </div>
+    </div>
+    <!-- TODO -->
+    <div class="type-card reveal d2">
+      <div class="type-ico" style="background:var(--tint-teal)">✓</div>
+      <h3>To-do</h3>
+      <span class="kp" style="background:var(--tint-teal);color:#0f766e">TASK</span>
+      <p>A shared family checklist for chores — assign anyone, set a due date, watch it sort itself.</p>
+      <div class="mini">
+        <div class="task"><span class="tick"></span>Boka bilservice<span class="pill over" style="margin-left:auto">FÖRSENAD</span></div>
+        <div class="task"><span class="tick"></span>Vattna blommor<span class="pill today" style="margin-left:auto">IDAG</span></div>
+        <div class="task"><span class="tick"></span>Ring tandläkare<span class="pill soon" style="margin-left:auto">FRE</span></div>
+      </div>
+    </div>
+    <!-- SCRAP -->
+    <div class="type-card reveal d3">
+      <div class="type-ico" style="background:var(--tint-orange)">📎</div>
+      <h3>Scrapbook</h3>
+      <span class="kp" style="background:var(--tint-orange);color:#b5560f">NOTES</span>
+      <p>A feed for everything else — typed notes, voice memos, and links that unfurl into rich cards.</p>
+      <div class="mini">
+        <div class="note"><div class="nimg">🍝</div><div class="nbody"><div class="nt">Sheet-pan ragù</div><div class="nh">nytimes.com</div></div></div>
+        <div class="note txt">🎙️ “Wifi-koden hos mormor är solros42”</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== COLLABORATION / SYNC ===== -->
+<section id="collab" class="wrap">
+  <div class="feature">
+    <div class="copy reveal">
+      <span class="kicker" style="color:var(--teal)">Shared &amp; in sync</span>
+      <h3>Everyone’s on the same list, in real time.</h3>
+      <p>Invite family by email and a list becomes a shared, live workspace. The moment someone adds milk, ticks off bread, or reorders the aisle, it appears on every phone — no refresh, no “pull to update.”</p>
+      <ul class="feat-list">
+        <li><span class="ck" style="background:var(--pink)">✓</span> Secure email + password accounts, invitation-only</li>
+        <li><span class="ck" style="background:var(--teal)">✓</span> Share any list; members come and go freely</li>
+        <li><span class="ck" style="background:var(--orange)">✓</span> Edits, ticks, reorders and merges all sync instantly</li>
+        <li><span class="ck" style="background:var(--blue)">✓</span> Your data is fenced off per family by database-level security</li>
+      </ul>
+    </div>
+    <div class="visual reveal d1">
+      <div class="vcard">
+        <div class="vhead">
+          <span class="vtitle">Veckohandling</span>
+          <span class="who"><span class="live"></span> 3 online</span>
+        </div>
+        <div class="sync-row"><span class="tick" style="width:20px;height:20px;border-radius:6px;border:2px solid var(--teal)"></span> Kaffe <span class="q" style="margin-left:auto">500 g</span></div>
+        <div class="sync-row" style="background:var(--tint-pink);border-color:color-mix(in oklab,var(--pink) 35%,transparent)">
+          <span class="tick" style="width:20px;height:20px;border-radius:6px;border:2px solid var(--pink)"></span> Blåbär
+          <span class="who" style="color:#be2d72"><span class="ww" style="background:var(--pink)">A</span> Anna lade just till</span>
+        </div>
+        <div class="sync-row" style="background:var(--tint-yellow);border-color:color-mix(in oklab,var(--yellow) 45%,transparent)">
+          <span class="tick on" style="width:20px;height:20px;border-radius:6px;background:var(--teal);border:none;color:#fff;display:grid;place-items:center;font-size:.7rem">✓</span> Bröd
+          <span class="who" style="color:#9a7b00"><span class="ww" style="background:var(--orange)">J</span> Johan bockade av</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== OFFLINE ===== -->
+<section class="wrap">
+  <div class="feature flip">
+    <div class="copy reveal">
+      <span class="kicker" style="color:var(--orange)">Offline-first</span>
+      <h3>Dead zone in the freezer aisle? Keep shopping.</h3>
+      <p>The whole app lives on your phone. Lists open instantly from local storage, every tick and edit is saved on the spot, and anything you change while offline quietly syncs the moment you’re back on signal.</p>
+      <ul class="feat-list">
+        <li><span class="ck" style="background:var(--orange)">✓</span> Browse and edit lists with zero connection</li>
+        <li><span class="ck" style="background:var(--teal)">✓</span> Changes queue up and send themselves on reconnect</li>
+        <li><span class="ck" style="background:var(--pink)">✓</span> Cached lists reopen in a blink — no spinners</li>
+      </ul>
+    </div>
+    <div class="visual reveal d1">
+      <div class="vcard">
+        <div class="vhead">
+          <span class="vtitle">Veckohandling</span>
+          <span class="ob"><span class="od"></span> OFFLINE</span>
+        </div>
+        <div class="imp-row"><span class="tick on" style="width:22px;height:22px;border-radius:7px;background:var(--teal);border:none;color:#fff;display:grid;place-items:center">✓</span> Tomater <span class="queued" style="margin-left:auto">sparad lokalt</span></div>
+        <div class="imp-row"><span class="tick" style="width:22px;height:22px;border-radius:7px;border:2px solid color-mix(in oklab,var(--ink) 25%,transparent)"></span> Basilika <span class="queued" style="margin-left:auto">i kö ↑</span></div>
+        <div class="imp-row"><span class="tick" style="width:22px;height:22px;border-radius:7px;border:2px solid color-mix(in oklab,var(--ink) 25%,transparent)"></span> Mozzarella <span class="queued" style="margin-left:auto">i kö ↑</span></div>
+        <p style="font-family:var(--mono);font-size:.7rem;color:var(--ink-soft);margin-top:12px;text-align:center">3 ändringar synkas när du är online igen</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SMART IMPORT ===== -->
+<section id="smart" class="sec wrap">
+  <div class="center reveal">
+    <span class="sec-tag">Less typing, more living</span>
+    <h2>From a recipe to your cart in one tap.</h2>
+    <p class="sec-lede">Paste a link, snap a photo, or just talk. Shoplist pulls out the ingredients, files them under the right aisle, and lets you accept or reject each one before it lands on the list.</p>
+  </div>
+
+  <div class="feature" style="margin-top:30px">
+    <div class="visual reveal">
+      <div class="phone sm">
+        <div class="screen">
+          <div class="app-head" style="padding-top:22px"><h3 style="font-size:1.05rem">Import recept</h3></div>
+          <div class="app-body">
+            <div style="font-family:var(--mono);font-size:.66rem;color:var(--ink-soft);background:color-mix(in oklab,var(--ink) 6%,white);padding:8px 10px;border-radius:10px;margin-bottom:6px">🔗 ica.se/recept/kramig-pasta</div>
+            <div class="cat-label">Hittade 5 varor</div>
+            <div class="imp-row"><span class="iq">250 g</span> Pasta <span class="acc">✓</span></div>
+            <div class="imp-row"><span class="iq">2 dl</span> Grädde <span class="acc">✓</span></div>
+            <div class="imp-row"><span class="iq">1</span> Gul lök <span class="acc">✓</span></div>
+            <div class="imp-row off"><span class="iq">1 krm</span> Salt <span class="acc">✕</span></div>
+            <div class="imp-row"><span class="iq">50 g</span> Parmesan <span class="acc">✓</span></div>
+            <div class="add-bar" style="justify-content:center;background:var(--ink);color:#fff;font-weight:700">Lägg till 4 varor</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="copy reveal d1">
+      <span class="kicker" style="color:var(--pink)">Recipe &amp; list import</span>
+      <h3>Three ways in.</h3>
+      <ul class="feat-list" style="margin-top:18px">
+        <li><span class="ck" style="background:var(--pink)">🔗</span> <span><b>From a link</b> — recipe URLs are fetched and parsed automatically.</span></li>
+        <li><span class="ck" style="background:var(--orange)">📷</span> <span><b>From a photo</b> — snap a handwritten list or a recipe page and the vision model reads it.</span></li>
+        <li><span class="ck" style="background:var(--teal)">⌨️</span> <span><b>From text</b> — paste anything; quantities and units are understood (“2 förp à 250 g”).</span></li>
+        <li><span class="ck" style="background:var(--blue)">📲</span> <span><b>From anywhere</b> — share a link or image into Shoplist straight from another app.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===== CATEGORIZE ===== -->
+<section class="wrap">
+  <div class="feature flip">
+    <div class="copy reveal">
+      <span class="kicker" style="color:var(--teal)">Auto-sorted</span>
+      <h3>Your list, already in shopping order.</h3>
+      <p>Add “halloumi” and it quietly files itself under <b>Mejeri</b>. Add “tvål” and it’s <b>Hygien</b>. Items are tagged across eleven aisles automatically, remembered for next time, and grouped so you walk the store once — not back and forth.</p>
+      <ul class="feat-list">
+        <li><span class="ck" style="background:var(--teal)">✓</span> Smart category guessing on every add</li>
+        <li><span class="ck" style="background:var(--pink)">✓</span> Learns your corrections and reuses them</li>
+        <li><span class="ck" style="background:var(--orange)">✓</span> Drag the aisles into <i>your</i> store’s order in Settings</li>
+      </ul>
+    </div>
+    <div class="visual reveal d1">
+      <div class="vcard">
+        <div class="cat-label" style="margin-top:0">Frukt &amp; grönt</div>
+        <div class="item t-teal" style="margin-bottom:7px"><span class="tick"></span>Spenat<span class="q" style="margin-left:auto">1 påse</span></div>
+        <div class="cat-label">Mejeri</div>
+        <div class="item t-pink" style="margin-bottom:7px"><span class="tick"></span>Halloumi <span style="font-family:var(--mono);font-size:.6rem;color:var(--teal);margin-left:8px">auto · mejeri</span></div>
+        <div class="cat-label">Skafferi</div>
+        <div class="item t-yellow" style="margin-bottom:7px"><span class="tick"></span>Linser<span class="q" style="margin-left:auto">2 burk</span></div>
+        <div class="cat-label">Hygien</div>
+        <div class="item t-orange"><span class="tick"></span>Tvål</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== STORE MODE ===== -->
+<section class="wrap">
+  <div class="feature">
+    <div class="visual reveal">
+      <div class="phone sm">
+        <div class="screen" style="background:#0f1419">
+          <div class="app-body" style="padding:34px 16px 18px;gap:14px">
+            <div style="font-family:var(--mono);font-size:.62rem;letter-spacing:.16em;color:#5fd6c6;text-align:center">STORE MODE · skärmen tänd</div>
+            <div style="display:flex;align-items:center;gap:14px;padding:18px;border-radius:18px;background:#1b2530;color:#fff;font-size:1.3rem;font-weight:700"><span style="width:30px;height:30px;border-radius:9px;border:2.5px solid #5fd6c6"></span> Mjölk</div>
+            <div style="display:flex;align-items:center;gap:14px;padding:18px;border-radius:18px;background:#1b2530;color:#fff;font-size:1.3rem;font-weight:700"><span style="width:30px;height:30px;border-radius:9px;border:2.5px solid #5fd6c6"></span> Bröd</div>
+            <div style="display:flex;align-items:center;gap:14px;padding:18px;border-radius:18px;background:#141d26;color:#5b6b78;font-size:1.3rem;font-weight:700;text-decoration:line-through"><span style="width:30px;height:30px;border-radius:9px;background:#14B8A6;display:grid;place-items:center;color:#fff">✓</span> Ägg</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="copy reveal d1">
+      <span class="kicker" style="color:var(--orange)">Store mode</span>
+      <h3>Big rows, bright ticks, screen stays awake.</h3>
+      <p>Tap into store mode and everything else fades away: oversized rows you can hit one-handed with a basket on your arm, and a screen wake-lock so your phone never dims halfway down the aisle.</p>
+      <ul class="feat-list">
+        <li><span class="ck" style="background:var(--orange)">✓</span> Extra-large, thumb-friendly item rows</li>
+        <li><span class="ck" style="background:var(--teal)">✓</span> Screen stays on while you shop</li>
+        <li><span class="ck" style="background:var(--pink)">✓</span> A little firework when you tick the last thing off</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===== MORE THINGS WORTH LIFTING UP ===== -->
+<section id="more" class="sec wrap">
+  <div class="center reveal">
+    <span class="sec-tag">And a few more touches</span>
+    <h2>The details that make it stick.</h2>
+  </div>
+  <div class="more-grid">
+    <div class="mcard reveal d1"><div class="mi">🎙️</div><h4>Talk to your list</h4><p>Record a voice memo and it’s transcribed into items, tasks, or a saved note — hands free, mid-cook.</p></div>
+    <div class="mcard reveal d2"><div class="mi">📷</div><h4>Per-item photos</h4><p>Snap the exact brand you want. Tap any thumbnail for a fullscreen look in the store.</p></div>
+    <div class="mcard reveal d3"><div class="mi">🔀</div><h4>Copy, move &amp; merge</h4><p>Shuffle items between lists, or drag two together to merge — quantities add up, units join neatly.</p></div>
+    <div class="mcard reveal d1"><div class="mi">⌨️</div><h4>Autocomplete that knows you</h4><p>Start typing and your most-used items surface instantly, ranked by how often you buy them.</p></div>
+    <div class="mcard reveal d2">
+      <div class="mi">🎨</div><h4>Five themes &amp; full accessibility</h4>
+      <p>Light, Dark, and three painterly palettes — plus high-contrast, large text, and reduce-motion modes.</p>
+      <div class="swatches">
+        <div class="sw" style="background:#fff"></div>
+        <div class="sw" style="background:#1c1622"></div>
+        <div class="sw" style="background:linear-gradient(135deg,#EC4899,#FACC15)"></div>
+        <div class="sw" style="background:linear-gradient(135deg,#bfe3ec,#7fb6d6)"></div>
+        <div class="sw" style="background:linear-gradient(135deg,#e8c9a0,#b9714f)"></div>
+      </div>
+    </div>
+    <div class="mcard reveal d3"><div class="mi">📲</div><h4>Installs like a real app</h4><p>Add Shoplist to your home screen, launch it full-screen, and share into it from the system share sheet.</p></div>
+  </div>
+</section>
+
+<!-- ===== CTA ===== -->
+<section class="wrap">
+  <div class="cta reveal">
+    <h2>Get the whole family on one list.</h2>
+    <p>Groceries that sort themselves, chores that nudge themselves, and a sync that never makes you wait — built for the messy, offline, three-people-shopping-at-once reality of family life.</p>
+    <a href="#" id="get" class="btn btn-primary">Start your first list →</a>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="fbrand">
+      <svg class="cart" style="width:26px;height:26px" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+        <rect x="3" y="3" width="42" height="42" rx="12" fill="#fff"/>
+        <path d="M11 13h5l3.4 16.2a2 2 0 0 0 2 1.6h11.3a2 2 0 0 0 2-1.5L37.5 18H18" stroke="#EC4899" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="21" cy="36" r="2.4" fill="#14B8A6"/><circle cx="33" cy="36" r="2.4" fill="#F97316"/>
+        <path d="M23 22h11M22 26h13" stroke="#FACC15" stroke-width="2.4" stroke-linecap="round"/>
+      </svg>
+      Shoplist
+    </div>
+    <div>A family shopping list, done right · Works offline · Syncs everywhere</div>
+  </div>
+</footer>
+
+<script>
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    }
+  }, { threshold: 0.14, rootMargin: '0px 0px -8% 0px' });
+  document.querySelectorAll('.reveal:not(.in)').forEach(el => io.observe(el));
+</script>
+</body>
+</html>
