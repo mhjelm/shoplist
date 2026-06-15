@@ -55,11 +55,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.redirect(new URL(`/share/${row.id}`, req.url), 303)
   }
 
-  // --- Link path: store raw link, no extraction, never bail on "empty" ---
+  // --- Link path ---
+  // Extract recipe/list items best-effort so a recipe link still lands on the
+  // reviewable item checklist (the picker shows it for shopping/task targets).
+  // A non-recipe link just yields [] — no bail; the picker offers saving it as a
+  // scrap instead. The raw url/title ride along so the scrap option can unfurl.
   if (linkUrl) {
+    const result = await extractRecipeItems(linkUrl)
+    if (result.error) log.warn('share.extract_failed', { source: 'link', error: result.error })
+    const items = result.items ?? []
     const { data: row, error: insertError } = await supabase
       .from('pending_imports')
-      .insert({ user_id: user.id, items: [], source: 'link', url: linkUrl, title: title || null })
+      .insert({ user_id: user.id, items, source: 'link', url: linkUrl, title: title || null })
       .select('id')
       .single()
     if (insertError || !row) {

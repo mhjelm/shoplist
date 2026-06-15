@@ -5,14 +5,12 @@ import ShareImportClient from '@/app/share/[importId]/ShareImportClient'
 vi.mock('@/app/share/actions', () => ({
   confirmShareImport: vi.fn(),
   confirmShareLink: vi.fn(),
-  confirmShareLinkAsRecipe: vi.fn(),
   cancelShareImport: vi.fn(),
 }))
 
-const { confirmShareImport, confirmShareLink, confirmShareLinkAsRecipe, cancelShareImport } = await import('@/app/share/actions')
+const { confirmShareImport, confirmShareLink, cancelShareImport } = await import('@/app/share/actions')
 const mockConfirm = vi.mocked(confirmShareImport)
 const mockConfirmLink = vi.mocked(confirmShareLink)
-const mockConfirmLinkRecipe = vi.mocked(confirmShareLinkAsRecipe)
 const mockCancel = vi.mocked(cancelShareImport)
 
 const baseItems = [
@@ -28,6 +26,8 @@ const baseLists = [
 const notesLists = [
   { id: 'notes-1', name: 'Min scrapbook', owner_id: 'me', kind: 'notes' },
 ]
+
+const taskList = { id: 'task-1', name: 'Sysslor', owner_id: 'me', kind: 'task' }
 
 function renderClient(overrides: Partial<React.ComponentProps<typeof ShareImportClient>> = {}) {
   return render(
@@ -145,7 +145,7 @@ describe('ShareImportClient — items mode', () => {
       expect(screen.getByRole('button', { name: /skapa & lägg till 2/i })).toBeDisabled()
     })
 
-    it('confirm calls confirmShareImport with the new-list destination (defaults to shopping)', async () => {
+    it('confirm calls confirmShareImport with the new-list destination (always shopping)', async () => {
       mockConfirm.mockResolvedValue(undefined as unknown as { error?: string })
       renderClient()
       fireEvent.click(screen.getByText(/skapa ny lista/i))
@@ -160,21 +160,18 @@ describe('ShareImportClient — items mode', () => {
       )
     })
 
-    it('confirm passes listKind: task when the task toggle is chosen', async () => {
-      mockConfirm.mockResolvedValue(undefined as unknown as { error?: string })
+    it('offers no task-list option when creating a new list', () => {
       renderClient()
       fireEvent.click(screen.getByText(/skapa ny lista/i))
-      fireEvent.change(screen.getByPlaceholderText(/listnamn/i), { target: { value: 'Helgsysslor' } })
-      fireEvent.click(screen.getByRole('radio', { name: /uppgifter/i }))
-      fireEvent.click(screen.getByRole('button', { name: /skapa & lägg till 2/i }))
-      await waitFor(() =>
-        expect(mockConfirm).toHaveBeenCalledWith(
-          'imp-1',
-          { kind: 'new', name: 'Helgsysslor', listKind: 'task' },
-          baseItems,
-        ),
-      )
+      expect(screen.queryByRole('radio', { name: /uppgifter|uppg/i })).toBeNull()
     })
+  })
+
+  // REQUIREMENT: task lists are never selectable as a share target.
+  it('does not show task lists as destinations', () => {
+    renderClient({ lists: [...baseLists, taskList, ...notesLists] })
+    expect(screen.getByText('Veckohandling')).toBeInTheDocument()
+    expect(screen.queryByText('Sysslor')).toBeNull()
   })
 
   it('surfaces an error returned by confirmShareImport', async () => {
@@ -199,15 +196,22 @@ describe('ShareImportClient — items mode', () => {
 })
 
 describe('ShareImportClient — link mode', () => {
-  // url=null so no auto-select; tests pick a destination explicitly.
+  // A shared RECIPE link carries the items extracted at the route. This fixture
+  // is the heart of the regression these tests guard: sharing a recipe must let
+  // the user review/accept the extracted items before they're imported.
+  const recipeItems = [
+    { name: 'Smör', category: 'mejeri', measurement: '2 msk' },
+    { name: 'Köttfärs', category: 'kott-fisk', measurement: '500 g' },
+  ]
+
   function renderLink(overrides: Partial<React.ComponentProps<typeof ShareImportClient>> = {}) {
     return render(
       <ShareImportClient
         importId="imp-2"
-        items={[]}
+        items={recipeItems}
         source="link"
-        url="https://www.biltema.se/x"
-        title="Kortläsare med USB C-kontakt"
+        url="https://recept.se/kottbullar"
+        title="Köttbullar"
         lists={[...baseLists, ...notesLists]}
         currentUserId="me"
         {...overrides}
@@ -215,84 +219,96 @@ describe('ShareImportClient — link mode', () => {
     )
   }
 
-  it('shows the "Importera länk" header', () => {
+  it('displays the link title and host', () => {
     renderLink()
-    expect(screen.getByText('Importera länk')).toBeInTheDocument()
+    expect(screen.getByText('Köttbullar')).toBeInTheDocument()
+    expect(screen.getByText('recept.se')).toBeInTheDocument()
   })
 
-  it('displays the link title and host pill', () => {
-    renderLink()
-    expect(screen.getByText('Kortläsare med USB C-kontakt')).toBeInTheDocument()
-    expect(screen.getByText('biltema.se')).toBeInTheDocument()
-  })
-
-  it('shows the raw url when no title given', () => {
-    renderLink({ title: null })
-    expect(screen.getByText('https://www.biltema.se/x')).toBeInTheDocument()
-  })
-
-  it('does not render the item checklist', () => {
-    renderLink()
-    expect(screen.queryByText(/varor att lägga till/i)).toBeNull()
-  })
-
-  it('shows ALL lists as destinations (shopping, task, notes)', () => {
+  it('offers shopping and notes lists as destinations', () => {
     renderLink()
     expect(screen.getByText('Veckohandling')).toBeInTheDocument()
     expect(screen.getByText('Fest')).toBeInTheDocument()
     expect(screen.getByText('Min scrapbook')).toBeInTheDocument()
   })
 
-  it('confirm is disabled until a list is picked (multiple lists)', () => {
-    renderLink()
-    expect(screen.getByRole('button', { name: /importera|spara klipp/i })).toBeDisabled()
+  // REQUIREMENT: task lists are never selectable as a share target.
+  it('does not show task lists as destinations, and offers no task create option', () => {
+    renderLink({ lists: [...baseLists, taskList, ...notesLists] })
+    expect(screen.queryByText('Sysslor')).toBeNull()
+    fireEvent.click(screen.getByText(/skapa ny lista/i))
+    expect(screen.queryByRole('radio', { name: /uppg/i })).toBeNull()
   })
 
-  it('picking a shopping list → label "Importera" and confirmShareLinkAsRecipe', async () => {
-    mockConfirmLinkRecipe.mockResolvedValue(undefined as unknown as { error?: string })
-    renderLink()
-    fireEvent.click(screen.getByText('Veckohandling'))
-    fireEvent.click(screen.getByRole('button', { name: /^importera$/i }))
+  // ── The core requirement: recipe share is reviewable, not auto-imported ──
+  // This is the test that must FAIL if anyone removes the accept/reject checklist
+  // again. Do not relax it to match a future implementation — fix the code.
+  describe('REQUIREMENT: a shared recipe is reviewed before import', () => {
+    it('shows the extracted items as an accept/reject checklist', () => {
+      renderLink()
+      expect(screen.getByText('Smör')).toBeInTheDocument()
+      expect(screen.getByText('Köttfärs')).toBeInTheDocument()
+      expect(screen.getByText(/varor att lägga till \(2\/2\)/i)).toBeInTheDocument()
+    })
+
+    it('imports the reviewed items (minus any deselected) into the chosen list', async () => {
+      mockConfirm.mockResolvedValue(undefined as unknown as { error?: string })
+      renderLink()
+      fireEvent.click(screen.getByText('Veckohandling'))        // pick a shopping list
+      fireEvent.click(screen.getByText('Smör'))                 // deselect one item
+      fireEvent.click(screen.getByRole('button', { name: /lägg till 1/i }))
+      await waitFor(() =>
+        expect(mockConfirm).toHaveBeenCalledWith(
+          'imp-2',
+          { kind: 'existing', listId: 'list-a' },
+          [{ name: 'Köttfärs', category: 'kott-fisk', measurement: '500 g' }],
+        ),
+      )
+      // It must be a real item import, never a silent link-save.
+      expect(mockConfirmLink).not.toHaveBeenCalled()
+    })
+
+    it('blocks import when every item is deselected', () => {
+      renderLink()
+      fireEvent.click(screen.getByText('Veckohandling'))
+      fireEvent.click(screen.getByText('Smör'))
+      fireEvent.click(screen.getByText('Köttfärs'))
+      expect(screen.getByRole('button', { name: /lägg till 0/i })).toBeDisabled()
+    })
+  })
+
+  it('create-new shopping list imports the reviewed items', async () => {
+    mockConfirm.mockResolvedValue(undefined as unknown as { error?: string })
+    renderLink({ lists: [] })
+    fireEvent.change(screen.getByPlaceholderText(/listnamn/i), { target: { value: 'Recept' } })
+    fireEvent.click(screen.getByRole('button', { name: /lägg till 2/i }))
     await waitFor(() =>
-      expect(mockConfirmLinkRecipe).toHaveBeenCalledWith(
+      expect(mockConfirm).toHaveBeenCalledWith(
         'imp-2',
-        { kind: 'existing', listId: 'list-a' },
-        'https://www.biltema.se/x',
+        { kind: 'new', name: 'Recept', listKind: 'shopping' },
+        recipeItems,
       ),
     )
-    expect(mockConfirmLink).not.toHaveBeenCalled()
   })
 
-  it('picking a notes list → label "Spara klipp" and confirmShareLink', async () => {
+  it('choosing a scrapbook hides the checklist and saves the link as a scrap', async () => {
     mockConfirmLink.mockResolvedValue(undefined as unknown as { error?: string })
     renderLink()
     fireEvent.click(screen.getByText('Min scrapbook'))
+    // Checklist is irrelevant for a scrap, so it's hidden.
+    expect(screen.queryByText(/varor att lägga till/i)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /spara klipp/i }))
     await waitFor(() =>
       expect(mockConfirmLink).toHaveBeenCalledWith(
         'imp-2',
         { kind: 'existing', listId: 'notes-1' },
-        'https://www.biltema.se/x',
+        'https://recept.se/kottbullar',
       ),
     )
-    expect(mockConfirmLinkRecipe).not.toHaveBeenCalled()
+    expect(mockConfirm).not.toHaveBeenCalled()
   })
 
-  it('create-new shopping list → confirmShareLinkAsRecipe with listKind shopping', async () => {
-    mockConfirmLinkRecipe.mockResolvedValue(undefined as unknown as { error?: string })
-    renderLink({ lists: [] })
-    fireEvent.change(screen.getByPlaceholderText(/listnamn/i), { target: { value: 'Recept' } })
-    fireEvent.click(screen.getByRole('button', { name: /^importera$/i }))
-    await waitFor(() =>
-      expect(mockConfirmLinkRecipe).toHaveBeenCalledWith(
-        'imp-2',
-        { kind: 'new', name: 'Recept', listKind: 'shopping' },
-        'https://www.biltema.se/x',
-      ),
-    )
-  })
-
-  it('create-new with the Scrap toggle → confirmShareLink', async () => {
+  it('create-new with the Scrap toggle saves a scrap', async () => {
     mockConfirmLink.mockResolvedValue(undefined as unknown as { error?: string })
     renderLink({ lists: [] })
     fireEvent.change(screen.getByPlaceholderText(/listnamn/i), { target: { value: 'Klipp' } })
@@ -302,22 +318,28 @@ describe('ShareImportClient — link mode', () => {
       expect(mockConfirmLink).toHaveBeenCalledWith(
         'imp-2',
         { kind: 'new', name: 'Klipp' },
-        'https://www.biltema.se/x',
+        'https://recept.se/kottbullar',
       ),
     )
   })
 
-  it('auto-selects when only one list exists', () => {
-    renderLink({ lists: [notesLists[0]] })
+  it('a non-recipe link (no items) cannot import to a shopping list, only scrap', () => {
+    renderLink({ items: [] })
+    expect(screen.queryByText(/varor att lägga till/i)).toBeNull()
+    // Shopping target with nothing to add → confirm disabled.
+    fireEvent.click(screen.getByText('Veckohandling'))
+    expect(screen.getByRole('button', { name: /lägg till 0/i })).toBeDisabled()
+    // Scrap target still works.
+    fireEvent.click(screen.getByText('Min scrapbook'))
     expect(screen.getByRole('button', { name: /spara klipp/i })).not.toBeDisabled()
   })
 
   it('surfaces an error from the confirm action', async () => {
-    mockConfirmLinkRecipe.mockResolvedValue({ error: 'Inga varor kunde hittas i länken.' } as unknown as void)
+    mockConfirm.mockResolvedValue({ error: 'Database is on fire' } as unknown as void)
     renderLink()
     fireEvent.click(screen.getByText('Veckohandling'))
-    fireEvent.click(screen.getByRole('button', { name: /^importera$/i }))
-    await waitFor(() => expect(screen.getByText(/inga varor kunde hittas/i)).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /lägg till 2/i }))
+    await waitFor(() => expect(screen.getByText(/database is on fire/i)).toBeInTheDocument())
   })
 
   it('cancel calls cancelShareImport', async () => {

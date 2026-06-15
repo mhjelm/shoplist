@@ -1,9 +1,15 @@
 'use server'
 
-import { redirect } from 'next/navigation'
+import { redirect, RedirectType } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { addItems, unfurlLink, extractRecipeItems } from '@/app/lists/[id]/actions'
+import { addItems, unfurlLink } from '@/app/lists/[id]/actions'
 import type { ListKind } from '@/lib/types'
+
+// The share picker (/share/[importId]) is a one-shot interstitial: the pending
+// row is deleted on confirm/cancel. Redirect with `replace` so it's removed from
+// history — otherwise Back from the destination list lands on the now-defunct
+// picker (which renders ShareGone) instead of going back to /lists.
+const REPLACE = RedirectType.replace
 
 type Destination =
   | { kind: 'existing'; listId: string }
@@ -52,38 +58,7 @@ export async function confirmShareImport(
 
   await supabase.from('pending_imports').delete().eq('id', importId)
 
-  redirect(`/lists/${resolved.listId}`)
-}
-
-// A shared link aimed at a shopping/task list: extract recipe/list items from
-// the URL (Gemini) and add them. Extraction runs here (at confirm) so the picker
-// stays instant and we don't pay for it when the user just wants a scrap.
-export async function confirmShareLinkAsRecipe(
-  importId: string,
-  destination: Destination,
-  link: string,
-) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Not authenticated' }
-
-  // Extract first — so a failed/empty extraction doesn't leave a stray new list.
-  const extracted = await extractRecipeItems(link)
-  if (extracted.error) return { error: extracted.error }
-  const items = extracted.items ?? []
-  if (items.length === 0) {
-    return { error: 'Inga varor kunde hittas i länken. Spara den som ett klipp i stället?' }
-  }
-
-  const resolved = await resolveList(supabase, user.id, destination)
-  if ('error' in resolved) return resolved
-
-  const addResult = await addItems(resolved.listId, items)
-  if (addResult.error) return { error: addResult.error }
-
-  await supabase.from('pending_imports').delete().eq('id', importId)
-
-  redirect(`/lists/${resolved.listId}`)
+  redirect(`/lists/${resolved.listId}`, REPLACE)
 }
 
 type LinkDestination =
@@ -130,7 +105,7 @@ export async function confirmShareLink(
 
   await supabase.from('pending_imports').delete().eq('id', importId)
 
-  redirect(`/lists/${listId}`)
+  redirect(`/lists/${listId}`, REPLACE)
 }
 
 export async function cancelShareImport(importId: string) {
@@ -140,5 +115,5 @@ export async function cancelShareImport(importId: string) {
 
   await supabase.from('pending_imports').delete().eq('id', importId)
 
-  redirect('/lists')
+  redirect('/lists', REPLACE)
 }

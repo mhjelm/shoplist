@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { ListKind } from '@/lib/types'
 import { noteHostname } from '@/lib/notesView'
-import { confirmShareImport, confirmShareLink, confirmShareLinkAsRecipe, cancelShareImport } from '../actions'
+import { confirmShareImport, confirmShareLink, cancelShareImport } from '../actions'
 
 interface SharedItem {
   name: string
@@ -38,21 +38,24 @@ const SOURCE_LABEL: Record<string, string> = {
 const NEW_LIST_ID = '__new__'
 
 // ── Link mode ─────────────────────────────────────────────────────────────────
-// A shared URL. Destination decides what happens:
-//   - shopping / task list → extract recipe/list items (Gemini) and add them
-//   - notes (scrapbook)    → unfurl into a saved scrap
+// A shared URL. Items are extracted at the route (best-effort); the chosen
+// destination decides what happens:
+//   - shopping / task list → review the extracted items (accept/reject) and add
+//   - notes (scrapbook)    → ignore items, unfurl the link into a saved scrap
 // All lists are valid targets; the confirm action + label follow the chosen kind.
 
 const KIND_GLYPH: Record<string, string> = { shopping: '🛒', task: '✓', notes: '📎' }
 
 function LinkImportMode({
   importId,
+  items,
   url,
   title,
   lists,
   currentUserId,
 }: {
   importId: string
+  items: SharedItem[]
   url: string
   title: string | null
   lists: ShareList[]
@@ -62,20 +65,30 @@ function LinkImportMode({
   const [selectedListId, setSelectedListId] = useState<string | null>(initialSelectedId)
   const [newListName, setNewListName] = useState('')
   const [newListKind, setNewListKind] = useState<ListKind>('shopping')
+  const [selectedItems, setSelectedItems] = useState<boolean[]>(() => items.map(() => true))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const isCreatingNew = selectedListId === NEW_LIST_ID
   const newNameTrimmed = newListName.trim()
   const destinationReady = isCreatingNew ? newNameTrimmed.length > 0 : selectedListId !== null
-  const confirmEnabled = !busy && destinationReady
   const host = noteHostname(url)
 
-  // The kind we're targeting drives whether we extract a recipe or save a scrap.
+  // The kind we're targeting drives whether we add reviewed items or save a scrap.
   const targetKind: ListKind | undefined = isCreatingNew
     ? newListKind
     : (lists.find(l => l.id === selectedListId)?.kind as ListKind | undefined)
   const isScrap = targetKind === 'notes'
+
+  const selectedCount = selectedItems.filter(Boolean).length
+  // The extracted-item checklist only matters for grocery/task targets.
+  const showChecklist = !isScrap && items.length > 0
+  // Scrap needs only a destination; grocery/task also needs ≥1 selected item.
+  const confirmEnabled = !busy && destinationReady && (isScrap || selectedCount > 0)
+
+  function toggleItem(idx: number) {
+    setSelectedItems(prev => prev.map((v, n) => n === idx ? !v : v))
+  }
 
   async function handleConfirm() {
     if (!confirmEnabled) return
@@ -88,10 +101,11 @@ function LinkImportMode({
         : { kind: 'existing' as const, listId: selectedListId! }
       result = await confirmShareLink(importId, destination, url)
     } else {
+      const chosen = items.filter((_, idx) => selectedItems[idx])
       const destination = isCreatingNew
         ? { kind: 'new' as const, name: newNameTrimmed, listKind: newListKind }
         : { kind: 'existing' as const, listId: selectedListId! }
-      result = await confirmShareLinkAsRecipe(importId, destination, url)
+      result = await confirmShareImport(importId, destination, chosen)
     }
     if (result?.error) {
       setError(result.error)
@@ -106,8 +120,8 @@ function LinkImportMode({
   }
 
   const confirmLabel = busy
-    ? (isScrap ? 'Sparar…' : 'Importerar…')
-    : (isScrap ? 'Spara klipp' : 'Importera')
+    ? (isScrap ? 'Sparar…' : 'Lägger till…')
+    : (isScrap ? 'Spara klipp' : `Lägg till ${selectedCount}`)
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -199,7 +213,8 @@ function LinkImportMode({
                     autoFocus
                     className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
                   />
-                  <div className="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Listtyp">
+                  {/* Task lists are not valid share targets, so only Inköp / Scrap. */}
+                  <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Listtyp">
                     <button
                       type="button"
                       role="radio"
@@ -212,19 +227,6 @@ function LinkImportMode({
                       }`}
                     >
                       🛒 Inköp
-                    </button>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={newListKind === 'task'}
-                      onClick={() => setNewListKind('task')}
-                      className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-sm font-medium transition-colors ${
-                        newListKind === 'task'
-                          ? 'border-indigo-400 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300'
-                          : 'border-gray-300 text-gray-500 dark:border-gray-700 dark:text-gray-400'
-                      }`}
-                    >
-                      ✓ Uppg.
                     </button>
                     <button
                       type="button"
@@ -245,6 +247,41 @@ function LinkImportMode({
             </li>
           </ul>
         </section>
+
+        {/* Item review — only for grocery/task targets; a scrap ignores items. */}
+        {showChecklist && (
+          <section>
+            <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Varor att lägga till ({selectedCount}/{items.length})
+            </h2>
+            <ul className="space-y-1 rounded-xl border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900">
+              {items.map((item, idx) => {
+                const checked = selectedItems[idx]
+                return (
+                  <li
+                    key={idx}
+                    onClick={() => toggleItem(idx)}
+                    className="flex cursor-pointer select-none items-center gap-3 rounded-lg px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors ${checked ? 'border-blue-600 bg-blue-600' : 'border-gray-300 dark:border-gray-600'}`}>
+                      {checked && (
+                        <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className={`flex-1 text-sm ${checked ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 line-through dark:text-gray-500'}`}>
+                      {item.name}
+                      {item.measurement && (
+                        <span className="ml-1.5 text-xs text-gray-400 dark:text-gray-500">· {item.measurement}</span>
+                      )}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        )}
 
         {error && <p className="text-sm text-red-500">{error}</p>}
 
@@ -270,7 +307,8 @@ function LinkImportMode({
 }
 
 // ── Items mode ────────────────────────────────────────────────────────────────
-// Grocery / task import: a checklist of extracted items, destination any list.
+// Grocery import: a checklist of extracted items. New lists are always shopping
+// lists (task lists aren't valid share targets).
 
 function ItemsImportMode({
   importId,
@@ -289,7 +327,6 @@ function ItemsImportMode({
     lists.length === 1 ? lists[0].id : lists.length === 0 ? NEW_LIST_ID : null
   const [selectedListId, setSelectedListId] = useState<string | null>(initialSelectedId)
   const [newListName, setNewListName] = useState('')
-  const [newListKind, setNewListKind] = useState<ListKind>('shopping')
   const [selectedItems, setSelectedItems] = useState<boolean[]>(() => items.map(() => true))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -310,7 +347,7 @@ function ItemsImportMode({
     setBusy(true)
     const chosen = items.filter((_, idx) => selectedItems[idx])
     const destination = isCreatingNew
-      ? { kind: 'new' as const, name: newNameTrimmed, listKind: newListKind }
+      ? { kind: 'new' as const, name: newNameTrimmed, listKind: 'shopping' as const }
       : { kind: 'existing' as const, listId: selectedListId! }
     const result = await confirmShareImport(importId, destination, chosen)
     if (result?.error) {
@@ -384,44 +421,14 @@ function ItemsImportMode({
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">+ Skapa ny lista</span>
               </button>
               {isCreatingNew && (
-                <>
-                  <input
-                    type="text"
-                    value={newListName}
-                    onChange={e => setNewListName(e.target.value)}
-                    placeholder="Listnamn"
-                    autoFocus
-                    className="mt-2 w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Listtyp">
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={newListKind === 'shopping'}
-                      onClick={() => setNewListKind('shopping')}
-                      className={`flex items-center justify-center gap-2 rounded-lg border py-2 text-sm font-medium transition-colors ${
-                        newListKind === 'shopping'
-                          ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                          : 'border-gray-300 text-gray-500 dark:border-gray-700 dark:text-gray-400'
-                      }`}
-                    >
-                      🛒 Inköp
-                    </button>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={newListKind === 'task'}
-                      onClick={() => setNewListKind('task')}
-                      className={`flex items-center justify-center gap-2 rounded-lg border py-2 text-sm font-medium transition-colors ${
-                        newListKind === 'task'
-                          ? 'border-indigo-400 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300'
-                          : 'border-gray-300 text-gray-500 dark:border-gray-700 dark:text-gray-400'
-                      }`}
-                    >
-                      ✓ Uppgifter
-                    </button>
-                  </div>
-                </>
+                <input
+                  type="text"
+                  value={newListName}
+                  onChange={e => setNewListName(e.target.value)}
+                  placeholder="Listnamn"
+                  autoFocus
+                  className="mt-2 w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               )}
             </li>
           </ul>
@@ -485,13 +492,17 @@ function ItemsImportMode({
 // ── Router ────────────────────────────────────────────────────────────────────
 
 export default function ShareImportClient({ importId, items, source, url, title, lists, currentUserId }: Props) {
+  // Task lists are not valid share targets (product decision) — never offer them.
+  const targetLists = lists.filter(l => l.kind !== 'task')
+
   if (source === 'link' && url) {
     return (
       <LinkImportMode
         importId={importId}
+        items={items}
         url={url}
         title={title ?? null}
-        lists={lists}
+        lists={targetLists}
         currentUserId={currentUserId}
       />
     )
@@ -501,7 +512,7 @@ export default function ShareImportClient({ importId, items, source, url, title,
       importId={importId}
       items={items}
       source={source}
-      lists={lists}
+      lists={targetLists}
       currentUserId={currentUserId}
     />
   )
