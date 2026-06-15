@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Pending manual tasks
 
+- **Apply migration `0029_notes_lists.sql`** — adds the `'notes'` list kind (extends the `lists.kind` CHECK) plus `items.url` + `items.note` for scrapbook lists, and extends the `bump_item_history` guard to skip notes too. Without it, creating/opening a scrapbook list errors (CHECK rejects the insert; `select('*')` won't return `url`/`note`).
+
 - **Apply migration `0028_list_views_task_sort.sql`** — adds `list_views.task_sort` (`'manual' | 'date'`, default `'manual'`); persists the per-user-per-list task-list sort view. Without it, the By-date toggle won't survive a reload (and `page.tsx`'s `list_views` select of `task_sort` will error).
 
 - ~~**Apply migration `0025_task_lists.sql`**~~ — done 2026-06-08 (adds `lists.kind`, `items.assignee_id` + `items.due_date`, and the `get_list_people` RPC; required for the task-lists feature).
@@ -27,7 +29,9 @@ Functional bugs are tracked in **`BUGS.md`** (single source of truth; e.g. BUG-0
 
 ## Active plan
 
-**Instant back-nav: /lists/[id] → /lists paints from local cache** — plan at `PLAN.md`, **executed 2026-06-12**, first pass committed `f7985ee` (awaiting prod verification on a real device — check `nav.back_overlay_ms` p50 in `app_logs` after deploy). Root cause: Next.js serves back/forward from the client router cache even when stale, but our own `revalidatePath('/lists')` (in `touchListView`, fired on every list mount/hide/unmount + after every outbox mutation), `router.refresh()` on ItemList/TaskList unmount, and per-mutation `revalidatePath('/lists/${id}')` purged it. Fix: unread-marker freshness moved local — `src/lib/sync/overviewLocal.ts` (`seedListsOverview` non-regressive Dexie merge + `touchListViewLocal`) — and all 17 hot-path revalidates removed (rare direct flows in `lists/actions.ts`, settings, auth keep theirs). Overlay removal now gated on Dexie readiness; logs `nav.back_overlay_ms` / `nav.back_overlay_timeout`.
+**Scrapbook (notes) lists** — plan at `PLAN.md`, **executed 2026-06-15**. A third `lists.kind` value `'notes'` (UI name "Scrapbook"): a freeform feed of saved scraps — typed notes, voice memos, and links auto-unfurled into rich cards. Reuses the entire sync substrate like task lists; page-level branch in `page.tsx` renders `NoteList`. See "Scrapbook (notes) lists" under Architecture. Needs migration `0029` applied (see Pending manual tasks).
+
+_Prior:_ **Instant back-nav: /lists/[id] → /lists paints from local cache** — plan archived to `docs/PLAN-ARCHIVE.md` (was at `PLAN.md`), **executed 2026-06-12**, first pass committed `f7985ee` (awaiting prod verification on a real device — check `nav.back_overlay_ms` p50 in `app_logs` after deploy). Root cause: Next.js serves back/forward from the client router cache even when stale, but our own `revalidatePath('/lists')` (in `touchListView`, fired on every list mount/hide/unmount + after every outbox mutation), `router.refresh()` on ItemList/TaskList unmount, and per-mutation `revalidatePath('/lists/${id}')` purged it. Fix: unread-marker freshness moved local — `src/lib/sync/overviewLocal.ts` (`seedListsOverview` non-regressive Dexie merge + `touchListViewLocal`) — and all 17 hot-path revalidates removed (rare direct flows in `lists/actions.ts`, settings, auth keep theirs). Overlay removal now gated on Dexie readiness; logs `nav.back_overlay_ms` / `nav.back_overlay_timeout`.
 
 _Prior:_ **Service-worker resume hardening — kill the "blank page on cold wake-up"** — executed + committed 2026-06-12 (`8e61117`); archived → `docs/PLAN-ARCHIVE.md`. Still awaiting on-device verification of the in-store suspend/resume scenario.
 
@@ -137,6 +141,18 @@ A list is either a grocery `'shopping'` list (default) or a `'task'` list — th
 - **`/lists` (Mixed·A):** both kinds share one recency-sorted stream; `ListsView`'s `ListRow` renders a 🛒/✓ `KindIcon` + `SHOP`/`TASK` `KindPill` from `list.kind`. `kind` rides along on `LocalListCatalog` (seeded in `page.tsx`, refreshed by `reconcileListsOverview`). The NEW marker / `last_add_*` logic is kind-agnostic and unchanged.
 - Copy/move is shopping-only: `page.tsx` filters the `availableLists` passed to `ItemList` to `kind !== 'task'`.
 
+### Scrapbook (notes) lists (`kind === 'notes'`)
+
+The third `lists.kind` value (migration `0029`), UI name **"Scrapbook"**: a freeform feed of saved scraps — typed notes, voice memos, and links. Like task lists it reuses the whole sync substrate unchanged and is a **page-level branch** in `page.tsx` (no store/edit-mode, no AI/category/measurement, no assignees/due dates).
+
+- **Two new `items` columns (0029):** `url` (the link) and `note` (a longer typed/spoken body). `name` is the title/short label. `picture_url` (existing) holds the link's unfurled preview image or a photo. A scrap is a link (`url` set) or a plain note; both render as a `NoteCard`.
+- **UI:** `NoteList.tsx` (feed + add textarea + voice button), `NoteCard.tsx` (title/link + body + host pill + thumbnail), `NoteEditModal.tsx` (title/body/url/remove-image), `NoteSpeechModal.tsx` (record → `transcribeNote` → editable transcript → add). Pure helpers in `src/lib/notesView.ts` (`isUrl`, `splitNoteText`, `noteHostname`). Sorted newest-first (no reorder, no done-section).
+- **GOTCHA enforced:** `url`/`note` are in the `ItemUpdatePatch` whitelist (`itemUpdate.ts`) and the `muAddItem` `item.insert` payload (conditional spread — shopping/task payloads byte-unchanged) and the `addItem` dispatch args. Same rule as task fields — miss any and the server write silently no-ops.
+- **Link unfurling:** adding a bare URL calls the `unfurlLink` server action (fetch + OpenGraph `og:title`/`og:description`/`og:image`, `<title>` fallback) → fills `name`/`note`/`picture_url`. Best-effort: skipped offline or on failure, the raw link is still saved.
+- **No Gemini-categorize / no history:** notes adds use `muAddItem(item, { skipCategorize: true })`; the `bump_item_history` guard (0029) skips `'notes'` too, so scraps stay out of grocery autocomplete.
+- **`addItem` merge gate:** the name-merge + cached-category fast path in `addItem` (`actions/items.ts`) now runs **only for `kind === 'shopping'`** (one cheap kind read) — notes (and tasks) must never dedupe by name, since titles can repeat or be empty.
+- **`/lists`:** `ListsView` renders a 📎 `NoteMarker` and a 📎 glyph in the nav loading overlay (`navGlyph`). `CreateListForm` offers a third "📎 Scrapbook" kind.
+
 ### Optimistic UI + Realtime
 
 Logic is split across focused hooks in `src/app/lists/[id]/`:
@@ -232,9 +248,9 @@ All diagnostic logging goes through **`src/lib/log.ts`** — `log.error / warn /
 
 Six tables. Initial schema in `supabase/migrations/0001_init.sql`; subsequent migrations add columns and tables:
 
-- `lists` (id, name, owner_id, created_at, kind, last_activity, last_add_at, last_add_by) — `kind` (`'shopping' | 'task'`, default `'shopping'`, migration 0025) discriminates grocery vs. task lists (see "Task lists" above). `is_shared` was dropped in migration 0012; shared status is now derived from `list_members` having rows. `last_activity` (added in 0017) is a monotonic timestamp bumped by a trigger on every items INSERT/UPDATE/DELETE; it powers the `list_activity` view's sync precheck and **must stay monotonic across deletes**. `last_add_at`/`last_add_by` (added in 0024) are the **add-only** signal for the `/lists` NEW marker — bumped by an INSERT-only trigger (`bump_list_add_activity`), so deletes, edits, clear-shopped, and move-from never raise the marker; only a genuine add (including a move/copy *into* the list) does. `computeUnread` (`src/lib/listsUnread.ts`) reads `last_add_*`, not `last_activity`. Don't conflate the two: `last_activity` = "did anything change?" (sync), `last_add_*` = "was something added?" (marker).
+- `lists` (id, name, owner_id, created_at, kind, last_activity, last_add_at, last_add_by) — `kind` (`'shopping' | 'task' | 'notes'`, default `'shopping'`; `'task'` migration 0025, `'notes'` migration 0029) discriminates grocery vs. task vs. scrapbook lists (see "Task lists" / "Scrapbook (notes) lists" above). `is_shared` was dropped in migration 0012; shared status is now derived from `list_members` having rows. `last_activity` (added in 0017) is a monotonic timestamp bumped by a trigger on every items INSERT/UPDATE/DELETE; it powers the `list_activity` view's sync precheck and **must stay monotonic across deletes**. `last_add_at`/`last_add_by` (added in 0024) are the **add-only** signal for the `/lists` NEW marker — bumped by an INSERT-only trigger (`bump_list_add_activity`), so deletes, edits, clear-shopped, and move-from never raise the marker; only a genuine add (including a move/copy *into* the list) does. `computeUnread` (`src/lib/listsUnread.ts`) reads `last_add_*`, not `last_activity`. Don't conflate the two: `last_activity` = "did anything change?" (sync), `last_add_*` = "was something added?" (marker).
 - `list_members` (list_id, user_id, added_at) — join table for sharing
-- `items` (id, list_id, added_by, name, is_checked, created_at, picture_url, sort_order, quantity, category, measurement, shared_group_id, assignee_id, due_date) — `assignee_id`/`due_date` (migration 0025) are task-list-only (null/ignored for shopping items)
+- `items` (id, list_id, added_by, name, is_checked, created_at, picture_url, sort_order, quantity, category, measurement, shared_group_id, assignee_id, due_date, url, note) — `assignee_id`/`due_date` (migration 0025) are task-list-only; `url`/`note` (migration 0029) are notes-list-only (all null/ignored for shopping items)
 - `user_item_history` (user_id, name, last_used_at, use_count, category) — autocomplete source
 - `user_preferences` (user_id, theme, list_text_size, category_order, high_contrast, reduce_motion, updated_at) — `theme` is `'light' | 'dark' | 'shoplist' | 'polar' | 'dusk'`
 - `pending_imports` (id, user_id, items jsonb, created_at) — transient store for Web Share Target payloads
@@ -265,4 +281,4 @@ Realtime publication includes `items`, `lists`, and `list_members`. `items` uses
 
 - **`@/...` imports** resolve to `src/...` (Next.js default).
 - **Tailwind v4** — uses `@tailwindcss/postcss`; no `tailwind.config.js`.
-- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0029_`.
+- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0030_`.

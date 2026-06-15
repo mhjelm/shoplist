@@ -50,6 +50,24 @@ describe('buildItemUpdatePayload', () => {
     expect('due_date' in payload).toBe(false)
   })
 
+  it('forwards and trims notes fields url and note', () => {
+    expect(buildItemUpdatePayload({ url: '  https://x.test  ' })).toEqual({ url: 'https://x.test' })
+    expect(buildItemUpdatePayload({ note: '  remember this  ' })).toEqual({ note: 'remember this' })
+  })
+
+  it('clears notes fields on explicit null or empty/whitespace string', () => {
+    expect(buildItemUpdatePayload({ url: null })).toEqual({ url: null })
+    expect(buildItemUpdatePayload({ url: '   ' })).toEqual({ url: null })
+    expect(buildItemUpdatePayload({ note: null })).toEqual({ note: null })
+    expect(buildItemUpdatePayload({ note: '' })).toEqual({ note: null })
+  })
+
+  it('omits notes fields entirely when not present in the patch', () => {
+    const payload = buildItemUpdatePayload({ name: 'A link' })
+    expect('url' in payload).toBe(false)
+    expect('note' in payload).toBe(false)
+  })
+
   it('composes multiple fields including is_checked', () => {
     expect(buildItemUpdatePayload({
       name: 'Bröd',

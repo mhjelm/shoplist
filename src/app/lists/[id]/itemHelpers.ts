@@ -23,6 +23,8 @@ export function itemToLocalItem(item: Item): LocalItem {
     shared_group_id: item.shared_group_id,
     assignee_id: item.assignee_id,
     due_date: item.due_date,
+    url: item.url,
+    note: item.note,
   }
 }
 
@@ -42,6 +44,8 @@ export function localItemToItem(li: LocalItem): Item {
     shared_group_id: li.shared_group_id,
     assignee_id: li.assignee_id,
     due_date: li.due_date,
+    url: li.url,
+    note: li.note,
   }
 }
 
@@ -93,6 +97,8 @@ export interface BuildLocalItemOpts {
   measurement?: string | null
   assigneeId?: string | null
   dueDate?: string | null
+  url?: string | null
+  note?: string | null
 }
 
 export function buildLocalItem(
@@ -117,6 +123,8 @@ export function buildLocalItem(
     shared_group_id: null,
     assignee_id: opts.assigneeId ?? null,
     due_date: opts.dueDate ?? null,
+    url: opts.url ?? null,
+    note: opts.note ?? null,
   }
 }
 

@@ -131,6 +131,8 @@ async function dispatch(entry: OutboxEntry) {
         p.quantity as number | undefined,
         p.measurement as string | null | undefined,
         p.category as CategorySlug | null | undefined,
+        p.url as string | null | undefined,
+        p.note as string | null | undefined,
       )
       check(result)
       // Gemini fallback: if the server couldn't find a cached category in

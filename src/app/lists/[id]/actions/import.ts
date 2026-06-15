@@ -253,6 +253,104 @@ export async function extractTasksFromImage(formData: FormData) {
   }
 }
 
+// Spoken note transcription for scrapbook (notes) lists. Unlike the grocery /
+// task audio flows, there is nothing to segment or classify — the speaker is
+// dictating one freeform memo, so we just want a faithful transcript back as a
+// single string. Returns it under `text`.
+const NOTE_AUDIO_PROMPT = `The attached audio is a person speaking out loud, dictating a note or memo to save for later — it might be a thought, a tip, a reminder, or a description of something. Transcribe what they say faithfully into clean written text.
+
+Rules:
+- Transcribe in the SAME language the person speaks (usually Swedish). Do not translate.
+- Lightly clean up filler words and false starts ("öh", "alltså", "vänta"), but keep the wording and meaning intact — do not summarise, rephrase, or add anything.
+- Preserve the natural sentence/line structure. Use line breaks where the speaker clearly moves to a new point.
+- If the audio is silence, background noise, or unintelligible, return {"text": ""}. Never invent content.
+
+Return JSON only: {"text": "the transcript"}`
+
+export async function transcribeNote(audioBase64: string, mimeType: string) {
+  if (!audioBase64) return { error: 'No audio' }
+  if (!process.env.GEMINI_API_KEY) return { error: 'GEMINI_API_KEY not configured' }
+
+  try {
+    const parsed = (await callGeminiWithAudio(
+      NOTE_AUDIO_PROMPT,
+      audioBase64,
+      mimeType,
+      { temperature: 0 },
+    )) as { text?: unknown }
+    const text = typeof parsed.text === 'string' ? parsed.text.trim() : ''
+    return { text }
+  } catch (e) {
+    log.error('extract.note_audio_failed', { error: e instanceof Error ? e.message : String(e) })
+    return { error: e instanceof Error ? e.message : 'Could not transcribe audio' }
+  }
+}
+
+// Decode the handful of HTML entities that show up in OpenGraph/<title> text.
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+}
+
+// Pull a single meta tag's `content` by property/name, tolerating attribute
+// order (content-before-property and property-before-content both occur).
+function metaContent(html: string, key: string): string | null {
+  const patterns = [
+    new RegExp(`<meta[^>]+(?:property|name)=["']${key}["'][^>]*content=["']([^"']*)["']`, 'i'),
+    new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${key}["']`, 'i'),
+  ]
+  for (const re of patterns) {
+    const m = html.match(re)
+    if (m && m[1].trim()) return decodeEntities(m[1].trim())
+  }
+  return null
+}
+
+// Link unfurling for scrapbook lists: fetch a URL and pull its OpenGraph
+// metadata so a pasted link becomes a rich card (title + description + image).
+// Best-effort — callers fall back to the raw link when this returns nothing.
+export async function unfurlLink(url: string): Promise<{
+  title?: string
+  description?: string
+  image?: string
+  error?: string
+}> {
+  const trimmed = url.trim()
+  if (!/^https?:\/\/\S+$/i.test(trimmed)) return { error: 'Not a URL' }
+
+  try {
+    const res = await fetch(trimmed, {
+      signal: AbortSignal.timeout(10000),
+      headers: { 'User-Agent': 'Mozilla/5.0 ShoplistBot' },
+    })
+    if (!res.ok) return { error: `Failed to fetch URL (${res.status})` }
+    const html = (await res.text()).slice(0, 200000)
+
+    const title =
+      metaContent(html, 'og:title') ??
+      (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim()
+        ? decodeEntities(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)![1].trim())
+        : undefined)
+    const description =
+      metaContent(html, 'og:description') ?? metaContent(html, 'description') ?? undefined
+    let image = metaContent(html, 'og:image') ?? undefined
+    // Resolve a relative og:image against the page URL.
+    if (image) {
+      try { image = new URL(image, trimmed).href } catch { image = undefined }
+    }
+
+    return { title, description, image }
+  } catch (e) {
+    log.warn('unfurl.fetch_failed', { error: e instanceof Error ? e.message : String(e) })
+    return { error: e instanceof Error ? e.message : 'Fetch failed' }
+  }
+}
+
 // Walk a JSON-LD value and collect every node typed as Recipe (handles bare
 // objects, arrays, and `@graph` wrappers).
 function findRecipeNodes(node: unknown): Array<Record<string, unknown>> {

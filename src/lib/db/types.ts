@@ -25,6 +25,9 @@ export interface LocalItem {
   // Task-list fields (null/ignored for shopping items). See migration 0025.
   assignee_id: string | null
   due_date: string | null
+  // Notes-list fields (null/ignored for other kinds). See migration 0029.
+  url: string | null
+  note: string | null
   _pending_local_updated_at?: number
 }
 
