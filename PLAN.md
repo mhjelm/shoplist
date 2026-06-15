@@ -1,9 +1,14 @@
 # Plan — Fix sharing + share a link as a scrap (Web Share Target)
 
-**Status: DONE — 2026-06-15.**
+**Status: DONE — 2026-06-15.** Migration `0030` applied.
 
-Three problems, one plan. Decision locked in by the user: **a shared link always
-becomes a scrap (unfurled), never grocery extraction.**
+**Correction (2026-06-15, same day):** the original "a shared link **always** becomes
+a scrap, never grocery extraction" decision was too aggressive — it made the link
+picker notes-only and silently killed **recipe-link sharing** (share a recipe URL →
+ingredients into a shopping list). Revised design: a link share offers **all lists**,
+and the **destination kind decides** — shopping/task → recipe extraction at confirm
+(`confirmShareLinkAsRecipe`), notes → unfurl into a scrap (`confirmShareLink`). Scrap
+is now an *additional* target, not the only one.
 
 ## Problems
 

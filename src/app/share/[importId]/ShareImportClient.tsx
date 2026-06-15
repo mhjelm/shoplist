@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { ListKind } from '@/lib/types'
 import { noteHostname } from '@/lib/notesView'
-import { confirmShareImport, confirmShareLink, cancelShareImport } from '../actions'
+import { confirmShareImport, confirmShareLink, confirmShareLinkAsRecipe, cancelShareImport } from '../actions'
 
 interface SharedItem {
   name: string
@@ -38,40 +38,61 @@ const SOURCE_LABEL: Record<string, string> = {
 const NEW_LIST_ID = '__new__'
 
 // ── Link mode ─────────────────────────────────────────────────────────────────
-// A shared URL is stored as-is and unfurled into a scrap on confirm.
-// Only notes lists are valid destinations.
+// A shared URL. Destination decides what happens:
+//   - shopping / task list → extract recipe/list items (Gemini) and add them
+//   - notes (scrapbook)    → unfurl into a saved scrap
+// All lists are valid targets; the confirm action + label follow the chosen kind.
+
+const KIND_GLYPH: Record<string, string> = { shopping: '🛒', task: '✓', notes: '📎' }
 
 function LinkImportMode({
   importId,
   url,
   title,
-  notesLists,
+  lists,
   currentUserId,
 }: {
   importId: string
   url: string
   title: string | null
-  notesLists: ShareList[]
+  lists: ShareList[]
   currentUserId: string
 }) {
-  const initialId = notesLists.length === 1 ? notesLists[0].id : NEW_LIST_ID
-  const [selectedListId, setSelectedListId] = useState<string>(initialId)
+  const initialSelectedId = lists.length === 1 ? lists[0].id : lists.length === 0 ? NEW_LIST_ID : null
+  const [selectedListId, setSelectedListId] = useState<string | null>(initialSelectedId)
   const [newListName, setNewListName] = useState('')
+  const [newListKind, setNewListKind] = useState<ListKind>('shopping')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const isCreatingNew = selectedListId === NEW_LIST_ID
-  const confirmEnabled = !busy && (isCreatingNew ? newListName.trim().length > 0 : true)
+  const newNameTrimmed = newListName.trim()
+  const destinationReady = isCreatingNew ? newNameTrimmed.length > 0 : selectedListId !== null
+  const confirmEnabled = !busy && destinationReady
   const host = noteHostname(url)
+
+  // The kind we're targeting drives whether we extract a recipe or save a scrap.
+  const targetKind: ListKind | undefined = isCreatingNew
+    ? newListKind
+    : (lists.find(l => l.id === selectedListId)?.kind as ListKind | undefined)
+  const isScrap = targetKind === 'notes'
 
   async function handleConfirm() {
     if (!confirmEnabled) return
     setError(null)
     setBusy(true)
-    const destination = isCreatingNew
-      ? { kind: 'new' as const, name: newListName.trim() }
-      : { kind: 'existing' as const, listId: selectedListId }
-    const result = await confirmShareLink(importId, destination, url)
+    let result: { error?: string } | undefined
+    if (isScrap) {
+      const destination = isCreatingNew
+        ? { kind: 'new' as const, name: newNameTrimmed }
+        : { kind: 'existing' as const, listId: selectedListId! }
+      result = await confirmShareLink(importId, destination, url)
+    } else {
+      const destination = isCreatingNew
+        ? { kind: 'new' as const, name: newNameTrimmed, listKind: newListKind }
+        : { kind: 'existing' as const, listId: selectedListId! }
+      result = await confirmShareLinkAsRecipe(importId, destination, url)
+    }
     if (result?.error) {
       setError(result.error)
       setBusy(false)
@@ -84,11 +105,17 @@ function LinkImportMode({
     await cancelShareImport(importId)
   }
 
+  const confirmLabel = busy
+    ? (isScrap ? 'Sparar…' : 'Importerar…')
+    : (isScrap ? 'Spara klipp' : 'Importera')
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <header className="border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-gray-900">
-        <h1 className="font-semibold text-gray-900 dark:text-gray-100">Spara länk</h1>
-        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Sparas som ett klipp i din scrapbook</p>
+        <h1 className="font-semibold text-gray-900 dark:text-gray-100">Importera länk</h1>
+        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+          Välj en lista — inköp/uppgifter tolkar innehållet, scrapbook sparar länken som klipp
+        </p>
       </header>
 
       <main className="mx-auto max-w-lg space-y-5 px-4 py-6">
@@ -110,13 +137,13 @@ function LinkImportMode({
           )}
         </div>
 
-        {/* Notes-only destination picker */}
+        {/* Destination picker: all lists */}
         <section>
           <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Välj scrapbook
+            Välj lista
           </h2>
           <ul className="space-y-2">
-            {notesLists.map(list => {
+            {lists.map(list => {
               const checked = selectedListId === list.id
               return (
                 <li key={list.id}>
@@ -134,6 +161,7 @@ function LinkImportMode({
                     }`}>
                       {checked && <span className="mx-auto mt-[3px] block h-1.5 w-1.5 rounded-full bg-white" />}
                     </span>
+                    <span className="shrink-0 text-sm" aria-hidden>{KIND_GLYPH[list.kind] ?? '🛒'}</span>
                     <span className="flex-1 min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
                       {list.name}
                     </span>
@@ -159,17 +187,60 @@ function LinkImportMode({
                 }`}>
                   {isCreatingNew && <span className="mx-auto mt-[3px] block h-1.5 w-1.5 rounded-full bg-white" />}
                 </span>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">+ Skapa ny scrapbook</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">+ Skapa ny lista</span>
               </button>
               {isCreatingNew && (
-                <input
-                  type="text"
-                  value={newListName}
-                  onChange={e => setNewListName(e.target.value)}
-                  placeholder="Namn på scrapbook"
-                  autoFocus
-                  className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
-                />
+                <>
+                  <input
+                    type="text"
+                    value={newListName}
+                    onChange={e => setNewListName(e.target.value)}
+                    placeholder="Listnamn"
+                    autoFocus
+                    className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
+                  />
+                  <div className="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Listtyp">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={newListKind === 'shopping'}
+                      onClick={() => setNewListKind('shopping')}
+                      className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-sm font-medium transition-colors ${
+                        newListKind === 'shopping'
+                          ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                          : 'border-gray-300 text-gray-500 dark:border-gray-700 dark:text-gray-400'
+                      }`}
+                    >
+                      🛒 Inköp
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={newListKind === 'task'}
+                      onClick={() => setNewListKind('task')}
+                      className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-sm font-medium transition-colors ${
+                        newListKind === 'task'
+                          ? 'border-indigo-400 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300'
+                          : 'border-gray-300 text-gray-500 dark:border-gray-700 dark:text-gray-400'
+                      }`}
+                    >
+                      ✓ Uppg.
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={newListKind === 'notes'}
+                      onClick={() => setNewListKind('notes')}
+                      className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-sm font-medium transition-colors ${
+                        newListKind === 'notes'
+                          ? 'border-pink-400 bg-pink-50 text-pink-700 dark:border-pink-700 dark:bg-pink-950/40 dark:text-pink-300'
+                          : 'border-gray-300 text-gray-500 dark:border-gray-700 dark:text-gray-400'
+                      }`}
+                    >
+                      📎 Scrap
+                    </button>
+                  </div>
+                </>
               )}
             </li>
           </ul>
@@ -190,7 +261,7 @@ function LinkImportMode({
             disabled={!confirmEnabled}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
           >
-            {busy ? 'Sparar…' : 'Spara'}
+            {confirmLabel}
           </button>
         </div>
       </main>
@@ -420,7 +491,7 @@ export default function ShareImportClient({ importId, items, source, url, title,
         importId={importId}
         url={url}
         title={title ?? null}
-        notesLists={lists.filter(l => l.kind === 'notes')}
+        lists={lists}
         currentUserId={currentUserId}
       />
     )
