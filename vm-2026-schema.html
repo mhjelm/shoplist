@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fotbolls-VM 2026 – Återstående matcher, tider & kanaler</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --bg-soft: #131a31;
+    --card: #182240;
+    --line: #26304f;
+    --text: #e8ecf6;
+    --muted: #93a0c0;
+    --accent: #ffd34d;
+    --se-blue: #006aa7;
+    --se-yellow: #fecc02;
+    --svt: #16a34a;
+    --tv4: #e11d48;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1b2b4a 0%, transparent 60%), var(--bg);
+    color: var(--text);
+    line-height: 1.45;
+    padding: 0 0 80px;
+  }
+  header {
+    background: linear-gradient(135deg, #0f2a4a 0%, #14224a 50%, #2a1840 100%);
+    padding: 48px 20px 36px;
+    text-align: center;
+    border-bottom: 1px solid var(--line);
+  }
+  header .ball { font-size: 46px; display: block; margin-bottom: 8px; }
+  header h1 { font-size: clamp(24px, 5vw, 38px); font-weight: 800; letter-spacing: -0.02em; }
+  header p { color: var(--muted); margin-top: 8px; font-size: 15px; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 0 16px; }
+
+  .note {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin: 24px 0;
+    font-size: 13.5px;
+    color: var(--muted);
+  }
+  .note strong { color: var(--text); }
+
+  h2.section {
+    margin: 38px 0 14px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--accent);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px;
+  }
+
+  .date {
+    margin: 26px 0 10px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .date .dow { color: var(--muted); font-weight: 500; font-size: 13px; }
+
+  .match {
+    display: grid;
+    grid-template-columns: 64px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 11px 14px;
+    margin-bottom: 8px;
+  }
+  .match.se {
+    border-color: var(--se-blue);
+    background: linear-gradient(90deg, rgba(0,106,167,0.18), var(--card) 60%);
+    box-shadow: inset 3px 0 0 var(--se-yellow);
+  }
+  .time { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15px; }
+  .teams { font-size: 14.5px; }
+  .teams .vs { color: var(--muted); padding: 0 6px; font-size: 12px; }
+  .teams b { font-weight: 700; }
+  .se-tag {
+    font-size: 11px; font-weight: 800; color: #04263a;
+    background: var(--se-yellow); border-radius: 5px; padding: 1px 6px; margin-left: 8px;
+    vertical-align: middle;
+  }
+  .ch {
+    font-size: 11px; font-weight: 800; letter-spacing: 0.03em;
+    padding: 4px 9px; border-radius: 999px; white-space: nowrap; color: #fff;
+  }
+  .ch.svt { background: var(--svt); }
+  .ch.tv4 { background: var(--tv4); }
+
+  .legend { margin-top: 14px; font-size: 12.5px; color: var(--muted); }
+  .legend code { background: var(--bg-soft); padding: 1px 6px; border-radius: 5px; color: var(--text); }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 40px; padding: 0 16px; }
+  footer a { color: var(--accent); }
+  @media (max-width: 480px) {
+    .match { grid-template-columns: 54px 1fr; }
+    .ch { grid-column: 2; justify-self: start; margin-top: 2px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <span class="ball">⚽</span>
+  <h1>Fotbolls-VM 2026 – Återstående matcher</h1>
+  <p>Alla tider i svensk tid · Kanaler: SVT &amp; TV4 · Streaming via SVT Play / TV4 Play</p>
+</header>
+
+<div class="wrap">
+
+  <div class="note">
+    ⏰ <strong>Varför nattmatcher?</strong> VM 2026 spelas i USA, Kanada och Mexiko, så många avsparkar
+    hamnar sent på kvällen eller mitt i natten svensk tid. Tider och kanaler kan justeras av sändaren –
+    dubbelkolla gärna nära inpå.
+  </div>
+
+  <div class="date">🇸🇪 Sveriges återstående gruppspelsmatcher</div>
+  <div class="match se">
+    <span class="time">19:00</span>
+    <span class="teams">Nederländerna <span class="vs">–</span> <b>Sverige</b><span class="se-tag">SE</span></span>
+    <span class="ch tv4">TV4</span>
+  </div>
+  <div class="match se" style="margin-bottom:2px">
+    <span class="time">01:00</span>
+    <span class="teams">Japan <span class="vs">–</span> <b>Sverige</b><span class="se-tag">SE</span></span>
+    <span class="ch svt">SVT</span>
+  </div>
+  <p class="legend">Lör 20 juni 19:00 · Fre 26 juni 01:00 (natten mot fredag). Sverige–Tunisien (15 juni) är redan spelad.</p>
+
+  <h2 class="section">Gruppspel</h2>
+
+  <div class="date">Mån 15 juni <span class="dow">– kvällens kvarvarande</span></div>
+  <div class="match"><span class="time">18:00</span><span class="teams">Spanien <span class="vs">–</span> Kap Verde</span><span class="ch svt">SVT</span></div>
+  <div class="match"><span class="time">21:00</span><span class="teams">Belgien <span class="vs">–</span> Egypten</span><span class="ch svt">SVT</span></div>
+
+  <div class="date">Tis 16 juni</div>
+  <div class="match"><span class="time">03:00</span><span class="teams">Iran <span class="vs">–</span> Nya Zeeland</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">21:00</span><span class="teams">Frankrike <span class="vs">–</span> Senegal</span><span class="ch svt">SVT</span></div>
+
+  <div class="date">Ons 17 juni</div>
+  <div class="match"><span class="time">00:00</span><span class="teams">Irak <span class="vs">–</span> Norge</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">03:00</span><span class="teams">Argentina <span class="vs">–</span> Algeriet</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">06:00</span><span class="teams">Österrike <span class="vs">–</span> Jordanien</span><span class="ch tv4">TV4</span></div>
+
+  <div class="date">Tor 18 juni</div>
+  <div class="match"><span class="time">01:00</span><span class="teams">Ghana <span class="vs">–</span> Panama</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">04:00</span><span class="teams">Uzbekistan <span class="vs">–</span> Colombia</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">18:00</span><span class="teams">Tjeckien <span class="vs">–</span> Sydafrika</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">21:00</span><span class="teams">Schweiz <span class="vs">–</span> Bosnien och Hercegovina</span><span class="ch tv4">TV4</span></div>
+
+  <div class="date">Fre 19 juni</div>
+  <div class="match"><span class="time">00:00</span><span class="teams">Kanada <span class="vs">–</span> Qatar</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">03:00</span><span class="teams">Mexiko <span class="vs">–</span> Sydkorea</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">21:00</span><span class="teams">USA <span class="vs">–</span> Australien</span><span class="ch svt">SVT</span></div>
+
+  <div class="date">Lör 20 juni</div>
+  <div class="match"><span class="time">00:00</span><span class="teams">Skottland <span class="vs">–</span> Marocko</span><span class="ch svt">SVT</span></div>
+  <div class="match"><span class="time">03:00</span><span class="teams">Brasilien <span class="vs">–</span> Haiti</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">06:00</span><span class="teams">Turkiet <span class="vs">–</span> Paraguay</span><span class="ch tv4">TV4</span></div>
+  <div class="match se"><span class="time">19:00</span><span class="teams">Nederländerna <span class="vs">–</span> <b>Sverige</b><span class="se-tag">SE</span></span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">22:00</span><span class="teams">Tyskland <span class="vs">–</span> Elfenbenskusten</span><span class="ch tv4">TV4</span></div>
+
+  <div class="date">Sön 21 juni</div>
+  <div class="match"><span class="time">02:00</span><span class="teams">Ecuador <span class="vs">–</span> Curaçao</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">06:00</span><span class="teams">Tunisien <span class="vs">–</span> Japan</span><span class="ch svt">SVT</span></div>
+  <div class="match"><span class="time">18:00</span><span class="teams">Spanien <span class="vs">–</span> Saudiarabien</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">21:00</span><span class="teams">Belgien <span class="vs">–</span> Iran</span><span class="ch tv4">TV4</span></div>
+
+  <div class="date">Mån 22 juni</div>
+  <div class="match"><span class="time">00:00</span><span class="teams">Uruguay <span class="vs">–</span> Kap Verde</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">03:00</span><span class="teams">Nya Zeeland <span class="vs">–</span> Egypten</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">19:00</span><span class="teams">Argentina <span class="vs">–</span> Österrike</span><span class="ch svt">SVT</span></div>
+  <div class="match"><span class="time">23:00</span><span class="teams">Frankrike <span class="vs">–</span> Irak</span><span class="ch svt">SVT</span></div>
+
+  <div class="date">Tis 23 juni</div>
+  <div class="match"><span class="time">02:00</span><span class="teams">Norge <span class="vs">–</span> Senegal</span><span class="ch svt">SVT</span></div>
+  <div class="match"><span class="time">05:00</span><span class="teams">Jordanien <span class="vs">–</span> Algeriet</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">19:00</span><span class="teams">Portugal <span class="vs">–</span> Uzbekistan</span><span class="ch svt">SVT</span></div>
+  <div class="match"><span class="time">22:00</span><span class="teams">England <span class="vs">–</span> Ghana</span><span class="ch svt">SVT</span></div>
+
+  <div class="date">Ons 24 juni</div>
+  <div class="match"><span class="time">01:00</span><span class="teams">Panama <span class="vs">–</span> Kroatien</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">04:00</span><span class="teams">Colombia <span class="vs">–</span> Kongo-Kinshasa</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">21:00</span><span class="teams">Schweiz <span class="vs">–</span> Kanada</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">21:00</span><span class="teams">Bosnien och Hercegovina <span class="vs">–</span> Qatar</span><span class="ch tv4">TV4</span></div>
+
+  <div class="date">Tor 25 juni</div>
+  <div class="match"><span class="time">00:00</span><span class="teams">Marocko <span class="vs">–</span> Haiti</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">00:00</span><span class="teams">Skottland <span class="vs">–</span> Brasilien</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">03:00</span><span class="teams">Sydafrika <span class="vs">–</span> Sydkorea</span><span class="ch svt">SVT</span></div>
+  <div class="match"><span class="time">03:00</span><span class="teams">Tjeckien <span class="vs">–</span> Mexiko</span><span class="ch svt">SVT</span></div>
+  <div class="match"><span class="time">22:00</span><span class="teams">Curaçao <span class="vs">–</span> Elfenbenskusten</span><span class="ch svt">SVT</span></div>
+  <div class="match"><span class="time">22:00</span><span class="teams">Ecuador <span class="vs">–</span> Tyskland</span><span class="ch svt">SVT</span></div>
+
+  <div class="date">Fre 26 juni</div>
+  <div class="match"><span class="time">01:00</span><span class="teams">Tunisien <span class="vs">–</span> Nederländerna</span><span class="ch svt">SVT</span></div>
+  <div class="match se"><span class="time">01:00</span><span class="teams">Japan <span class="vs">–</span> <b>Sverige</b><span class="se-tag">SE</span></span><span class="ch svt">SVT</span></div>
+  <div class="match"><span class="time">04:00</span><span class="teams">Turkiet <span class="vs">–</span> USA</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">04:00</span><span class="teams">Paraguay <span class="vs">–</span> Australien</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">21:00</span><span class="teams">Norge <span class="vs">–</span> Frankrike</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">21:00</span><span class="teams">Senegal <span class="vs">–</span> Irak</span><span class="ch tv4">TV4</span></div>
+
+  <div class="date">Lör 27 juni</div>
+  <div class="match"><span class="time">02:00</span><span class="teams">Kap Verde <span class="vs">–</span> Saudiarabien</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">02:00</span><span class="teams">Uruguay <span class="vs">–</span> Spanien</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">05:00</span><span class="teams">Nya Zeeland <span class="vs">–</span> Belgien</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">05:00</span><span class="teams">Egypten <span class="vs">–</span> Iran</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">23:00</span><span class="teams">Panama <span class="vs">–</span> England</span><span class="ch svt">SVT</span></div>
+  <div class="match"><span class="time">23:00</span><span class="teams">Kroatien <span class="vs">–</span> Ghana</span><span class="ch svt">SVT</span></div>
+
+  <div class="date">Sön 28 juni <span class="dow">– sista gruppspelsdagen</span></div>
+  <div class="match"><span class="time">01:30</span><span class="teams">Kongo-Kinshasa <span class="vs">–</span> Uzbekistan</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">01:30</span><span class="teams">Colombia <span class="vs">–</span> Portugal</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">04:00</span><span class="teams">Algeriet <span class="vs">–</span> Österrike</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">04:00</span><span class="teams">Jordanien <span class="vs">–</span> Argentina</span><span class="ch tv4">TV4</span></div>
+
+  <h2 class="section">Slutspel · Åttondelsfinaler</h2>
+
+  <div class="date">Sön 28 juni</div>
+  <div class="match"><span class="time">21:00</span><span class="teams">2A <span class="vs">–</span> 2B</span><span class="ch tv4">TV4</span></div>
+
+  <div class="date">Mån 29 juni</div>
+  <div class="match"><span class="time">19:00</span><span class="teams">1C <span class="vs">–</span> 2F</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">22:30</span><span class="teams">1E <span class="vs">–</span> 3ABCDF</span><span class="ch svt">SVT</span></div>
+
+  <div class="date">Tis 30 juni</div>
+  <div class="match"><span class="time">03:00</span><span class="teams">1F <span class="vs">–</span> 2C</span><span class="ch svt">SVT</span></div>
+  <div class="match"><span class="time">19:00</span><span class="teams">2E <span class="vs">–</span> 2I</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">23:00</span><span class="teams">1I <span class="vs">–</span> 3CDFGH</span><span class="ch tv4">TV4</span></div>
+
+  <div class="date">Ons 1 juli</div>
+  <div class="match"><span class="time">03:00</span><span class="teams">1A <span class="vs">–</span> 3CEFHI</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">18:00</span><span class="teams">1L <span class="vs">–</span> 3EHIJK</span><span class="ch svt">SVT</span></div>
+  <div class="match"><span class="time">22:00</span><span class="teams">1G <span class="vs">–</span> 3AEHIJ</span><span class="ch tv4">TV4</span></div>
+
+  <div class="date">Tor 2 juli</div>
+  <div class="match"><span class="time">02:00</span><span class="teams">1D <span class="vs">–</span> 3BEFIJ</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">21:00</span><span class="teams">1H <span class="vs">–</span> 2J</span><span class="ch svt">SVT</span></div>
+
+  <div class="date">Fre 3 juli</div>
+  <div class="match"><span class="time">01:00</span><span class="teams">2K <span class="vs">–</span> 2L</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">05:00</span><span class="teams">1B <span class="vs">–</span> 3EFGIJ</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">20:00</span><span class="teams">2D <span class="vs">–</span> 2G</span><span class="ch tv4">TV4</span></div>
+
+  <div class="date">Lör 4 juli</div>
+  <div class="match"><span class="time">00:00</span><span class="teams">1J <span class="vs">–</span> 2H</span><span class="ch svt">SVT</span></div>
+  <div class="match"><span class="time">03:30</span><span class="teams">1K <span class="vs">–</span> 3DEIJL</span><span class="ch svt">SVT</span></div>
+
+  <h2 class="section">Slutspel · Kvartsfinaler</h2>
+
+  <div class="date">Sön 5 juli</div>
+  <div class="match"><span class="time">19:00</span><span class="teams">V73 <span class="vs">–</span> V75</span><span class="ch tv4">TV4</span></div>
+  <div class="match"><span class="time">23:00</span><span class="teams">V74 <span class="vs">–</span> V77</span><span class="ch svt">SVT</span></div>
+
+  <div class="date">Mån 6 juli</div>
+  <div class="match"><span class="time">22:00</span><span class="teams">V76 <span class="vs">–</span> V78</span><span class="ch tv4">TV4</span></div>
+
+  <div class="date">Tis 7 juli</div>
+  <div class="match"><span class="time">02:00</span><span class="teams">V79 <span class="vs">–</span> V80</span><span class="ch svt">SVT</span></div>
+
+  <h2 class="section">Slutspel · Semifinaler &amp; final</h2>
+
+  <div class="date">Tis 14 juli <span class="dow">– semifinal 1</span></div>
+  <div class="match"><span class="time">21:00</span><span class="teams">V97 <span class="vs">–</span> V98</span><span class="ch svt">SVT</span></div>
+
+  <div class="date">Ons 15 juli <span class="dow">– semifinal 2</span></div>
+  <div class="match"><span class="time">21:00</span><span class="teams">V99 <span class="vs">–</span> V100</span><span class="ch tv4">TV4</span></div>
+
+  <div class="date">Lör 18 juli <span class="dow">– bronsmatch</span></div>
+  <div class="match"><span class="time">23:00</span><span class="teams">Förlorare SF1 <span class="vs">–</span> Förlorare SF2</span><span class="ch svt">SVT</span></div>
+
+  <div class="date">Sön 19 juli <span class="dow">– 🏆 FINAL</span></div>
+  <div class="match" style="border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)">
+    <span class="time">21:00</span><span class="teams"><b>Vinnare SF1 <span class="vs">–</span> Vinnare SF2</b></span><span class="ch tv4">TV4</span>
+  </div>
+
+  <p class="legend" style="margin-top:22px">
+    <strong>Slutspelskoder:</strong> <code>1A</code> = etta i grupp A, <code>2B</code> = tvåa i grupp B,
+    <code>3ABCDF</code> = en av de bästa grupptreorna. <code>V73</code> = vinnare av match 73.
+    Lagen fylls i när grupperna är avgjorda.
+  </p>
+
+  <footer>
+    Sammanställt 15 juni 2026 · Tider i svensk tid, kan ändras av sändaren.<br>
+    Källor:
+    <a href="https://www.fotbollskanalen.se/artiklar/vm-2026/fotbolls-vm-2026-spelschema-tv-tider-avsparkstider-och-grupper--allt-om-sverige-i-vm-i-fotboll">Fotbollskanalen</a> ·
+    <a href="https://www.vm-fotboll.se/tv-tider-och-tabla-fotbolls-vm/">vm-fotboll.se</a> ·
+    <a href="https://www.svt.se/sport/om/vm-i-fotboll-2026">SVT Sport</a>
+  </footer>
+
+</div>
+</body>
+</html>
