@@ -212,7 +212,53 @@ ugly data, seed a dedicated **demo user** and automate a browser against it:
   time. **Green light pending** — capture screenshots first, judge quality, then
   decide on the wow-clip.
 
-## 10. Open questions (decide later)
+## 10. Feature opportunities
+
+**Contrarian first principle: the app does not need more features to go public —
+adding them is the likelier mistake.** For its category it's already more complete
+and more polished than most shopping-list apps (AI import from photo/recipe/voice,
+offline-first + realtime, PWA, store mode, themes). More features tend to *reduce*
+attractiveness (bloat, harder onboarding, more to explain on the landing page).
+
+**The real gap is cold-start for a solo stranger, not feature count.** The magic is
+*family* sharing, but a new public user arrives **alone**, to an empty screen, with
+no one to share with — so the value prop doesn't land on day one. Highest-leverage
+work is **single-player onboarding**: drop them straight into the AI wow
+(photo→list) with a seeded example, *then* introduce sharing. This beats any new
+feature below and should come first.
+
+Features that would genuinely add *pull* (ranked by retention value ÷ effort).
+Tagged Free vs Pro to tie into §2:
+
+1. **Predictive re-add / smart suggestions — `Free`, do regardless.** Near-free:
+   `user_item_history` already has use-count + timestamps. "Frequently bought,"
+   "you usually get milk around now," "haven't bought in 2 weeks." Pure delight from
+   existing data, no new infra, no Gemini spend. Best delight-to-effort ratio.
+2. **Recurring / staple lists — `Free`, reconsider the non-goal.** "Add my weekly
+   basics" in one tap is the single biggest retention lever for grocery apps — it
+   manufactures the weekly habit loop. Low conceptual complexity. *Currently a
+   non-goal (§ below).*
+3. **Meal planning → auto-generated list — `Pro` flagship.** A weekly planner that
+   feeds the shopping list: sticky, AI-native (ingredient extraction already
+   exists), and the feature most worth charging for / headlining the landing page.
+   Bigger build.
+4. **Recipe box — `Pro`-ish.** Close the loop: scrapbook already unfurls links and
+   import already extracts recipes — let users *save* a recipe collection that
+   re-imports to a list. Medium effort, reuses existing pieces.
+5. **Task reminders (web push) — `Pro`, reconsider the non-goal.** The #1 gap on the
+   task-list side vs. any to-do app, and a clean Pro feature — but needs real
+   web-push infrastructure, so it's the heaviest here.
+
+**Not worth chasing:** barcode scanning (low value for a list vs. an inventory app),
+spend/budget tracking (different product; already ruled out), admin roles. Surface
+without pull.
+
+**Non-goals worth revisiting in the go-public context** (PRD §Non-goals is a current
+stance, not gospel — scrapbook/notes and multi-language are already overtaking it):
+- **Recurring / template lists** — reconsider for retention (#2 above).
+- **Push notifications / task reminders** — reconsider as a Pro feature (#5 above).
+
+## 11. Open questions (decide later)
 
 - **Free quota number** — start ~15/mo, adjust from real Gemini cost + conversion.
 - **Pro price** — €/month vs annual; validate willingness to pay.
