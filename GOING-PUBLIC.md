@@ -137,7 +137,82 @@ toggle), not in code — `/auth/signup` is ready and the middleware already lets
 - [ ] Real screenshots + analytics on `welcome.html`.
 - [ ] Load-test realtime + check Supabase usage headroom.
 
-## 9. Open questions (decide later)
+## 9. Distribution & awareness
+
+How we'd get the first outsiders to actually try it. Note: the in-app **family
+sharing is not a growth loop yet** — sharing stays inside a household that already
+has the app. It only *becomes* one once unrelated public users each share with
+their own families; not a lever for the first cohort.
+
+### 9a. Engineering prerequisites (before/alongside any push)
+
+Two code tasks gate how far awareness efforts can reach. **Sequence is
+deliberately left open** — decide when we commit.
+
+- **TWA — Play Store presence (small, ~days, mostly paperwork).** Wrap the
+  existing PWA (`manifest.ts` + `sw.js` already done) as a Trusted Web Activity
+  via **Bubblewrap**/PWABuilder — near-zero app code. Needs:
+  `public/.well-known/assetlinks.json` (Digital Asset Links to verify domain →
+  hides the URL bar), **excluded from the `proxy.ts` auth gate** like
+  `welcome.html`; a Play Console account ($25 one-time); signing key; privacy
+  policy URL; content rating; store listing assets. **Independent of i18n** — can
+  ship a Swedish TWA now; later localization updates the web app *and* the TWA
+  shell automatically. ⚠️ **Android-only**: iOS gets no store listing this way
+  (iPhone users still install via Safari "Add to Home Screen") — a real gap given
+  Sweden's iPhone share, not a blocker. Unlocks "inköpslista / shopping list"
+  organic Play Store search — a durable free acquisition channel.
+
+- **i18n — localize to sv + en (large, ~1–2 weeks + translation). STUB; full plan
+  later.** No i18n library today; ~42 of 115 source files carry Swedish strings
+  (~251+ literals), server *and* client components. Recommended: **`next-intl`**
+  with a **cookie/preference-based locale** (store `locale` on `user_preferences`
+  next to `theme`, read in `layout.tsx`; browser `Accept-Language` as the pre-login
+  default) — avoids threading `/sv`/`/en` routing through the auth middleware.
+  Three app-specific wrinkles beyond string extraction: (1) **categories**
+  (`src/lib/categories.ts`) — 11 Swedish labels need EN, slugs stay the source of
+  truth; (2) **Gemini prompts** — categorize/extract are Swedish-shaped and return
+  Swedish labels; English users need AI in their language with output still mapped
+  to **slugs**; (3) **date copy** ("Idag/Imorgon", weekday sections in
+  `taskView.ts`) → `Intl` formatting, plus `welcome.html` needs its own toggle.
+  This is the gate for all **international** channels below.
+
+### 9b. Channels
+
+- **Lead with the screenshottable "wow."** The strongest hook is **photo of a
+  handwritten grocery list → instant digital checklist**, and **share a recipe link
+  → ingredients auto-added** — moments most list apps don't have. A 10–15s screen
+  recording of that is the raw material for everything else.
+- **Swedish-first (warm, free, no i18n needed):** Swedish Facebook parenting/family
+  & household groups, Familjeliv, the right Flashback subforum, r/sweden — answer
+  real "vilken inköpslista-app använder ni?" threads honestly (no spam). Short-form
+  video (TikTok/Reels/YT Shorts) of the wow-clip in Swedish.
+- **International (gated behind i18n):** Product Hunt, Show HN, r/androidapps, indie
+  newsletters. Don't half-localize first.
+- **Finish the shop window:** `welcome.html` still uses CSS/SVG mockups — replace
+  with real screenshots + the wow-clip + basic analytics before driving traffic to
+  it.
+
+**Asset production — demo user + automated capture (planned, not yet run).** To
+generate real screenshots and raw wow-clips without exposing a real account or
+ugly data, seed a dedicated **demo user** and automate a browser against it:
+- `tools/seed-demo.mjs` — create a confirmed demo user via the Supabase **admin
+  API** (service-role key; bypasses the disabled signup toggle — no dashboard
+  needed), then seed curated, demo-pretty Swedish data via service role (set
+  categories directly, no Gemini spend): a grocery list w/ a few item photos, a
+  task list w/ assignees + due dates, a scrapbook list w/ an unfurled recipe link.
+  Idempotent / re-runnable.
+- Add **Playwright** as a dev-dependency (not currently installed) + a
+  `tools/capture.mjs` that logs in as the demo user via `/auth/login`, walks the
+  key screens, and saves PNGs — plus optionally a raw screen-capture clip of the
+  recipe-import flow (raw functional capture; final marketing edit is done
+  externally — captions/music/transitions are out of scope for the tooling).
+- ⚠️ The only configured Supabase is **prod**, so the demo user/data live there
+  (RLS-isolated; give it a strong password; deletable anytime; mind it as a minor
+  abuse surface once signup opens). Decide email (e.g. `you+demo@…` alias) at run
+  time. **Green light pending** — capture screenshots first, judge quality, then
+  decide on the wow-clip.
+
+## 10. Open questions (decide later)
 
 - **Free quota number** — start ~15/mo, adjust from real Gemini cost + conversion.
 - **Pro price** — €/month vs annual; validate willingness to pay.
@@ -145,4 +220,5 @@ toggle), not in code — `/auth/signup` is ready and the middleware already lets
   (The app's whole identity is family sharing, so a household plan may matter.)
 - **Exact non-AI free caps** (lists / members / images) — keep free genuinely
   useful; don't strangle the family use case that built the product.
-- **i18n** — app is Swedish; going "public" may mean broader audience → English.
+- **TWA vs i18n sequencing** — both are prerequisites (§9a); which ships first is
+  undecided.
