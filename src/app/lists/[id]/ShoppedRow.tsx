@@ -45,6 +45,7 @@ export function ShoppedRow({
         ref={liRef}
         className="bg-gray-50 dark:bg-gray-950 rounded-xl border border-gray-100 dark:border-gray-800/50 overflow-hidden relative select-none"
         style={{ touchAction: 'pan-y' }}
+        data-item-row
         data-sl-color={slColor}
         data-muted="true"
         {...swipeHandlers}
@@ -91,6 +92,7 @@ export function ShoppedRow({
       ref={liRef}
       onClick={e => onToggle((e.currentTarget as HTMLElement).getBoundingClientRect())}
       className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800/50 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors select-none cursor-pointer"
+      data-item-row
       data-sl-color={slColor}
       data-muted="true"
     >

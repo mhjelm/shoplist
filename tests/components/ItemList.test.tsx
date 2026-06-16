@@ -152,7 +152,7 @@ function makeItem(id: string, overrides: Partial<Item> = {}): Item {
 }
 
 function makeList(): List {
-  return { id: 'list-1', name: 'Test list', owner_id: 'user-1', created_at: '2024-01-01T00:00:00Z' }
+  return { id: 'list-1', name: 'Test list', owner_id: 'user-1', created_at: '2024-01-01T00:00:00Z', kind: 'shopping' }
 }
 
 function renderItemList(items: Item[] = []) {
@@ -230,6 +230,53 @@ describe('ItemList — smoke tests', () => {
     const rows = screen.getAllByRole('listitem')
     fireEvent.click(rows[0])
     expect(vi.mocked(muUpdateItem)).toHaveBeenCalledWith('list-1', 'a', { is_checked: true })
+  })
+
+  // ── List stats line ─────────────────────────────────────────────────────────
+  // REQUIREMENT: when items exist, a "N to buy" stats line appears in browse mode.
+  it('shows stats line with to-buy count when items exist', () => {
+    renderItemList([
+      makeItem('a', { name: 'Mjölk', is_checked: false }),
+      makeItem('b', { name: 'Smör', is_checked: false }),
+    ])
+    expect(screen.getByText(/to buy/i)).toBeInTheDocument()
+    expect(screen.getByText('2')).toBeInTheDocument()
+  })
+
+  it('shows in-cart count in stats line when some items are checked', () => {
+    renderItemList([
+      makeItem('a', { name: 'Mjölk', is_checked: false }),
+      makeItem('b', { name: 'Smör', is_checked: true }),
+    ])
+    expect(screen.getByText(/to buy/i)).toBeInTheDocument()
+    expect(screen.getByText(/in cart/i)).toBeInTheDocument()
+  })
+
+  it('does not show stats line when list is empty', () => {
+    renderItemList([])
+    expect(screen.queryByText(/to buy/i)).not.toBeInTheDocument()
+  })
+
+  // ── Shop-mode progress bar ───────────────────────────────────────────────────
+  // REQUIREMENT: in store mode, a progress bar shows picked-up / total counts.
+  it('shows progress bar in store mode when items exist', async () => {
+    const { fireEvent: fe } = await import('@testing-library/react')
+    renderItemList([
+      makeItem('a', { name: 'Mjölk', is_checked: true }),
+      makeItem('b', { name: 'Smör', is_checked: false }),
+    ])
+    // Activate store mode
+    const handlaBtn = screen.getByRole('button', { name: /handla/i })
+    fe.click(handlaBtn)
+    expect(screen.getByRole('progressbar')).toBeInTheDocument()
+    expect(screen.getByText(/picked up/i)).toBeInTheDocument()
+  })
+
+  it('does not show progress bar in browse mode', () => {
+    renderItemList([
+      makeItem('a', { name: 'Mjölk', is_checked: true }),
+    ])
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
   })
 
   // Guards the instant-back-nav fix: the unmount cleanup must touch last_viewed

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Fraunces, Newsreader } from "next/font/google";
 import "./globals.css";
 import { getUserPreferences } from "@/lib/preferences";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
@@ -14,6 +14,18 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  axes: ["opsz"],
+});
+
+const newsreader = Newsreader({
+  variable: "--font-newsreader",
+  subsets: ["latin"],
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
@@ -43,7 +55,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased ${theme === 'dark' ? 'dark' : ''} ${theme === 'shoplist' ? 'shoplist' : ''} ${theme === 'polar' ? 'polar' : ''} ${theme === 'dusk' ? 'dusk' : ''} ${high_contrast ? 'hc' : ''} ${reduce_motion ? 'reduce-motion' : ''}`}
+      className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} ${newsreader.variable} h-full antialiased ${theme === 'dark' ? 'dark' : ''} ${theme === 'shoplist' ? 'shoplist' : ''} ${theme === 'polar' ? 'polar' : ''} ${theme === 'dusk' ? 'dusk' : ''} ${theme === 'editorial' ? 'editorial' : ''} ${high_contrast ? 'hc' : ''} ${reduce_motion ? 'reduce-motion' : ''}`}
     >
       <body className="min-h-full flex flex-col bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100">
         <ConflictBanner />

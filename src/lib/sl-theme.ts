@@ -23,4 +23,5 @@ export const FIREWORK_PALETTES: Record<Theme, string[]> = {
   shoplist: ['#EC4899', '#14B8A6', '#F97316', '#FACC15', '#3B82F6', '#ffffff'],
   polar:    ['#4A8EB8', '#9BC1D7', '#D8E7F0', '#F3F9FC', '#2D5B7D', '#ffffff'],
   dusk:     ['#C47B5E', '#D6A888', '#F0B89A', '#FDF6EE', '#8A4A30'],
+  editorial: ['#b9462b', '#d9a679', '#211c16', '#f3ece1', '#8a7c66'],
 }

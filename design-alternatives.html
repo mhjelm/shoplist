@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Shoplist — 4 design directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400&family=Baloo+2:wght@500..800&family=Nunito:ital,wght@0,400..800;1,400&family=Archivo:wght@400..900&family=JetBrains+Mono:wght@400..800&family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #14110f;
+    --paper: #f4efe9;
+  }
+
+  body {
+    font-family: "Newsreader", Georgia, serif;
+    background:
+      radial-gradient(60% 50% at 10% -5%, #2a2622, transparent 60%),
+      radial-gradient(70% 60% at 100% 100%, #1d1a17, transparent 55%),
+      #131110;
+    color: #e9e3da;
+    min-height: 100vh;
+    padding: 48px 24px 96px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Gallery chrome ─────────────────────────────────────── */
+  .gallery-head {
+    max-width: 1320px;
+    margin: 0 auto 52px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+  .gallery-head h1 {
+    font-family: "Bricolage Grotesque", sans-serif;
+    font-weight: 700;
+    font-size: clamp(2.2rem, 5vw, 3.6rem);
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+    color: #fff;
+  }
+  .gallery-head h1 em {
+    font-family: "Instrument Serif", serif;
+    font-style: italic;
+    font-weight: 400;
+    color: #d9a679;
+  }
+  .gallery-head p {
+    max-width: 30ch;
+    font-size: 1.05rem;
+    line-height: 1.5;
+    color: #9c9389;
+    text-align: right;
+  }
+
+  .grid {
+    max-width: 1320px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 56px 40px;
+    align-items: start;
+  }
+
+  .slot { display: flex; flex-direction: column; gap: 18px; }
+  .slot-label {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #7d756b;
+  }
+  .slot-label b {
+    font-family: "Bricolage Grotesque", sans-serif;
+    font-weight: 700;
+    font-size: 1.35rem;
+    letter-spacing: -0.01em;
+    text-transform: none;
+    color: #f2ece3;
+  }
+  .slot-label .tag {
+    margin-left: auto;
+    padding: 3px 9px;
+    border: 1px solid #463f37;
+    border-radius: 999px;
+    color: #b7ad9f;
+    font-size: 0.62rem;
+  }
+
+  /* Phone frame */
+  .phone {
+    border-radius: 38px;
+    padding: 10px;
+    background: linear-gradient(160deg, #34302b, #1a1714);
+    box-shadow:
+      0 2px 0 rgba(255,255,255,0.06) inset,
+      0 40px 70px -30px rgba(0,0,0,0.8),
+      0 10px 30px -15px rgba(0,0,0,0.6);
+  }
+  .screen {
+    border-radius: 30px;
+    overflow: hidden;
+    height: 620px;
+    overflow-y: auto;
+    position: relative;
+    scrollbar-width: none;
+  }
+  .screen::-webkit-scrollbar { display: none; }
+
+  /* ════════════════════════════════════════════════════════════
+     DESIGN 1 — EDITORIAL / WARM PRESS
+     Magazine layout. Fraunces display, cream paper, hairline rules,
+     numbered index, restrained ink + a single rust accent.
+     ════════════════════════════════════════════════════════════ */
+  .d1 {
+    background: #f3ece1;
+    color: #211c16;
+    font-family: "Newsreader", serif;
+    padding: 30px 26px 40px;
+  }
+  .d1 .masthead {
+    border-bottom: 2px solid #211c16;
+    padding-bottom: 12px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+  .d1 .masthead h2 {
+    font-family: "Fraunces", serif;
+    font-weight: 600;
+    font-size: 2.1rem;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .d1 .masthead .date {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #8a7c66;
+    text-align: right;
+    line-height: 1.5;
+  }
+  .d1 .newbtn {
+    width: 100%;
+    margin: 20px 0 26px;
+    padding: 16px;
+    border: 1px solid #211c16;
+    background: #211c16;
+    color: #f3ece1;
+    font-family: "Fraunces", serif;
+    font-size: 1.05rem;
+    letter-spacing: 0.01em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: background .25s, color .25s;
+  }
+  .d1 .newbtn:hover { background: #b9462b; border-color: #b9462b; }
+  .d1 .sec {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #b9462b;
+    margin: 22px 0 6px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .d1 .sec::after { content:""; flex:1; height:1px; background:#cdbfa8; }
+  .d1 .row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: baseline;
+    gap: 14px;
+    padding: 15px 2px;
+    border-bottom: 1px solid #d9cdb8;
+    cursor: pointer;
+  }
+  .d1 .row:hover .ttl { color: #b9462b; }
+  .d1 .num {
+    font-family: "Fraunces", serif;
+    font-size: 0.95rem;
+    color: #a8997f;
+    font-variant-numeric: tabular-nums;
+  }
+  .d1 .ttl {
+    font-family: "Fraunces", serif;
+    font-weight: 500;
+    font-size: 1.5rem;
+    letter-spacing: -0.01em;
+    transition: color .2s;
+  }
+  .d1 .sub {
+    display: block;
+    font-family: "Newsreader", serif;
+    font-style: italic;
+    font-size: 0.85rem;
+    color: #8a7c66;
+    margin-top: 2px;
+  }
+  .d1 .kind {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.56rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .d1 .kind.note { background:#e7d9c0; color:#8a5a1e; }
+  .d1 .kind.task { background:#d6dfe0; color:#3a5b5f; }
+  .d1 .kind.shop { background:#211c16; color:#f3ece1; }
+
+  /* ════════════════════════════════════════════════════════════
+     DESIGN 2 — SOFT CANDY / PLAYFUL TOY
+     Rounded everything, pastel cards, chunky friendly type,
+     soft drop shadows + tactile press states. Joyful.
+     ════════════════════════════════════════════════════════════ */
+  .d2 {
+    font-family: "Nunito", sans-serif;
+    color: #4a2e57;
+    padding: 26px 20px 36px;
+    background:
+      radial-gradient(120% 80% at 0% 0%, #ffe3f1, transparent 60%),
+      radial-gradient(120% 90% at 100% 100%, #d9f3ff, transparent 55%),
+      #fff6fb;
+  }
+  .d2 .top { display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; }
+  .d2 .top h2 { font-family:"Baloo 2", cursive; font-weight:800; font-size:1.75rem; color:#6a2e7a; }
+  .d2 .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, #ff9ecd, #ffd36e);
+    display:grid; place-items:center; color:#fff; font-family:"Baloo 2"; font-weight:800;
+    box-shadow: 0 6px 14px -4px rgba(255,120,180,0.6);
+  }
+  .d2 .newbtn {
+    width:100%; padding:18px; margin-bottom:24px;
+    border:none; border-radius:22px; cursor:pointer;
+    font-family:"Baloo 2", cursive; font-weight:700; font-size:1.1rem; color:#fff;
+    background: linear-gradient(135deg, #ff7eb6, #ff65a3);
+    box-shadow: 0 12px 22px -8px rgba(255,101,163,0.7), inset 0 2px 0 rgba(255,255,255,0.4);
+    transition: transform .12s, box-shadow .12s;
+  }
+  .d2 .newbtn:active { transform: translateY(3px) scale(0.99); box-shadow: 0 5px 12px -6px rgba(255,101,163,0.7); }
+  .d2 .sec { font-family:"Baloo 2"; font-weight:700; font-size:0.8rem; letter-spacing:0.04em; color:#b48ac0; margin:18px 4px 12px; }
+  .d2 .card {
+    display:flex; align-items:center; gap:14px;
+    padding:16px 18px; margin-bottom:13px; border-radius:24px;
+    background:#fff; cursor:pointer;
+    box-shadow: 0 10px 22px -14px rgba(106,46,122,0.5);
+    transition: transform .15s, box-shadow .15s;
+    border: 2px solid transparent;
+  }
+  .d2 .card:hover { transform: translateY(-3px); box-shadow: 0 16px 28px -14px rgba(106,46,122,0.55); }
+  .d2 .ic { width:46px; height:46px; border-radius:16px; display:grid; place-items:center; font-size:1.3rem; flex:none; }
+  .d2 .ic.note { background:#fff0d6; }
+  .d2 .ic.task { background:#e3ecff; }
+  .d2 .ic.shop { background:#ffe1ee; }
+  .d2 .body { flex:1; min-width:0; }
+  .d2 .name { font-family:"Baloo 2"; font-weight:700; font-size:1.2rem; line-height:1.1; color:#3f2349; }
+  .d2 .meta { font-size:0.82rem; color:#a98fb4; font-weight:600; margin-top:1px; }
+  .d2 .pill {
+    font-family:"Baloo 2"; font-weight:700; font-size:0.62rem; letter-spacing:0.05em;
+    padding:3px 10px; border-radius:999px; text-transform:uppercase;
+  }
+  .d2 .pill.note { background:#ffe2a8; color:#b9690b; }
+  .d2 .pill.task { background:#c9d8ff; color:#3b5bc0; }
+  .d2 .pill.shop { background:#ffc8de; color:#c43670; }
+  .d2 .chev { color:#d8c2e0; font-size:1.4rem; flex:none; }
+
+  /* ════════════════════════════════════════════════════════════
+     DESIGN 3 — UTILITY MONO / BRUTALIST GRID
+     Hard edges, monospace, high-contrast paper, offset shadows,
+     status badges, everything labelled like a control panel.
+     ════════════════════════════════════════════════════════════ */
+  .d3 {
+    font-family: "JetBrains Mono", monospace;
+    background: #ece9e1;
+    color: #16150f;
+    padding: 22px 18px 34px;
+  }
+  .d3 .bar {
+    border: 2px solid #16150f; background:#f5ec00;
+    padding: 12px 14px; margin-bottom:18px;
+    display:flex; align-items:center; justify-content:space-between;
+    box-shadow: 5px 5px 0 #16150f;
+  }
+  .d3 .bar h2 { font-family:"Archivo", sans-serif; font-weight:900; font-size:1.35rem; letter-spacing:-0.02em; text-transform:uppercase; }
+  .d3 .bar span { font-size:0.6rem; letter-spacing:0.1em; }
+  .d3 .newbtn {
+    width:100%; padding:15px; margin-bottom:24px; cursor:pointer;
+    border:2px dashed #16150f; background:transparent;
+    font-family:"JetBrains Mono"; font-weight:700; font-size:0.85rem;
+    text-transform:uppercase; letter-spacing:0.08em; color:#16150f;
+    transition: background .15s, color .15s;
+  }
+  .d3 .newbtn:hover { background:#16150f; color:#f5ec00; border-style:solid; }
+  .d3 .sec {
+    font-size:0.62rem; font-weight:700; letter-spacing:0.18em; text-transform:uppercase;
+    color:#16150f; background:#16150f; color:#ece9e1; display:inline-block;
+    padding:3px 8px; margin:16px 0 12px;
+  }
+  .d3 .row {
+    border:2px solid #16150f; background:#fff;
+    padding:13px 14px; margin-bottom:12px; cursor:pointer;
+    display:grid; grid-template-columns:1fr auto; gap:6px 12px; align-items:center;
+    box-shadow: 4px 4px 0 #16150f;
+    transition: transform .12s, box-shadow .12s;
+  }
+  .d3 .row:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 #16150f; }
+  .d3 .name { font-family:"Archivo", sans-serif; font-weight:800; font-size:1.15rem; letter-spacing:-0.01em; }
+  .d3 .badge {
+    font-size:0.56rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase;
+    padding:3px 7px; border:1.5px solid #16150f;
+  }
+  .d3 .badge.note { background:#ffcf5e; }
+  .d3 .badge.task { background:#7fd1c4; }
+  .d3 .badge.shop { background:#16150f; color:#f5ec00; }
+  .d3 .stat { grid-column:1 / -1; font-size:0.62rem; letter-spacing:0.06em; color:#5a564a; display:flex; gap:14px; }
+  .d3 .stat b { color:#16150f; }
+  .d3 .dot { width:7px; height:7px; border-radius:50%; display:inline-block; vertical-align:middle; margin-right:5px; }
+
+  /* ════════════════════════════════════════════════════════════
+     DESIGN 4 — MIDNIGHT GLASS / LUXE
+     Dark, glassmorphic cards, aurora glow behind, fine type,
+     glowing kind dots, refined and premium.
+     ════════════════════════════════════════════════════════════ */
+  .d4 {
+    font-family: "Bricolage Grotesque", sans-serif;
+    color: #e7e9f2;
+    padding: 30px 22px 40px;
+    position: relative;
+    background: #0c0e16;
+  }
+  .d4::before {
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:
+      radial-gradient(50% 30% at 15% 0%, rgba(124,108,255,0.4), transparent 60%),
+      radial-gradient(55% 35% at 100% 20%, rgba(64,196,180,0.32), transparent 60%),
+      radial-gradient(60% 40% at 80% 100%, rgba(255,128,170,0.22), transparent 60%);
+    filter: blur(6px);
+  }
+  .d4 > * { position: relative; z-index:1; }
+  .d4 .top { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; }
+  .d4 .top h2 { font-weight:700; font-size:1.7rem; letter-spacing:-0.02em; }
+  .d4 .top h2 em { font-family:"Instrument Serif", serif; font-style:italic; font-weight:400; color:#b7aaff; }
+  .d4 .top .hi { font-size:0.78rem; color:#8a8ea3; margin-top:3px; }
+  .d4 .newbtn {
+    width:100%; padding:17px; margin-bottom:26px; cursor:pointer;
+    border:1px solid rgba(255,255,255,0.16); border-radius:18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.1), rgba(255,255,255,0.03));
+    backdrop-filter: blur(12px);
+    color:#fff; font-family:"Bricolage Grotesque"; font-weight:600; font-size:1rem;
+    display:flex; align-items:center; justify-content:center; gap:9px;
+    transition: border-color .25s, background .25s;
+  }
+  .d4 .newbtn:hover { border-color:rgba(183,170,255,0.6); background: linear-gradient(180deg, rgba(124,108,255,0.22), rgba(255,255,255,0.04)); }
+  .d4 .sec { font-size:0.66rem; font-weight:600; letter-spacing:0.22em; text-transform:uppercase; color:#6e7290; margin:20px 2px 13px; }
+  .d4 .card {
+    display:flex; align-items:center; gap:14px;
+    padding:16px 18px; margin-bottom:13px; border-radius:20px; cursor:pointer;
+    border:1px solid rgba(255,255,255,0.09);
+    background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
+    backdrop-filter: blur(14px);
+    transition: transform .2s, border-color .25s, box-shadow .25s;
+  }
+  .d4 .card:hover { transform: translateY(-2px); border-color: rgba(183,170,255,0.5); box-shadow: 0 18px 40px -22px rgba(124,108,255,0.7); }
+  .d4 .glow { width:10px; height:10px; border-radius:50%; flex:none; box-shadow:0 0 12px 1px currentColor; }
+  .d4 .glow.note { color:#ffb454; background:#ffb454; }
+  .d4 .glow.task { color:#5be0c8; background:#5be0c8; }
+  .d4 .glow.shop { color:#7c6cff; background:#7c6cff; }
+  .d4 .body { flex:1; min-width:0; }
+  .d4 .name { font-weight:600; font-size:1.18rem; letter-spacing:-0.01em; }
+  .d4 .meta { font-size:0.76rem; color:#8a8ea3; margin-top:2px; display:flex; align-items:center; gap:8px; }
+  .d4 .tag { font-size:0.6rem; letter-spacing:0.1em; text-transform:uppercase; padding:2px 8px; border-radius:999px; border:1px solid rgba(255,255,255,0.16); color:#b9bdd4; }
+  .d4 .arrow { color:#5a5e78; font-size:1.1rem; transition: transform .2s, color .2s; }
+  .d4 .card:hover .arrow { transform: translateX(3px); color:#b7aaff; }
+
+  @media (max-width: 560px){
+    .gallery-head p { text-align:left; }
+    body { padding: 32px 14px 64px; }
+  }
+</style>
+</head>
+<body>
+
+  <header class="gallery-head">
+    <h1>Shoplist<br><em>four directions</em></h1>
+    <p>Same lists screen, four committed aesthetics. Hover the cards. Pick the one that feels like home.</p>
+  </header>
+
+  <main class="grid">
+
+    <!-- ── DESIGN 1 ─────────────────────────────────────── -->
+    <section class="slot">
+      <div class="slot-label"><b>Editorial</b> Warm press <span class="tag">light · serif</span></div>
+      <div class="phone"><div class="screen">
+        <div class="d1">
+          <div class="masthead">
+            <h2>The List</h2>
+            <div class="date">Tue · 16 Jun<br>No. 04</div>
+          </div>
+          <button class="newbtn">＋ Compose a new list</button>
+
+          <div class="sec">My lists</div>
+          <div class="row">
+            <span class="num">01</span>
+            <span><span class="ttl">Scrap</span><span class="sub">a clippings notebook</span></span>
+            <span class="kind note">Note</span>
+          </div>
+          <div class="row">
+            <span class="num">02</span>
+            <span><span class="ttl">Att göra</span><span class="sub">shared · 3 hands on deck</span></span>
+            <span class="kind task">Task</span>
+          </div>
+          <div class="row">
+            <span class="num">03</span>
+            <span><span class="ttl">Todo lista</span><span class="sub">7 open, 2 done</span></span>
+            <span class="kind task">Task</span>
+          </div>
+          <div class="row">
+            <span class="num">04</span>
+            <span><span class="ttl">Min handla</span><span class="sub">12 items waiting</span></span>
+            <span class="kind shop">Shop</span>
+          </div>
+
+          <div class="sec">Shared with me</div>
+          <div class="row">
+            <span class="num">05</span>
+            <span><span class="ttl">Handla idag</span><span class="sub">from Anna · updated 2h ago</span></span>
+            <span class="kind shop">Shop</span>
+          </div>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- ── DESIGN 2 ─────────────────────────────────────── -->
+    <section class="slot">
+      <div class="slot-label"><b>Soft candy</b> Playful toy <span class="tag">light · rounded</span></div>
+      <div class="phone"><div class="screen">
+        <div class="d2">
+          <div class="top">
+            <h2>Hej, Magnus 👋</h2>
+            <div class="avatar">M</div>
+          </div>
+          <button class="newbtn">＋ New list</button>
+
+          <div class="sec">MY LISTS</div>
+          <div class="card">
+            <div class="ic note">📎</div>
+            <div class="body"><div class="name">Scrap</div><div class="meta">notebook of bits</div></div>
+            <span class="pill note">Note</span>
+          </div>
+          <div class="card">
+            <div class="ic task">✓</div>
+            <div class="body"><div class="name">Att göra</div><div class="meta">shared · 3 people</div></div>
+            <span class="pill task">Task</span>
+          </div>
+          <div class="card">
+            <div class="ic task">✓</div>
+            <div class="body"><div class="name">Todo lista</div><div class="meta">7 to go</div></div>
+            <span class="pill task">Task</span>
+          </div>
+          <div class="card">
+            <div class="ic shop">🛒</div>
+            <div class="body"><div class="name">Min handla</div><div class="meta">12 items</div></div>
+            <span class="pill shop">Shop</span>
+          </div>
+
+          <div class="sec">SHARED WITH ME</div>
+          <div class="card">
+            <div class="ic shop">🛒</div>
+            <div class="body"><div class="name">Handla idag</div><div class="meta">from Anna 💕</div></div>
+            <span class="pill shop">Shop</span>
+          </div>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- ── DESIGN 3 ─────────────────────────────────────── -->
+    <section class="slot">
+      <div class="slot-label"><b>Utility</b> Brutalist grid <span class="tag">mono · hard</span></div>
+      <div class="phone"><div class="screen">
+        <div class="d3">
+          <div class="bar">
+            <h2>SHOPLIST</h2>
+            <span>5 LISTS</span>
+          </div>
+          <button class="newbtn">[ + ] new_list</button>
+
+          <div class="sec">// my_lists</div>
+          <div class="row">
+            <span class="name">Scrap</span>
+            <span class="badge note">note</span>
+            <span class="stat"><span><span class="dot" style="background:#ffcf5e"></span>14 clips</span><span>edited <b>2d</b></span></span>
+          </div>
+          <div class="row">
+            <span class="name">Att göra</span>
+            <span class="badge task">task</span>
+            <span class="stat"><span><span class="dot" style="background:#7fd1c4"></span>SHARED·3</span><span>open <b>5</b></span></span>
+          </div>
+          <div class="row">
+            <span class="name">Todo lista</span>
+            <span class="badge task">task</span>
+            <span class="stat"><span><span class="dot" style="background:#7fd1c4"></span>solo</span><span>open <b>7</b> / done <b>2</b></span></span>
+          </div>
+          <div class="row">
+            <span class="name">Min handla</span>
+            <span class="badge shop">shop</span>
+            <span class="stat"><span><span class="dot" style="background:#16150f"></span>cart</span><span>items <b>12</b></span></span>
+          </div>
+
+          <div class="sec">// shared_with_me</div>
+          <div class="row">
+            <span class="name">Handla idag</span>
+            <span class="badge shop">shop</span>
+            <span class="stat"><span>from <b>anna</b></span><span>sync <b>2h</b></span></span>
+          </div>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- ── DESIGN 4 ─────────────────────────────────────── -->
+    <section class="slot">
+      <div class="slot-label"><b>Midnight glass</b> Luxe <span class="tag">dark · frosted</span></div>
+      <div class="phone"><div class="screen">
+        <div class="d4">
+          <div class="top">
+            <div>
+              <h2>Your <em>lists</em></h2>
+              <div class="hi">Good evening, Magnus</div>
+            </div>
+          </div>
+          <button class="newbtn">＋ New list</button>
+
+          <div class="sec">My lists</div>
+          <div class="card">
+            <span class="glow note"></span>
+            <div class="body"><div class="name">Scrap</div><div class="meta"><span class="tag">Note</span> 14 clippings</div></div>
+            <span class="arrow">→</span>
+          </div>
+          <div class="card">
+            <span class="glow task"></span>
+            <div class="body"><div class="name">Att göra</div><div class="meta"><span class="tag">Task</span> shared · 3 people</div></div>
+            <span class="arrow">→</span>
+          </div>
+          <div class="card">
+            <span class="glow task"></span>
+            <div class="body"><div class="name">Todo lista</div><div class="meta"><span class="tag">Task</span> 7 open</div></div>
+            <span class="arrow">→</span>
+          </div>
+          <div class="card">
+            <span class="glow shop"></span>
+            <div class="body"><div class="name">Min handla</div><div class="meta"><span class="tag">Shop</span> 12 items</div></div>
+            <span class="arrow">→</span>
+          </div>
+
+          <div class="sec">Shared with me</div>
+          <div class="card">
+            <span class="glow shop"></span>
+            <div class="body"><div class="name">Handla idag</div><div class="meta"><span class="tag">Shop</span> from Anna</div></div>
+            <span class="arrow">→</span>
+          </div>
+        </div>
+      </div></div>
+    </section>
+
+  </main>
+
+</body>
+</html>

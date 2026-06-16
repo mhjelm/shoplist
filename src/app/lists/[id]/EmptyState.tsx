@@ -30,6 +30,10 @@ const COPY: Record<Theme, Record<Props['variant'], ThemeCopy>> = {
     'no-items':    { glyph: '☾', headline: 'Tom lista.',          subline: 'Lägg till din första vara.' },
     'all-shopped': { glyph: '☾', headline: 'Klart för i kväll.', subline: 'Andas ut.' },
   },
+  editorial: {
+    'no-items':    { glyph: null, headline: 'No items yet.',     subline: null },
+    'all-shopped': { glyph: null, headline: 'Everything shopped', subline: null },
+  },
 }
 
 export function EmptyState({ theme, variant }: Props) {

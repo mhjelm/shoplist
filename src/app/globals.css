@@ -488,3 +488,252 @@ body.store-mode main {
   padding-right: 0.5rem;
 }
 
+/* ── Editorial theme ─────────────────────────────────────────────────────────
+   Warm cream paper, Fraunces serif display, hairline rules, ink + rust accent.
+   Non-decorative (no per-item tints, no completion fireworks). */
+
+@custom-variant editorial (&:where(.editorial, .editorial *));
+
+.editorial {
+  --ed-paper:  #f3ece1;
+  --ed-ink:    #211c16;
+  --ed-rust:   #b9462b;
+  --ed-muted:  #8a7c66;
+  --ed-rule:   #d9cdb8;
+  --ed-cream:  #fffaf2;
+  --background: #f3ece1;
+  --foreground: #211c16;
+  --sl-select:  #b9462b;
+}
+
+.editorial body {
+  background: var(--background);
+  font-family: var(--font-newsreader), Georgia, serif;
+}
+
+.editorial .min-h-screen { background: transparent !important; }
+
+/* Frosted cream header */
+.editorial header {
+  background-color: rgba(243, 236, 225, 0.92) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom-color: var(--ed-ink) !important;
+  border-bottom-width: 2px !important;
+}
+
+/* Header text + icon colours */
+.editorial header h1 {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 600;
+  color: var(--ed-ink) !important;
+}
+.editorial header button,
+.editorial header a,
+.editorial header svg {
+  color: var(--ed-muted) !important;
+}
+.editorial header button:hover,
+.editorial header a:hover {
+  color: var(--ed-rust) !important;
+}
+
+/* Page-section labels ("My lists", "Shared with me", Settings headers) —
+   these are small uppercase h2 labels, not display headings. */
+.editorial .text-sm.font-medium.uppercase {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  color: var(--ed-rust) !important;
+}
+
+/* ── List-overview row (ListsView) — every overview row carries
+   data-sl-color, so it's a safe, surgical anchor. ── */
+.editorial li[data-sl-color] {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid var(--ed-rule) !important;
+  border-radius: 0 !important;
+}
+
+/* List name styling (overview) */
+.editorial .font-medium.text-gray-900 {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ed-ink) !important;
+}
+.editorial .font-medium.text-gray-900:hover {
+  color: var(--ed-rust) !important;
+}
+
+/* ── Item rows (SortableRow / ShoppedRow) — flat, hairline separators.
+   Anchored on data-item-row so task/notes lists, modals, and other
+   ul>li lists under the editorial theme are left untouched. ── */
+.editorial li[data-item-row] {
+  background: transparent !important;
+  border-color: transparent !important;
+  border-bottom: 1px solid var(--ed-rule) !important;
+  border-radius: 0 !important;
+}
+
+/* Item name — serif + ink. No forced font-size: the user's list_text_size
+   preference (incl. x-large / store-xlarge) must keep driving the size. */
+.editorial li[data-item-row] .text-gray-800 {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ed-ink) !important;
+}
+/* Muted (shopped) item name */
+.editorial li[data-item-row] .text-gray-400 {
+  font-style: italic;
+  color: var(--ed-muted) !important;
+}
+
+/* Category label + "Shopped" header (scoped to the item list) */
+.editorial [data-item-list] .text-xs.font-semibold.uppercase {
+  font-family: var(--font-geist-mono), monospace;
+  letter-spacing: 0.22em;
+  color: var(--ed-rust) !important;
+}
+
+/* Drag handle colour */
+.editorial li[data-item-row] .text-gray-300 { color: var(--ed-rule) !important; }
+
+/* Add-item textarea (scoped to the add bar only — not modal textareas) */
+.editorial [data-add-item] textarea {
+  background: var(--ed-cream) !important;
+  border-color: var(--ed-rule) !important;
+  color: var(--ed-ink) !important;
+  font-family: var(--font-newsreader), Georgia, serif;
+}
+.editorial [data-add-item] textarea::placeholder {
+  color: var(--ed-muted) !important;
+  font-style: italic;
+}
+.editorial [data-add-item] textarea:focus {
+  border-color: var(--ed-ink) !important;
+}
+
+/* Add button */
+.editorial [data-add-item] .bg-blue-600 {
+  background: var(--ed-ink) !important;
+  font-family: var(--font-fraunces), Georgia, serif;
+}
+.editorial [data-add-item] .bg-blue-600:hover {
+  background: var(--ed-rust) !important;
+}
+
+/* Handla / Clear-list controls (scoped to the item list) */
+.editorial [data-item-list] .text-blue-500,
+.editorial [data-item-list] .text-blue-400 {
+  color: var(--ed-rust) !important;
+}
+
+/* ── List stats line (.list-stats) ── */
+.list-stats {
+  font-size: 0.75rem;
+  color: oklch(55% 0 0);
+  margin-bottom: 0.25rem;
+}
+.editorial .list-stats {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ed-muted);
+}
+.editorial .list-stats .list-stats-to-buy {
+  color: var(--ed-rust);
+  font-weight: 700;
+}
+
+/* ── Shop-mode progress bar (.shop-progress) ── */
+.shop-progress {
+  margin-bottom: 1rem;
+}
+.shop-progress-bar-track {
+  height: 3px;
+  background: oklch(88% 0 0);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.shop-progress-bar-fill {
+  height: 100%;
+  background: oklch(55% 0 0);
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+.shop-progress-label {
+  font-size: 0.75rem;
+  color: oklch(55% 0 0);
+}
+
+/* Editorial overrides for progress bar */
+.editorial .shop-progress-label {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ed-muted);
+}
+.editorial .shop-progress-bar-track {
+  background: var(--ed-rule);
+}
+.editorial .shop-progress-bar-fill {
+  background: linear-gradient(90deg, var(--ed-rust), #e7b486);
+}
+
+/* ── Editorial dark "store edition" — activated by body.store-mode.
+   Item sizing stays driven by the store-mode itemTextClass / list_text_size;
+   we only invert colours here, never force a font-size. ── */
+.editorial body.store-mode {
+  background: #1c1814 !important;
+  color: #f1e7d8 !important;
+}
+.editorial body.store-mode main {
+  background: #1c1814;
+}
+
+/* Invert item rows in store mode. They MUST stay opaque (not transparent):
+   SortableRow/ShoppedRow render a hidden emerald swipe-reveal layer behind a
+   content wrapper that uses `background: inherit`. A transparent row exposes
+   that layer (and its checkmark) permanently and the name overlaps it. Solid
+   espresso keeps the green hidden until the row is actually swiped. */
+.editorial body.store-mode li[data-item-row] {
+  background: #1c1814 !important;
+  border-bottom: 1px solid #332b23 !important;
+}
+.editorial body.store-mode li[data-item-row] .text-gray-800 { color: #f1e7d8 !important; }
+.editorial body.store-mode li[data-item-row] .text-gray-400 { color: #8a7c66 !important; }
+
+/* Category / "Shopped" section labels in store mode */
+.editorial body.store-mode [data-item-list] .text-xs.font-semibold.uppercase {
+  color: #c79a72 !important;
+}
+
+/* Store-edition progress bar */
+.editorial body.store-mode .shop-progress-label {
+  color: #c79a72;
+}
+.editorial body.store-mode .shop-progress-bar-track {
+  background: #3a322a;
+}
+.editorial body.store-mode .shop-progress-bar-fill {
+  background: linear-gradient(90deg, #b9462b, #e7b486);
+}
+
+/* "Sluta handla" control in store mode */
+.editorial body.store-mode [data-item-list] .text-blue-500,
+.editorial body.store-mode [data-item-list] .text-blue-400 {
+  color: #e7b486 !important;
+}
+
+/* Empty state + loading overlay */
+.editorial .empty-state-headline { color: var(--ed-ink) !important; font-family: var(--font-fraunces), Georgia, serif; }
+.editorial .empty-state-subline  { color: var(--ed-muted) !important; font-style: italic; }
+.editorial .loading-label        { color: var(--ed-rust) !important; font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-style: italic; }
+

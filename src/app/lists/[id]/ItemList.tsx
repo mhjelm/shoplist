@@ -121,6 +121,8 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
 
   const toShop = useMemo(() => items.filter(i => !i.is_checked).sort(sortItemsByOrder), [items])
   const shopped = useMemo(() => items.filter(i => i.is_checked).sort(sortItemsByOrder), [items])
+  const total = toShop.length + shopped.length
+  const progressPct = total > 0 ? Math.round((shopped.length / total) * 100) : 0
   const groupedToShop = useMemo(() => groupByCategory(toShop, categoryOrder), [toShop, categoryOrder])
 
   // "NEW" dot: items another user added since this visit started. Freeze the
@@ -237,7 +239,14 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
   return (
     // revealFx is one of six subtle entrance animations, chosen at random once
     // Dexie has loaded (see useRevealFx + hasLoaded); '' otherwise.
-    <div className={`space-y-4${revealFx ? ' ' + revealFx : ''}`}>
+    <div data-item-list className={`space-y-4${revealFx ? ' ' + revealFx : ''}`}>
+      {!storeMode && total > 0 && (
+        <p className="list-stats text-xs text-gray-400 dark:text-gray-500 px-1">
+          <span className="list-stats-to-buy">{toShop.length}</span> to buy
+          {shopped.length > 0 && <> · {shopped.length} in cart</>}
+        </p>
+      )}
+
       {!storeMode && (
         <AddItemForm
           {...addItems}
@@ -245,6 +254,24 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
           onOpenRecipe={() => setShowRecipe(true)}
           onOpenSpeech={() => setShowSpeech(true)}
         />
+      )}
+
+      {storeMode && total > 0 && (
+        <div className="shop-progress px-1">
+          <p className="shop-progress-label text-xs text-gray-400 dark:text-gray-500">
+            {shopped.length} / {total} picked up
+          </p>
+          <div className="shop-progress-bar-track">
+            <div
+              className="shop-progress-bar-fill"
+              style={{ width: `${progressPct}%` }}
+              role="progressbar"
+              aria-valuenow={shopped.length}
+              aria-valuemin={0}
+              aria-valuemax={total}
+            />
+          </div>
+        </div>
       )}
 
       <DndContext id="items-dnd" sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>

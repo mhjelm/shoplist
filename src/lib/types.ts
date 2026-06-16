@@ -45,7 +45,7 @@ export interface Item {
   note: string | null
 }
 
-export type Theme = 'light' | 'dark' | 'shoplist' | 'polar' | 'dusk'
+export type Theme = 'light' | 'dark' | 'shoplist' | 'polar' | 'dusk' | 'editorial'
 export type ListTextSize = 'normal' | 'large' | 'x-large' | 'large-store-xlarge'
 
 export interface UserPreferences {

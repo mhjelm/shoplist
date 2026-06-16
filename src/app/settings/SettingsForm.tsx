@@ -56,6 +56,7 @@ export default function SettingsForm({ initialTheme, initialListTextSize, initia
     html.classList.toggle('shoplist', next === 'shoplist')
     html.classList.toggle('polar',    next === 'polar')
     html.classList.toggle('dusk',     next === 'dusk')
+    html.classList.toggle('editorial', next === 'editorial')
     save(next, size, highContrast, reduceMotion)
   }
 
@@ -134,6 +135,13 @@ export default function SettingsForm({ initialTheme, initialListTextSize, initia
             sublabel="Mjuk &amp; varm"
             selected={theme === 'dusk'}
             onSelect={() => pickTheme('dusk')}
+          />
+          <div className="border-t border-gray-100 dark:border-gray-800" />
+          <OptionRow
+            label="Editorial"
+            sublabel="Tidning"
+            selected={theme === 'editorial'}
+            onSelect={() => pickTheme('editorial')}
           />
         </div>
       </section>

@@ -10,6 +10,8 @@ A standalone, shareable marketing/landing page lives at **`public/welcome.html`*
 
 ## Pending manual tasks
 
+- ~~**Apply migration `0032_editorial_theme.sql`**~~ — done 2026-06-16 (adds `'editorial'` to the `user_preferences.theme` CHECK; required for the editorial-theme feature).
+
 - ~~**Apply migration `0031_pending_import_unfurl.sql`**~~ — done 2026-06-15 (adds nullable `unfurl jsonb` to `pending_imports` so a shared link's unfurl (title/description/image) is captured at the route, shown in the picker preview, and reused by `confirmShareLink` without a second fetch).
 
 - ~~**Apply migration `0030_share_link_payload.sql`**~~ — done 2026-06-15 (extends `pending_imports.source` CHECK to include `'link'`; adds nullable `url`/`title` columns. Required for the share-link-as-scrap plan).
@@ -41,7 +43,7 @@ Functional bugs are tracked in **`BUGS.md`** (single source of truth; e.g. BUG-0
 
 ## Active plan
 
-No active plan. Needs `0030` applied + PWA reinstall on family phone (see Pending manual tasks above).
+**Editorial theme + universal list stats & shop-mode progress** — plan at `PLAN.md`, **executed 2026-06-16**, migration `0032` applied 2026-06-16. Adds `'editorial'` theme (cream paper, Fraunces serif, hairline rows, dark store-edition shop mode), a universal stats line (N to buy · N in cart), and a shop-mode progress bar. Editorial is **non-decorative** (not in `hasDecorativeTheme`); its CSS is scoped to `data-item-row` / `data-add-item` / `data-item-list` / `li[data-sl-color]` anchors so it can't leak into task/notes lists or modals. Item names use serif font-family only — size still driven by `list_text_size`. Awaiting commit approval.
 
 _Prior:_ **Fix sharing + share a link as a scrap (Web Share Target)** — plan at `PLAN.md`, **executed 2026-06-15**, migration `0030` applied 2026-06-15. Route branches: image → grocery; link (url field OR a URL found in text via `firstUrlIn`) → link path (stores raw link, **no route-time extraction, no empty-bail**); plain text → grocery. Items are extracted at the route (best-effort, no empty-bail). `LinkImportMode` shows **all lists** and the **destination kind decides**: shopping/task → show the extracted items as an **accept/reject checklist** → `confirmShareImport` (same reviewed path as image/text), notes → hide checklist → `confirmShareLink` (unfurl → scrap). `shareError` surfaced as dismissible toast (`ShareErrorToast.tsx`). `share.received` log for Bug #3. **Two same-day regressions fixed:** (1) first pass forced *every* link to a notes-only scrap, killing recipe-link sharing; (2) second pass deferred extraction and dropped the item-review checklist. The checklist requirement is now locked by the `REQUIREMENT:` block in `tests/components/ShareImportClient.test.tsx` (do not rewrite it to match new logic — fix the code). Still awaiting PWA reinstall on family phone. See `docs/architecture/share-target.md`.
 

@@ -49,7 +49,7 @@ export function AddItemForm({
   const speechSupported = useSpeechSupported()
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2" data-add-item>
       <div className="relative">
         <div className="flex gap-2 items-stretch">
           <div className="relative flex-1 min-w-0">

@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Theme, ListTextSize } from '@/lib/types'
 import { DEFAULT_CATEGORY_ORDER, isValidCategorySlug, type CategorySlug } from '@/lib/categories'
 
-const THEMES: readonly Theme[] = ['light', 'dark', 'shoplist', 'polar', 'dusk']
+const THEMES: readonly Theme[] = ['light', 'dark', 'shoplist', 'polar', 'dusk', 'editorial']
 const SIZES: readonly ListTextSize[] = ['normal', 'large', 'x-large', 'large-store-xlarge']
 
 export async function updateSettings(theme: Theme, listTextSize: ListTextSize, highContrast: boolean, reduceMotion: boolean) {
