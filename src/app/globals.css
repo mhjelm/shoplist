@@ -632,24 +632,6 @@ body.store-mode main {
   color: var(--ed-rust) !important;
 }
 
-/* ── List stats line (.list-stats) ── */
-.list-stats {
-  font-size: 0.75rem;
-  color: oklch(55% 0 0);
-  margin-bottom: 0.25rem;
-}
-.editorial .list-stats {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 0.65rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ed-muted);
-}
-.editorial .list-stats .list-stats-to-buy {
-  color: var(--ed-rust);
-  font-weight: 700;
-}
-
 /* ── Shop-mode progress bar (.shop-progress) ── */
 .shop-progress {
   margin-bottom: 1rem;
@@ -736,4 +718,40 @@ body.store-mode main {
 .editorial .empty-state-headline { color: var(--ed-ink) !important; font-family: var(--font-fraunces), Georgia, serif; }
 .editorial .empty-state-subline  { color: var(--ed-muted) !important; font-style: italic; }
 .editorial .loading-label        { color: var(--ed-rust) !important; font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-style: italic; }
+
+/* ── Dusk "store edition" — dark inverted shop mode (mirrors editorial).
+   Dusk is decorative (per-item warm tints); in store mode we override those
+   tints to a warm dark so item names read large on a calm backdrop. Rows must
+   stay opaque so the emerald swipe-reveal layer (and its checkmark) stay hidden
+   until a row is actually swiped — see the editorial store-mode note above. ── */
+.dusk body.store-mode {
+  background: #2a1e16 !important;
+  color: #fdf6ee !important;
+}
+.dusk body.store-mode main { background: #2a1e16; }
+
+.dusk body.store-mode li[data-item-row] {
+  background: #2a1e16 !important;
+  border: none !important;
+  border-bottom: 1px solid #4a3a31 !important;
+  border-radius: 0 !important;
+}
+.dusk body.store-mode li[data-item-row] .text-gray-800 { color: #fdf6ee !important; }
+.dusk body.store-mode li[data-item-row] .text-gray-400 { color: #c4a088 !important; }
+
+/* Category / "Shopped" section labels in store mode */
+.dusk body.store-mode [data-item-list] .text-xs.font-semibold.uppercase {
+  color: #d6a888 !important;
+}
+
+/* Store-edition progress bar */
+.dusk body.store-mode .shop-progress-label { color: #d6a888; }
+.dusk body.store-mode .shop-progress-bar-track { background: #4a3a31; }
+.dusk body.store-mode .shop-progress-bar-fill { background: linear-gradient(90deg, #8a4a30, #d6a888); }
+
+/* "Sluta handla" control in store mode */
+.dusk body.store-mode [data-item-list] .text-blue-500,
+.dusk body.store-mode [data-item-list] .text-blue-400 {
+  color: #d6a888 !important;
+}
 

@@ -240,13 +240,6 @@ export default function ItemList({ list, listId, suggestions, textSize, theme, c
     // revealFx is one of six subtle entrance animations, chosen at random once
     // Dexie has loaded (see useRevealFx + hasLoaded); '' otherwise.
     <div data-item-list className={`space-y-4${revealFx ? ' ' + revealFx : ''}`}>
-      {!storeMode && total > 0 && (
-        <p className="list-stats text-xs text-gray-400 dark:text-gray-500 px-1">
-          <span className="list-stats-to-buy">{toShop.length}</span> to buy
-          {shopped.length > 0 && <> · {shopped.length} in cart</>}
-        </p>
-      )}
-
       {!storeMode && (
         <AddItemForm
           {...addItems}
