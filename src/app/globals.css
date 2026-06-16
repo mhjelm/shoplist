@@ -592,6 +592,17 @@ body.store-mode main {
   color: var(--ed-muted) !important;
 }
 
+/* Optical size compensation: Fraunces has a smaller x-height than the sans
+   used by other themes, so item names read slightly smaller at the same px.
+   Bump each itemTextClass ~8–10% so editorial matches visually while still
+   scaling with the list_text_size preference (one rule per size class).
+   text-sm/base/xl are browse-mode sizes; text-lg/2xl are store-mode sizes. */
+.editorial li[data-item-row] .text-sm   { font-size: 0.95rem; }
+.editorial li[data-item-row] .text-base { font-size: 1.1rem; }
+.editorial li[data-item-row] .text-lg   { font-size: 1.225rem; }
+.editorial li[data-item-row] .text-xl   { font-size: 1.4rem; }
+.editorial li[data-item-row] .text-2xl  { font-size: 1.65rem; }
+
 /* Category label + "Shopped" header (scoped to the item list) */
 .editorial [data-item-list] .text-xs.font-semibold.uppercase {
   font-family: var(--font-geist-mono), monospace;
