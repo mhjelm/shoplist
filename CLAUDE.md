@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A standalone, shareable marketing/landing page lives at **`public/welcome.html`** — served statically at **`https://shoplist-eta.vercel.app/welcome.html`**. It is **deliberately unlinked** from the app (no nav/footer reference) and is excluded from the edge-middleware auth gate via the `welcome.html` entry in the `proxy.ts` matcher, so it loads without login. Self-contained (only external dep is Google Fonts); CSS/SVG mockups stand in for screenshots, reusing the Shoplist theme palette. Update the matcher exclusion if the filename changes.
 
+> Future monetization / go-public strategy (free app + Pro AI paywall, Merchant-of-Record payments, free-tier limits) lives in **`GOING-PUBLIC.md`** — a forward-looking playbook, nothing built yet.
+
 ## Pending manual tasks
 
 - ~~**Apply migration `0031_pending_import_unfurl.sql`**~~ — done 2026-06-15 (adds nullable `unfurl jsonb` to `pending_imports` so a shared link's unfurl (title/description/image) is captured at the route, shown in the picker preview, and reused by `confirmShareLink` without a second fetch).
