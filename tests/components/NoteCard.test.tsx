@@ -84,6 +84,37 @@ describe('NoteCard', () => {
     expect(onDelete).toHaveBeenCalledTimes(1)
   })
 
+  it('in select mode shows a checkbox overlay and toggles instead of navigating', () => {
+    const onToggleSelect = vi.fn()
+    render(
+      <NoteCard
+        item={makeNote({ name: 'Cool gadget', url: 'https://www.shop.test/item' })}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        selectable
+        selected={false}
+        onToggleSelect={onToggleSelect}
+      />,
+    )
+    // The overlay button toggles selection (it sits above the link).
+    fireEvent.click(screen.getByRole('button', { name: 'Markera Cool gadget' }))
+    expect(onToggleSelect).toHaveBeenCalledTimes(1)
+  })
+
+  it('reflects the selected state in its aria-label', () => {
+    render(
+      <NoteCard
+        item={makeNote({ name: 'Picked' })}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        selectable
+        selected
+        onToggleSelect={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Avmarkera Picked' })).toBeInTheDocument()
+  })
+
   it('shows the NEW dot when isNew and calls onEdit', () => {
     const onEdit = vi.fn()
     render(<NoteCard item={makeNote()} isNew onEdit={onEdit} onDelete={vi.fn()} />)

@@ -6,6 +6,32 @@ import { CSS } from '@dnd-kit/utilities'
 import type { Item } from '@/lib/types'
 import { MeasurementBadge } from './MeasurementBadge'
 import { useStoreModeSwipe } from './useStoreModeSwipe'
+import { noteHostname } from '@/lib/notesView'
+
+// Secondary line under the item name for items promoted from a scrapbook link
+// (item.url set). Opens the source page in a new tab. stopPropagation on the
+// pointer/click events so it never toggles the row or triggers the store-mode
+// swipe. Hidden entirely for normal grocery items (no url).
+function LinkLine({ url }: { url: string }) {
+  const host = noteHostname(url)
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={e => e.stopPropagation()}
+      onPointerDown={e => e.stopPropagation()}
+      onPointerUp={e => e.stopPropagation()}
+      className="mt-0.5 inline-flex max-w-full items-center gap-1 text-[11px] font-medium text-indigo-500 hover:underline dark:text-indigo-400"
+    >
+      <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+      </svg>
+      <span className="truncate">{host || 'öppna länk'}</span>
+      <span aria-hidden className="shrink-0">↗</span>
+    </a>
+  )
+}
 
 export function SortableRow({
   item, itemTextClass, thumbSizeClass, onToggle, onEdit, onPicture, onCombine, editMode, storeMode, onDelete, muted, selected, onToggleSelect, slColor, rowAnim, isNew,
@@ -116,7 +142,10 @@ export function SortableRow({
             />
           )}
           {newDot}
-          <span className={`${itemTextClass} flex-1 min-w-0 break-words ${nameClass}`}>{item.name}</span>
+          <div className="flex-1 min-w-0">
+            <span className={`${itemTextClass} block break-words ${nameClass}`}>{item.name}</span>
+            {item.url && <LinkLine url={item.url} />}
+          </div>
           <MeasurementBadge item={item} muted={muted} onCombine={onCombine} />
           {showHint && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30 rounded-xl">
@@ -161,9 +190,12 @@ export function SortableRow({
         />
       )}
       {newDot}
-      <span className={`${itemTextClass} flex-1 min-w-0 break-words ${nameClass}`}>
-        {item.name}
-      </span>
+      <div className="flex-1 min-w-0">
+        <span className={`${itemTextClass} block break-words ${nameClass}`}>
+          {item.name}
+        </span>
+        {item.url && <LinkLine url={item.url} />}
+      </div>
       {item.shared_group_id && (
         <span
           aria-label="Delad mellan listor"

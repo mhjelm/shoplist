@@ -2,18 +2,23 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
 import type { Item, List, Theme } from '@/lib/types'
+import type { LocalItem } from '@/lib/db/types'
+import { localDB } from '@/lib/db/local'
 import { isNewSinceVisit } from '@/lib/listsUnread'
 import { isUrl, splitNoteText } from '@/lib/notesView'
 import { useRevealFx } from '@/lib/useRevealFx'
 import { useSyncState } from '@/lib/sync/engine'
+import { log } from '@/lib/log'
 import { useListItemsSync } from './useListItemsSync'
 import { buildLocalItem } from './itemHelpers'
 import { muAddItem, muUpdateItem, muDeleteItem } from '@/lib/sync/mutations'
-import { touchListView, unfurlLink } from './actions'
+import { touchListView, unfurlLink, copyItemsToList } from './actions'
 import { touchListViewLocal } from '@/lib/sync/overviewLocal'
+import { useNotesSelect } from './NotesSelectContext'
 import { NoteCard } from './NoteCard'
 import { NoteEditModal, type NotePatch } from './NoteEditModal'
 import NoteSpeechModal from './NoteSpeechModal'
+import TargetListModal from './TargetListModal'
 
 // Client-only capability read (mirrors TaskList): false during SSR, real value
 // once mounted — avoids a hydration mismatch on the voice button.
@@ -32,9 +37,10 @@ interface Props {
   currentUserId: string
   lastViewedAt: string | null
   theme: Theme
+  availableLists: Pick<List, 'id' | 'name' | 'owner_id'>[]
 }
 
-export default function NoteList({ list, listId, currentUserId, lastViewedAt }: Props) {
+export default function NoteList({ list, listId, currentUserId, lastViewedAt, availableLists }: Props) {
   const [draft, setDraft] = useState('')
   // The last clipboard URL we auto-pasted, cleared, or added. Used so refocusing
   // re-pastes only when the clipboard holds a *different* link — never the same
@@ -47,6 +53,66 @@ export default function NoteList({ list, listId, currentUserId, lastViewedAt }: 
   const revealFx = useRevealFx(hasLoaded)
   const { isOffline } = useSyncState()
   const speechSupported = useSpeechSupported()
+
+  // Select & copy: select mode is driven from the header ⋯ menu via context.
+  const { selecting, setSelecting } = useNotesSelect()
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+
+  // Clear selection when leaving select mode (render-time derived state —
+  // idempotent setters, mirrors useItemSelection).
+  const [prevSelecting, setPrevSelecting] = useState(selecting)
+  if (prevSelecting !== selecting) {
+    setPrevSelecting(selecting)
+    if (!selecting) { setSelectedIds(new Set()); setPickerOpen(false) }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // Copy selected scraps into the chosen shopping list. Representation A:
+  // the scrap's title becomes the item name and its unfurled og:image
+  // (picture_url) rides along as the item photo. The source url/note ride
+  // along too so the link stays reachable from the shopping row.
+  async function handleCopy(targetListId: string) {
+    const chosen = items.filter(i => selectedIds.has(i.id))
+    if (chosen.length === 0) return
+    const payload = chosen.map(i => ({
+      name: i.name,
+      picture_url: i.picture_url,
+      quantity: 1,
+      category: null,
+      measurement: null,
+      url: i.url,
+      note: i.note,
+    }))
+    const res = await copyItemsToList(targetListId, payload)
+    if (res?.error) {
+      log.warn('notes.copy_failed', { error: res.error, count: chosen.length })
+      throw new Error(res.error)
+    }
+    // Seed the target list's Dexie cache so the receiving view shows the rows
+    // immediately (same rationale as the shopping copy path in useItemSelection).
+    if ('items' in res && res.items) {
+      try { await localDB.items.bulkPut(res.items as LocalItem[]) } catch { /* best-effort */ }
+    }
+    setToast(`Kopierade ${chosen.length} ${chosen.length === 1 ? 'scrap' : 'scraps'} ✓`)
+    setSelecting(false) // also clears selection + picker via the derived effect
+  }
+
+  // Auto-dismiss the success toast.
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 2600)
+    return () => clearTimeout(t)
+  }, [toast])
 
   // Touch last_viewed on mount/unmount so the /lists NEW marker clears for this
   // user (local write = instant; server write = cross-device). Mirrors TaskList.
@@ -136,7 +202,8 @@ export default function NoteList({ list, listId, currentUserId, lastViewedAt }: 
   }
 
   return (
-    <div className={`space-y-6${revealFx ? ' ' + revealFx : ''}`}>
+    <div className={`space-y-6${revealFx ? ' ' + revealFx : ''}${selecting ? ' pb-24' : ''}`}>
+      {!selecting && (
       <form onSubmit={handleAdd} className="flex flex-col gap-2">
         <div className="relative">
           <textarea
@@ -192,6 +259,13 @@ export default function NoteList({ list, listId, currentUserId, lastViewedAt }: 
           )}
         </div>
       </form>
+      )}
+
+      {selecting && (
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          Välj scraps att kopiera till en handlingslista.
+        </p>
+      )}
 
       {hasLoaded && sorted.length === 0 && (
         <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -208,9 +282,53 @@ export default function NoteList({ list, listId, currentUserId, lastViewedAt }: 
               isNew={isNewSinceVisit(item, currentUserId, lastViewedAt)}
               onEdit={() => setEditing(item)}
               onDelete={() => muDeleteItem(listId, item.id)}
+              selectable={selecting}
+              selected={selectedIds.has(item.id)}
+              onToggleSelect={() => toggleSelect(item.id)}
             />
           ))}
         </ul>
+      )}
+
+      {selecting && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-gray-800 dark:bg-gray-900/95">
+          <div className="mx-auto flex max-w-lg items-center gap-3">
+            <span className="flex-1 text-sm text-gray-600 dark:text-gray-400">
+              {selectedIds.size} {selectedIds.size === 1 ? 'markerad' : 'markerade'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelecting(false)}
+              className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              Avbryt
+            </button>
+            <button
+              type="button"
+              disabled={selectedIds.size === 0}
+              onClick={() => setPickerOpen(true)}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-40"
+            >
+              Kopiera till lista →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pickerOpen && (
+        <TargetListModal
+          mode="copy"
+          availableLists={availableLists}
+          currentUserId={currentUserId}
+          onPick={handleCopy}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-lg dark:bg-gray-100 dark:text-gray-900">
+          {toast}
+        </div>
       )}
 
       {editing && (

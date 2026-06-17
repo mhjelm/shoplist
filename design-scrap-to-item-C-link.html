@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scrap → shopping item · C — Link-preserving</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400..700&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#f9fafb; --card:#ffffff; --ink:#111827; --sub:#6b7280; --faint:#9ca3af;
+    --line:#e5e7eb; --indigo:#4f46e5; --indigo-soft:#eef2ff; --emerald:#10b981;
+    --amber-bg:#fffbeb; --amber-line:#fde68a; --amber-ink:#b45309;
+  }
+  body { font-family:"Inter",system-ui,-apple-system,sans-serif; background:#eef0f4; color:var(--ink); min-height:100vh; padding:44px 22px 90px; -webkit-font-smoothing:antialiased; }
+  .head { max-width:900px; margin:0 auto 40px; }
+  .head h1 { font-size:clamp(1.6rem,4vw,2.4rem); font-weight:700; letter-spacing:-0.02em; }
+  .head .lede { color:#4b5563; font-size:1.02rem; margin-top:10px; max-width:62ch; line-height:1.55; }
+  .pill { display:inline-block; font-family:"JetBrains Mono",monospace; font-size:0.62rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--indigo); background:var(--indigo-soft); border-radius:999px; padding:4px 11px; margin-bottom:14px; }
+  .grid { max-width:900px; margin:0 auto; display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:46px 40px; align-items:start; }
+  .slot { display:flex; flex-direction:column; gap:16px; }
+  .slot-label { font-family:"JetBrains Mono",monospace; font-size:0.68rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--sub); }
+  .slot-label b { display:block; font-family:"Inter",sans-serif; font-weight:700; font-size:1.15rem; letter-spacing:-0.01em; text-transform:none; color:var(--ink); margin-top:4px; }
+  .note { font-size:0.85rem; color:var(--sub); line-height:1.5; }
+  .phone { border-radius:36px; padding:9px; background:linear-gradient(160deg,#d7dae1,#aeb4c0); box-shadow:0 40px 70px -34px rgba(20,24,40,.5),0 10px 26px -16px rgba(20,24,40,.4); }
+  .screen { border-radius:28px; overflow:hidden; height:660px; overflow-y:auto; background:var(--bg); scrollbar-width:none; }
+  .screen::-webkit-scrollbar { display:none; }
+  .top { position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid var(--line); padding:14px 16px; display:flex; align-items:center; gap:10px; }
+  .top .back { color:var(--faint); font-size:1.3rem; }
+  .top h2 { font-size:1rem; font-weight:600; flex:1; }
+  .top .badge { font-size:0.6rem; font-weight:700; letter-spacing:0.08em; color:var(--indigo); background:var(--indigo-soft); padding:3px 8px; border-radius:999px; }
+  .cat { font-size:0.66rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--faint); padding:18px 18px 6px; }
+  .row { display:flex; align-items:center; gap:12px; padding:11px 16px; background:#fff; border-bottom:1px solid #f1f2f4; }
+  .check { width:22px; height:22px; border-radius:7px; border:2px solid #d1d5db; flex:none; }
+  .nothumb { width:46px; height:46px; border-radius:10px; flex:none; background:repeating-linear-gradient(45deg,#f3f4f6,#f3f4f6 6px,#eceef1 6px,#eceef1 12px); }
+  .row .body { flex:1; min-width:0; }
+  .row .name { font-size:0.95rem; font-weight:500; }
+  .row .qty { font-size:0.78rem; color:var(--faint); margin-top:1px; }
+
+  /* rich link-preserving row */
+  .linkrow { display:flex; align-items:center; gap:12px; padding:11px 16px; background:linear-gradient(90deg,#fafaff,#fff); border-bottom:1px solid #f1f2f4; }
+  .linkrow .thumb { width:52px; height:52px; border-radius:11px; flex:none; object-fit:cover; }
+  .linkrow .body { flex:1; min-width:0; }
+  .linkrow .name { font-size:0.95rem; font-weight:600; line-height:1.25; }
+  .linkrow .meta { display:flex; align-items:center; gap:6px; margin-top:5px; }
+  .host { font-size:0.66rem; font-weight:600; color:var(--amber-ink); background:var(--amber-bg); border:1px solid var(--amber-line); border-radius:999px; padding:2px 8px; }
+  .open { font-size:0.72rem; font-weight:600; color:var(--indigo); text-decoration:none; display:inline-flex; align-items:center; gap:3px; }
+
+  .selbar { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:#fff; border-bottom:1px solid var(--line); }
+  .selbar .lbl { font-size:0.82rem; font-weight:600; } .selbar .lnk { font-size:0.8rem; font-weight:600; color:var(--indigo); }
+  .scard { display:flex; gap:11px; padding:13px 16px; background:#fff; border-bottom:1px solid #f1f2f4; align-items:flex-start; }
+  .selbox { width:22px; height:22px; border-radius:6px; border:2px solid var(--indigo); flex:none; display:flex; align-items:center; justify-content:center; color:#fff; }
+  .selbox.on { background:var(--indigo); } .selbox.off { border-color:#cbd0d8; }
+  .scard .t { font-size:0.92rem; font-weight:600; } .scard .d { font-size:0.78rem; color:var(--sub); margin-top:2px; line-height:1.4; }
+  .scard .hostc { font-size:0.64rem; color:var(--amber-ink); background:var(--amber-bg); border:1px solid var(--amber-line); border-radius:999px; padding:1px 7px; margin-top:5px; display:inline-block; }
+  .footbar { position:sticky; bottom:0; background:#fff; border-top:1px solid var(--line); padding:12px 16px; display:flex; gap:10px; align-items:center; }
+  .footbar .count { font-size:0.82rem; color:var(--sub); flex:1; }
+  .btn { font-size:0.85rem; font-weight:600; padding:9px 14px; border-radius:10px; border:none; }
+  .btn.primary { background:var(--indigo); color:#fff; } .btn.ghost { background:#f3f4f6; color:var(--ink); }
+  .picker { padding:16px; }
+  .picker h3 { font-size:0.7rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--faint); margin-bottom:8px; }
+  .pick { display:flex; align-items:center; gap:10px; padding:12px 14px; background:#fff; border:1px solid var(--line); border-radius:12px; margin-bottom:8px; font-size:0.9rem; font-weight:500; }
+  .pick .ic { width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center; background:var(--indigo-soft); }
+  .pick.new { color:var(--indigo); border-style:dashed; border-color:#c7cdfb; }
+  .newform { margin-top:6px; padding:12px 14px; border:1px dashed #c7cdfb; border-radius:12px; }
+  .newform input { width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 11px; font-size:0.9rem; font-family:inherit; }
+  .newform .k { display:flex; gap:8px; margin-top:10px; }
+  .kchip { flex:1; text-align:center; font-size:0.78rem; font-weight:600; padding:8px; border-radius:9px; border:1px solid var(--line); }
+  .kchip.on { background:var(--indigo); color:#fff; border-color:var(--indigo); }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="pill">Design C · of 3</div>
+    <h1>Link scrap → <em>Link-preserving item</em></h1>
+    <p class="lede">The richest option: a former link scrap keeps its identity inside the shopping list — title, thumbnail, host pill, and a tap-to-open link — while still being a checkable shopping row. Best when the family shops <em>from</em> recipes: you can open the page mid-aisle to double-check an ingredient. The trade-off is a busier list where recipe cards sit alongside plain food rows.</p>
+  </div>
+
+  <div class="grid">
+    <div class="slot">
+      <div class="slot-label">Converted list<b>Shopping mode</b></div>
+      <div class="phone"><div class="screen">
+        <div class="top"><span class="back">‹</span><h2>Helgmiddag</h2><span class="badge">SHOP</span></div>
+        <div class="cat">Frukt &amp; grönt</div>
+        <div class="row"><span class="check"></span><span class="nothumb"></span><div class="body"><div class="name">Gul lök</div><div class="qty">2 st</div></div></div>
+        <div class="row"><span class="check"></span><span class="nothumb"></span><div class="body"><div class="name">Vitlök</div></div></div>
+        <div class="cat">Recept &amp; länkar</div>
+        <div class="linkrow"><span class="check"></span>
+          <img class="thumb" alt="" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='104' height='104'><rect width='104' height='104' fill='%23c2410c'/><rect y='66' width='104' height='38' fill='%23f97316'/><circle cx='34' cy='38' r='17' fill='%23fed7aa'/></svg>" />
+          <div class="body"><div class="name">Krämig pasta med soltorkade tomater</div>
+            <div class="meta"><span class="host">📎 ica.se</span><a class="open" href="#">Öppna ↗</a></div></div>
+        </div>
+        <div class="linkrow"><span class="check"></span>
+          <img class="thumb" alt="" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='104' height='104'><rect width='104' height='104' fill='%23166534'/><path d='M22 80 Q52 22 82 80Z' fill='%2386efac'/></svg>" />
+          <div class="body"><div class="name">Grön curry med kyckling</div>
+            <div class="meta"><span class="host">📎 koket.se</span><a class="open" href="#">Öppna ↗</a></div></div>
+        </div>
+        <div class="cat">Övrigt</div>
+        <div class="row"><span class="check"></span><span class="nothumb"></span><div class="body"><div class="name">Crème fraiche</div></div></div>
+      </div></div>
+      <p class="note"><b>Pro:</b> keeps recipe links useful while shopping; visually distinct "Recept &amp; länkar" grouping. <b>Con:</b> richest/busiest row; needs the shopping row to learn a link-aware variant (small new UI in <code>ItemList</code>).</p>
+    </div>
+
+    <div class="slot">
+      <div class="slot-label">Copy flow<b>Select &amp; send</b></div>
+      <div class="phone"><div class="screen">
+        <div class="top"><span class="back">‹</span><h2>Idéer &amp; recept</h2><span class="badge" style="color:var(--amber-ink);background:var(--amber-bg)">📎 SCRAP</span></div>
+        <div class="selbar"><span class="lbl">Select scraps to copy</span><span class="lnk">Cancel</span></div>
+        <div class="scard"><span class="selbox on">✓</span><div><div class="t">Krämig pasta med soltorkade tomater</div><div class="d">Snabb vardagsmiddag på 20 min.</div><span class="hostc">📎 ica.se</span></div></div>
+        <div class="scard"><span class="selbox on">✓</span><div><div class="t">Grön curry med kyckling</div><div class="d">Stark och len currygryta.</div><span class="hostc">📎 koket.se</span></div></div>
+        <div class="scard"><span class="selbox off"></span><div><div class="t">Köp blommor till mormor 🌷</div></div></div>
+        <div class="scard"><span class="selbox on">✓</span><div><div class="t">Crème fraiche</div></div></div>
+        <div class="footbar"><span class="count">3 markerade</span><button class="btn ghost">Avbryt</button><button class="btn primary">Kopiera →</button></div>
+      </div></div>
+      <p class="note">Selection mode is identical across A/B/C — it's the destination row that differs.</p>
+    </div>
+
+    <div class="slot">
+      <div class="slot-label">Copy flow<b>Pick / create</b></div>
+      <div class="phone"><div class="screen">
+        <div class="top"><span class="back">‹</span><h2>Kopiera 3 scraps</h2></div>
+        <div class="picker">
+          <h3>Befintlig handlingslista</h3>
+          <div class="pick"><span class="ic">🛒</span>Helgmiddag</div>
+          <div class="pick"><span class="ic">🛒</span>Veckohandling</div>
+          <h3 style="margin-top:18px">Skapa ny</h3>
+          <div class="newform">
+            <input value="Helgmiddag" />
+            <div class="k"><span class="kchip on">🛒 Shopping</span><span class="kchip">✓ Task</span></div>
+            <button class="btn primary" style="width:100%;margin-top:10px">Skapa &amp; kopiera</button>
+          </div>
+        </div>
+      </div></div>
+      <p class="note">"Create new" expands inline: name + kind, defaulting to 🛒 Shopping. Reuses the existing <code>createList</code> action, then <code>copyItemsToList</code>.</p>
+    </div>
+  </div>
+</body>
+</html>

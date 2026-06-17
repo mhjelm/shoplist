@@ -92,6 +92,34 @@ const NewDot = () => (
   />
 )
 
+// In select mode, a full-card overlay button intercepts taps (so the link
+// underneath doesn't navigate) and toggles selection; a checkbox sits top-left.
+function SelectOverlay({ selected, name, onToggle }: { selected: boolean; name: string; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={selected}
+      aria-label={`${selected ? 'Avmarkera' : 'Markera'} ${name || 'scrap'}`}
+      className="absolute inset-0 z-20"
+    >
+      <span
+        className={`absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-md border-2 transition-colors ${
+          selected
+            ? 'border-indigo-600 bg-indigo-600 text-white'
+            : 'border-gray-300 bg-white/90 dark:border-gray-600 dark:bg-gray-900/80'
+        }`}
+      >
+        {selected && (
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+          </svg>
+        )}
+      </span>
+    </button>
+  )
+}
+
 // A single scrap card. A link with a preview image renders as a rich
 // link-preview card (full-width image on top, then title / description / host —
 // the WhatsApp style). Everything else (plain notes, links without an image)
@@ -101,18 +129,25 @@ export function NoteCard({
   isNew = false,
   onEdit,
   onDelete,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
 }: {
   item: Item
   isNew?: boolean
   onEdit: () => void
   onDelete: () => void
+  selectable?: boolean
+  selected?: boolean
+  onToggleSelect?: () => void
 }) {
   const host = noteHostname(item.url)
+  const selRing = selectable && selected ? ' ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-gray-950' : ''
 
   // Rich link-preview layout.
   if (item.url && item.picture_url) {
     return (
-      <li className="relative overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+      <li className={`relative overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900${selRing}`}>
         <a href={item.url} target="_blank" rel="noopener noreferrer" className="block">
           <img
             src={item.picture_url}
@@ -136,13 +171,15 @@ export function NoteCard({
           </div>
         </a>
         <CardActions name={item.name} onEdit={onEdit} onDelete={onDelete} floating />
+        {selectable && <SelectOverlay selected={selected} name={item.name} onToggle={onToggleSelect ?? (() => {})} />}
       </li>
     )
   }
 
-  // Compact layout.
+  // Compact layout. In select mode the left padding grows so the top-left
+  // checkbox overlay never sits on top of the title/thumbnail.
   return (
-    <li className="relative flex gap-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3">
+    <li className={`relative flex gap-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${selectable ? 'py-3 pr-3 pl-11' : 'p-3'}${selRing}`}>
       {item.picture_url && (
         <img
           src={item.picture_url}
@@ -181,6 +218,7 @@ export function NoteCard({
 
         {host && <HostPill host={host} />}
       </div>
+      {selectable && <SelectOverlay selected={selected} name={item.name} onToggle={onToggleSelect ?? (() => {})} />}
     </li>
   )
 }

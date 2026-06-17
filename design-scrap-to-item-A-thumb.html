@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scrap → shopping item · A — Thumbnail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400..700&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#f9fafb; --card:#ffffff; --ink:#111827; --sub:#6b7280; --faint:#9ca3af;
+    --line:#e5e7eb; --indigo:#4f46e5; --indigo-soft:#eef2ff; --emerald:#10b981;
+    --amber-bg:#fffbeb; --amber-line:#fde68a; --amber-ink:#b45309;
+  }
+  body {
+    font-family:"Inter",system-ui,-apple-system,sans-serif;
+    background:#eef0f4; color:var(--ink); min-height:100vh; padding:44px 22px 90px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .head { max-width:900px; margin:0 auto 40px; }
+  .head h1 { font-size:clamp(1.6rem,4vw,2.4rem); font-weight:700; letter-spacing:-0.02em; }
+  .head .lede { color:#4b5563; font-size:1.02rem; margin-top:10px; max-width:62ch; line-height:1.55; }
+  .pill { display:inline-block; font-family:"JetBrains Mono",monospace; font-size:0.62rem; letter-spacing:0.16em;
+    text-transform:uppercase; color:var(--indigo); background:var(--indigo-soft); border-radius:999px; padding:4px 11px; margin-bottom:14px; }
+  .grid { max-width:900px; margin:0 auto; display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:46px 40px; align-items:start; }
+  .slot { display:flex; flex-direction:column; gap:16px; }
+  .slot-label { font-family:"JetBrains Mono",monospace; font-size:0.68rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--sub); }
+  .slot-label b { display:block; font-family:"Inter",sans-serif; font-weight:700; font-size:1.15rem; letter-spacing:-0.01em; text-transform:none; color:var(--ink); margin-top:4px; }
+  .note { font-size:0.85rem; color:var(--sub); line-height:1.5; }
+
+  .phone { border-radius:36px; padding:9px; background:linear-gradient(160deg,#d7dae1,#aeb4c0);
+    box-shadow:0 40px 70px -34px rgba(20,24,40,.5),0 10px 26px -16px rgba(20,24,40,.4); }
+  .screen { position:relative; border-radius:28px; overflow:hidden; height:660px; overflow-y:auto; background:var(--bg); scrollbar-width:none; }
+  .screen::-webkit-scrollbar { display:none; }
+
+  .top { position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid var(--line);
+    padding:14px 16px; display:flex; align-items:center; gap:10px; }
+  .top .back { color:var(--faint); font-size:1.3rem; }
+  .top h2 { font-size:1rem; font-weight:600; flex:1; }
+  .top .badge { font-size:0.6rem; font-weight:700; letter-spacing:0.08em; color:var(--indigo); background:var(--indigo-soft); padding:3px 8px; border-radius:999px; }
+
+  .cat { font-size:0.66rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--faint); padding:18px 18px 6px; }
+  .row { display:flex; align-items:center; gap:12px; padding:11px 16px; background:#fff; border-bottom:1px solid #f1f2f4; }
+  .check { width:22px; height:22px; border-radius:7px; border:2px solid #d1d5db; flex:none; }
+  .thumb { width:46px; height:46px; border-radius:10px; flex:none; object-fit:cover; background:#e5e7eb; }
+  .nothumb { width:46px; height:46px; border-radius:10px; flex:none; background:repeating-linear-gradient(45deg,#f3f4f6,#f3f4f6 6px,#eceef1 6px,#eceef1 12px); }
+  .row .body { flex:1; min-width:0; }
+  .row .name { font-size:0.95rem; font-weight:500; }
+  .row .qty { font-size:0.78rem; color:var(--faint); margin-top:1px; }
+  .row.fromlink { background:linear-gradient(90deg,#fffdf7,#fff); }
+  .linkchip { display:inline-flex; align-items:center; gap:4px; font-size:0.66rem; font-weight:600; color:var(--amber-ink);
+    background:var(--amber-bg); border:1px solid var(--amber-line); border-radius:999px; padding:2px 7px; margin-top:4px; }
+
+  /* selection-mode panel */
+  .selbar { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:#fff; border-bottom:1px solid var(--line); }
+  .selbar .lbl { font-size:0.82rem; font-weight:600; }
+  .selbar .lnk { font-size:0.8rem; font-weight:600; color:var(--indigo); }
+  .scard { display:flex; gap:11px; padding:13px 16px; background:#fff; border-bottom:1px solid #f1f2f4; align-items:flex-start; }
+  .selbox { width:22px; height:22px; border-radius:6px; border:2px solid var(--indigo); flex:none; display:flex; align-items:center; justify-content:center; color:#fff; }
+  .selbox.on { background:var(--indigo); }
+  .selbox.off { border-color:#cbd0d8; }
+  .scard .t { font-size:0.92rem; font-weight:600; }
+  .scard .d { font-size:0.78rem; color:var(--sub); margin-top:2px; line-height:1.4; }
+  .scard .host { font-size:0.64rem; color:var(--amber-ink); background:var(--amber-bg); border:1px solid var(--amber-line); border-radius:999px; padding:1px 7px; margin-top:5px; display:inline-block; }
+  .footbar { position:sticky; bottom:0; background:#fff; border-top:1px solid var(--line); padding:12px 16px; display:flex; gap:10px; align-items:center; }
+  .footbar .count { font-size:0.82rem; color:var(--sub); flex:1; }
+  .btn { font-size:0.85rem; font-weight:600; padding:9px 14px; border-radius:10px; border:none; }
+  .btn.primary { background:var(--indigo); color:#fff; }
+  .btn.ghost { background:#f3f4f6; color:var(--ink); }
+
+  .picker { padding:16px; }
+  .picker h3 { font-size:0.7rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--faint); margin-bottom:8px; }
+  .pick { display:flex; align-items:center; gap:10px; padding:12px 14px; background:#fff; border:1px solid var(--line); border-radius:12px; margin-bottom:8px; font-size:0.9rem; font-weight:500; }
+  .pick .ic { width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center; background:var(--indigo-soft); }
+  .pick.new { color:var(--indigo); border-style:dashed; border-color:#c7cdfb; }
+
+  /* convert-in-place: /lists row + edit panel */
+  .lview { padding:14px 14px 0; }
+  .lview .h { font-size:0.66rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--faint); margin:8px 4px 10px; }
+  .lrow { background:#fff; border:1px solid var(--line); border-radius:14px; margin-bottom:10px; }
+  .lrow .main { display:flex; align-items:center; gap:8px; padding:13px 14px; }
+  .lrow .nm { flex:1; font-weight:600; font-size:0.95rem; }
+  .lrow .chip { font-size:0.58rem; font-weight:700; letter-spacing:0.06em; padding:2px 7px; border-radius:999px; }
+  .lrow .chip.scrap { color:var(--amber-ink); background:var(--amber-bg); border:1px solid var(--amber-line); }
+  .lrow .pencil { color:#c3c8d0; font-size:0.95rem; }
+  .lrow .pencil.on { color:var(--indigo); }
+  .editpanel { border-top:1px solid var(--line); background:#fafbfc; padding:14px; border-radius:0 0 14px 14px; }
+  .editpanel label { font-size:0.7rem; font-weight:600; color:var(--sub); display:block; margin-bottom:6px; }
+  .editpanel .rename { display:flex; gap:8px; margin-bottom:16px; }
+  .editpanel .rename input { flex:1; border:1px solid var(--line); border-radius:9px; padding:9px 11px; font-size:0.88rem; font-family:inherit; }
+  .editpanel .rename .save { background:var(--indigo); color:#fff; border:none; border-radius:9px; padding:0 14px; font-size:0.82rem; font-weight:600; }
+  .seg { display:flex; gap:6px; }
+  .seg .opt { flex:1; text-align:center; font-size:0.8rem; font-weight:600; padding:9px 4px; border-radius:10px; border:1px solid var(--line); background:#fff; color:var(--sub); }
+  .seg .opt.on { background:var(--indigo); color:#fff; border-color:var(--indigo); box-shadow:0 4px 12px -4px rgba(79,70,229,.5); }
+  .seg .opt small { display:block; font-size:0.6rem; font-weight:500; opacity:.85; margin-top:1px; }
+  .editpanel .hint { font-size:0.74rem; color:var(--sub); line-height:1.45; margin-top:12px; }
+  .editpanel .share { margin-top:14px; padding-top:12px; border-top:1px dashed var(--line); font-size:0.78rem; color:var(--faint); }
+
+  /* scrap-list header overflow menu */
+  .top .kebab { color:var(--faint); font-size:1.2rem; font-weight:700; letter-spacing:1px; }
+  .ovf { position:absolute; top:52px; right:12px; z-index:20; background:#fff; border:1px solid var(--line);
+    border-radius:14px; box-shadow:0 22px 40px -18px rgba(20,24,40,.4); overflow:hidden; width:230px; }
+  .ovf .mi { display:flex; align-items:center; gap:11px; padding:13px 15px; font-size:0.88rem; font-weight:500; }
+  .ovf .mi + .mi { border-top:1px solid #f1f2f4; }
+  .ovf .mi .g { width:24px; text-align:center; font-size:1rem; }
+  .ovf .mi small { display:block; font-size:0.72rem; color:var(--faint); font-weight:400; margin-top:1px; }
+  .scrim { position:absolute; inset:0; background:rgba(17,24,39,.32); z-index:15; }
+  /* confirm dialog */
+  .dialog { position:absolute; left:50%; top:46%; transform:translate(-50%,-50%); z-index:25; width:280px;
+    background:#fff; border-radius:18px; padding:20px; box-shadow:0 30px 60px -20px rgba(20,24,40,.5); text-align:center; }
+  .dialog .ic { width:52px; height:52px; border-radius:14px; margin:0 auto 12px; display:flex; align-items:center; justify-content:center;
+    font-size:1.5rem; background:var(--indigo-soft); }
+  .dialog h3 { font-size:1.05rem; font-weight:700; }
+  .dialog p { font-size:0.83rem; color:var(--sub); line-height:1.5; margin-top:8px; }
+  .dialog .acts { display:flex; gap:9px; margin-top:18px; }
+  .dialog .acts .btn { flex:1; padding:11px; }
+
+  /* resting scrap list */
+  .top .kebab.hot { color:var(--indigo); position:relative; }
+  .callout { position:absolute; top:58px; right:14px; z-index:21; background:var(--indigo); color:#fff;
+    font-size:0.72rem; font-weight:600; padding:7px 11px; border-radius:10px; box-shadow:0 14px 24px -12px rgba(79,70,229,.7); }
+  .callout::before { content:""; position:absolute; top:-6px; right:14px; border:6px solid transparent; border-bottom-color:var(--indigo); border-top:0; }
+  .addbox { margin:14px; }
+  .addbox .ta { border:1px solid var(--line); border-radius:11px; background:#fff; padding:11px 13px; font-size:0.85rem; color:var(--faint); }
+  .addbox .ctl { display:flex; gap:8px; margin-top:9px; }
+  .addbox .ctl .add { background:var(--indigo); color:#fff; border-radius:9px; padding:8px 16px; font-size:0.82rem; font-weight:600; }
+  .addbox .ctl .mic { width:36px; border:1px solid var(--line); border-radius:9px; display:flex; align-items:center; justify-content:center; color:var(--faint); }
+  .ncard { display:flex; gap:11px; padding:12px 16px; margin:0 14px 10px; background:#fff; border:1px solid var(--line); border-radius:13px; align-items:flex-start; }
+  .ncard img { width:48px; height:48px; border-radius:10px; flex:none; object-fit:cover; }
+  .ncard .t { font-size:0.9rem; font-weight:600; line-height:1.25; }
+  .ncard .d { font-size:0.77rem; color:var(--sub); margin-top:2px; line-height:1.4; }
+  .ncard .host { font-size:0.63rem; color:var(--amber-ink); background:var(--amber-bg); border:1px solid var(--amber-line); border-radius:999px; padding:1px 7px; margin-top:5px; display:inline-block; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="pill">Design A · of 3</div>
+    <h1>Link scrap → <em>Thumbnail item</em></h1>
+    <p class="lede">When a Scrapbook becomes a shopping list, a link scrap collapses into an ordinary grocery row: its title is the item name and the unfurled <code>og:image</code> fills the normal item-photo slot. No screenshot needed — we already grabbed the page image at unfurl time. The link itself goes dormant (still stored, just not shown). Reads exactly like a hand-added item with a photo. Two ways in: <b>convert the list in place</b> (below) or <b>copy selected scraps</b> into another list.</p>
+  </div>
+
+  <div class="grid">
+    <!-- Phone 00: resting scrap list — where the entry point lives -->
+    <div class="slot">
+      <div class="slot-label">Starting point<b>Scrap list (today)</b></div>
+      <div class="phone"><div class="screen">
+        <div class="top"><span class="back">‹</span><h2>Helgmiddag</h2><span class="badge" style="color:var(--amber-ink);background:var(--amber-bg)">📎 SCRAP</span><span class="kebab hot">⋯</span></div>
+        <div class="callout">↑ menu: convert / copy</div>
+        <div class="addbox">
+          <div class="ta">Skriv en anteckning eller klistra in en länk…</div>
+          <div class="ctl"><span class="add">Lägg till</span><span class="mic">🎙</span></div>
+        </div>
+        <div class="ncard">
+          <img alt="" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='92' height='92'><rect width='92' height='92' fill='%23c2410c'/><rect y='58' width='92' height='34' fill='%23f97316'/><circle cx='30' cy='34' r='15' fill='%23fed7aa'/></svg>" />
+          <div><div class="t">Krämig pasta med soltorkade tomater</div><div class="d">Snabb vardagsmiddag på 20 min.</div><span class="host">📎 ica.se</span></div>
+        </div>
+        <div class="ncard">
+          <img alt="" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='92' height='92'><rect width='92' height='92' fill='%23166534'/><path d='M20 70 Q46 20 72 70Z' fill='%2386efac'/></svg>" />
+          <div><div class="t">Grön curry med kyckling</div><div class="d">Stark och len currygryta.</div><span class="host">📎 koket.se</span></div>
+        </div>
+        <div class="ncard"><div><div class="t">Crème fraiche</div></div></div>
+        <div class="ncard"><div><div class="t">Köp blommor till mormor 🌷</div></div></div>
+      </div></div>
+      <p class="note">The scrap list as it exists today (add box + scrap feed). The only new affordance is the <b>⋯</b> in the header — that's where conversion and copy start. Everything else is unchanged.</p>
+    </div>
+
+    <!-- Phone 0: entry point — scrap list header menu -->
+    <div class="slot">
+      <div class="slot-label">Entry point<b>Scrap list · menu</b></div>
+      <div class="phone"><div class="screen">
+        <div class="top"><span class="back">‹</span><h2>Helgmiddag</h2><span class="badge" style="color:var(--amber-ink);background:var(--amber-bg)">📎 SCRAP</span><span class="kebab">⋯</span></div>
+        <div class="scrim"></div>
+        <div class="ovf">
+          <div class="mi"><span class="g">🛒</span><div>Konvertera till handlingslista<small>Hela listan blir en shoplist</small></div></div>
+          <div class="mi"><span class="g">☑️</span><div>Välj &amp; kopiera scraps<small>Kopiera valda till en annan lista</small></div></div>
+        </div>
+        <div style="filter:blur(1px);opacity:.55">
+          <div class="scard" style="border:none"><div><div class="t">Krämig pasta med soltorkade tomater</div><span class="host">📎 ica.se</span></div></div>
+          <div class="scard" style="border:none"><div><div class="t">Grön curry med kyckling</div><span class="host">📎 koket.se</span></div></div>
+        </div>
+      </div></div>
+      <p class="note">A <b>⋯</b> menu in the scrap-list header is the single entry point. Owner sees both actions; a non-owner member sees only <b>Välj &amp; kopiera</b> (convert changes the list for everyone, so it's owner-only).</p>
+    </div>
+
+    <!-- Phone 0b: convert safety confirm -->
+    <div class="slot">
+      <div class="slot-label">Convert<b>Safety accept</b></div>
+      <div class="phone"><div class="screen">
+        <div class="top"><span class="back">‹</span><h2>Helgmiddag</h2><span class="badge" style="color:var(--amber-ink);background:var(--amber-bg)">📎 SCRAP</span><span class="kebab">⋯</span></div>
+        <div class="scrim"></div>
+        <div class="dialog">
+          <div class="ic">🛒</div>
+          <h3>Konvertera till handlingslista?</h3>
+          <p>“Helgmiddag” blir en <b>shoplist</b> med samma namn. Anteckningar och länkar sparas kvar. Ändringen gäller alla som listan delas med.</p>
+          <div class="acts"><button class="btn ghost">Avbryt</button><button class="btn primary">Konvertera</button></div>
+        </div>
+        <div style="filter:blur(2px);opacity:.4">
+          <div class="scard" style="border:none"><div><div class="t">Krämig pasta med soltorkade tomater</div></div></div>
+          <div class="scard" style="border:none"><div><div class="t">Grön curry med kyckling</div></div></div>
+        </div>
+      </div></div>
+      <p class="note">Convert is intentionally minimal: one confirm, then it flips in place keeping the <b>same name</b> — no rename, no type-picker. Reversible (the ⋯ menu on a shopping list offers “Konvertera till scrapbook”).</p>
+    </div>
+
+    <!-- Phone 1: converted shopping list -->
+    <div class="slot">
+      <div class="slot-label">Converted list<b>Shopping mode</b></div>
+      <div class="phone"><div class="screen">
+        <div class="top"><span class="back">‹</span><h2>Helgmiddag</h2><span class="badge">SHOP</span></div>
+
+        <div class="cat">Frukt &amp; grönt</div>
+        <div class="row"><span class="check"></span><span class="nothumb"></span><div class="body"><div class="name">Gul lök</div><div class="qty">2 st</div></div></div>
+        <div class="row"><span class="check"></span><span class="nothumb"></span><div class="body"><div class="name">Vitlök</div></div></div>
+
+        <div class="cat">Övrigt</div>
+        <div class="row fromlink"><span class="check"></span>
+          <img class="thumb" alt="" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='92' height='92'><rect width='92' height='92' fill='%23c2410c'/><rect y='58' width='92' height='34' fill='%23f97316'/><circle cx='30' cy='34' r='15' fill='%23fed7aa'/></svg>" />
+          <div class="body"><div class="name">Krämig pasta med soltorkade tomater</div><div class="qty">från länk · ica.se/recept</div></div>
+        </div>
+        <div class="row fromlink"><span class="check"></span>
+          <img class="thumb" alt="" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='92' height='92'><rect width='92' height='92' fill='%23166534'/><path d='M20 70 Q46 20 72 70Z' fill='%2386efac'/></svg>" />
+          <div class="body"><div class="name">Grön curry med kyckling</div><div class="qty">från länk · koket.se</div></div>
+        </div>
+        <div class="row"><span class="check"></span><span class="nothumb"></span><div class="body"><div class="name">Crème fraiche</div></div></div>
+      </div></div>
+      <p class="note"><b>Pro:</b> zero new UI — reuses the item-photo slot. The list looks uniform and clean. <b>Con:</b> the recipe link is no longer tappable from the list (it lives in the edit modal only).</p>
+    </div>
+
+    <!-- Phone 2: selection mode for copy -->
+    <div class="slot">
+      <div class="slot-label">Copy flow<b>Select &amp; send</b></div>
+      <div class="phone"><div class="screen">
+        <div class="top"><span class="back">‹</span><h2>Helgmiddag</h2><span class="badge" style="color:var(--amber-ink);background:var(--amber-bg)">📎 SCRAP</span></div>
+        <div class="selbar"><span class="lbl">Välj scraps att kopiera</span><span class="lnk">Avbryt</span></div>
+
+        <div class="scard"><span class="selbox on">✓</span><div><div class="t">Krämig pasta med soltorkade tomater</div><div class="d">Snabb vardagsmiddag på 20 min.</div><span class="host">📎 ica.se</span></div></div>
+        <div class="scard"><span class="selbox on">✓</span><div><div class="t">Grön curry med kyckling</div><div class="d">Stark och len currygryta.</div><span class="host">📎 koket.se</span></div></div>
+        <div class="scard"><span class="selbox off"></span><div><div class="t">Köp blommor till mormor 🌷</div><div class="d">Inte mat — hoppa över.</div></div></div>
+        <div class="scard"><span class="selbox on">✓</span><div><div class="t">Crème fraiche</div></div></div>
+
+        <div class="footbar"><span class="count">3 markerade</span><button class="btn ghost">Avbryt</button><button class="btn primary">Kopiera till lista →</button></div>
+      </div></div>
+      <p class="note">Tap <b>Select</b> to enter multi-select; pick scraps; <b>Copy to list →</b> opens the picker (next).</p>
+    </div>
+
+    <!-- Phone 3: picker -->
+    <div class="slot">
+      <div class="slot-label">Copy flow<b>Pick destination</b></div>
+      <div class="phone"><div class="screen">
+        <div class="top"><span class="back">‹</span><h2>Kopiera 3 scraps</h2></div>
+        <div class="picker">
+          <h3>Befintlig handlingslista</h3>
+          <div class="pick"><span class="ic">🛒</span>Helgmiddag</div>
+          <div class="pick"><span class="ic">🛒</span>Veckohandling</div>
+          <div class="pick"><span class="ic">🛒</span>Storhandling</div>
+          <h3 style="margin-top:18px">Eller</h3>
+          <div class="pick new"><span class="ic">➕</span>Skapa ny lista…</div>
+        </div>
+      </div></div>
+      <p class="note">Existing shopping lists + a "create new" affordance. The Scrapbook is left untouched (copy, not move).</p>
+    </div>
+  </div>
+</body>
+</html>

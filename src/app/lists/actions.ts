@@ -41,6 +41,28 @@ export async function deleteList(listId: string) {
   revalidatePath('/lists')
 }
 
+export async function changeListKind(listId: string, kind: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  if (kind !== 'shopping' && kind !== 'task' && kind !== 'notes') {
+    return { error: 'Invalid list type' }
+  }
+
+  // RLS only lets the owner update the lists row, so a member's attempt
+  // affects zero rows without erroring — the UI hides the affordance for them.
+  const { error } = await supabase
+    .from('lists')
+    .update({ kind })
+    .eq('id', listId)
+
+  if (error) return { error: error.message }
+  revalidatePath('/lists')
+  revalidatePath(`/lists/${listId}`)
+  return { error: null }
+}
+
 export async function renameList(listId: string, name: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

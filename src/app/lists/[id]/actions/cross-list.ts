@@ -9,6 +9,11 @@ type CopyItem = {
   quantity: number
   category: CategorySlug | null
   measurement: string | null
+  // Carried when promoting a scrapbook link-scrap to a shopping item so the
+  // source link stays reachable from the shopping row (optional; null for
+  // ordinary grocery copies).
+  url?: string | null
+  note?: string | null
 }
 
 export async function copyItemsToList(targetListId: string, incoming: CopyItem[]) {
@@ -25,6 +30,8 @@ export async function copyItemsToList(targetListId: string, incoming: CopyItem[]
     measurements: string[]
     category: CategorySlug | null
     picture_url: string | null
+    url: string | null
+    note: string | null
   }
   const byLower = new Map<string, Bucket>()
   for (const it of incoming) {
@@ -38,6 +45,8 @@ export async function copyItemsToList(targetListId: string, incoming: CopyItem[]
       if (m) existing.measurements.push(m)
       if (!existing.category && it.category) existing.category = it.category
       if (!existing.picture_url && it.picture_url) existing.picture_url = it.picture_url
+      if (!existing.url && it.url) existing.url = it.url
+      if (!existing.note && it.note) existing.note = it.note
     } else {
       byLower.set(key, {
         display: t,
@@ -45,6 +54,8 @@ export async function copyItemsToList(targetListId: string, incoming: CopyItem[]
         measurements: m ? [m] : [],
         category: it.category ?? null,
         picture_url: it.picture_url ?? null,
+        url: it.url ?? null,
+        note: it.note ?? null,
       })
     }
   }
@@ -114,6 +125,9 @@ export async function copyItemsToList(targetListId: string, incoming: CopyItem[]
           category: bucket.category,
           measurement: batchMeasurement,
           picture_url: bucket.picture_url,
+          // Preserve a promoted link-scrap's source link/body on the new row.
+          url: bucket.url,
+          note: bucket.note,
         })
         .select()
         .single()

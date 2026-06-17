@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scrap → shopping item · B — Plain text</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400..700&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#f9fafb; --card:#ffffff; --ink:#111827; --sub:#6b7280; --faint:#9ca3af;
+    --line:#e5e7eb; --indigo:#4f46e5; --indigo-soft:#eef2ff; --emerald:#10b981;
+    --amber-bg:#fffbeb; --amber-line:#fde68a; --amber-ink:#b45309;
+  }
+  body { font-family:"Inter",system-ui,-apple-system,sans-serif; background:#eef0f4; color:var(--ink); min-height:100vh; padding:44px 22px 90px; -webkit-font-smoothing:antialiased; }
+  .head { max-width:900px; margin:0 auto 40px; }
+  .head h1 { font-size:clamp(1.6rem,4vw,2.4rem); font-weight:700; letter-spacing:-0.02em; }
+  .head .lede { color:#4b5563; font-size:1.02rem; margin-top:10px; max-width:62ch; line-height:1.55; }
+  .pill { display:inline-block; font-family:"JetBrains Mono",monospace; font-size:0.62rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--indigo); background:var(--indigo-soft); border-radius:999px; padding:4px 11px; margin-bottom:14px; }
+  .grid { max-width:900px; margin:0 auto; display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:46px 40px; align-items:start; }
+  .slot { display:flex; flex-direction:column; gap:16px; }
+  .slot-label { font-family:"JetBrains Mono",monospace; font-size:0.68rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--sub); }
+  .slot-label b { display:block; font-family:"Inter",sans-serif; font-weight:700; font-size:1.15rem; letter-spacing:-0.01em; text-transform:none; color:var(--ink); margin-top:4px; }
+  .note { font-size:0.85rem; color:var(--sub); line-height:1.5; }
+  .phone { border-radius:36px; padding:9px; background:linear-gradient(160deg,#d7dae1,#aeb4c0); box-shadow:0 40px 70px -34px rgba(20,24,40,.5),0 10px 26px -16px rgba(20,24,40,.4); }
+  .screen { border-radius:28px; overflow:hidden; height:660px; overflow-y:auto; background:var(--bg); scrollbar-width:none; }
+  .screen::-webkit-scrollbar { display:none; }
+  .top { position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid var(--line); padding:14px 16px; display:flex; align-items:center; gap:10px; }
+  .top .back { color:var(--faint); font-size:1.3rem; }
+  .top h2 { font-size:1rem; font-weight:600; flex:1; }
+  .top .badge { font-size:0.6rem; font-weight:700; letter-spacing:0.08em; color:var(--indigo); background:var(--indigo-soft); padding:3px 8px; border-radius:999px; }
+  .cat { font-size:0.66rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--faint); padding:18px 18px 6px; }
+  .row { display:flex; align-items:center; gap:12px; padding:11px 16px; background:#fff; border-bottom:1px solid #f1f2f4; }
+  .check { width:22px; height:22px; border-radius:7px; border:2px solid #d1d5db; flex:none; }
+  .nothumb { width:46px; height:46px; border-radius:10px; flex:none; background:repeating-linear-gradient(45deg,#f3f4f6,#f3f4f6 6px,#eceef1 6px,#eceef1 12px); }
+  .row .body { flex:1; min-width:0; }
+  .row .name { font-size:0.95rem; font-weight:500; }
+  .row .qty { font-size:0.78rem; color:var(--faint); margin-top:1px; }
+  .linkchip { display:inline-flex; align-items:center; gap:3px; font-size:0.7rem; font-weight:600; color:var(--indigo); background:var(--indigo-soft); border-radius:8px; padding:4px 8px; flex:none; text-decoration:none; }
+
+  .selbar { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:#fff; border-bottom:1px solid var(--line); }
+  .selbar .lbl { font-size:0.82rem; font-weight:600; }
+  .selbar .lnk { font-size:0.8rem; font-weight:600; color:var(--indigo); }
+  .scard { display:flex; gap:11px; padding:13px 16px; background:#fff; border-bottom:1px solid #f1f2f4; align-items:flex-start; }
+  .selbox { width:22px; height:22px; border-radius:6px; border:2px solid var(--indigo); flex:none; display:flex; align-items:center; justify-content:center; color:#fff; }
+  .selbox.on { background:var(--indigo); }
+  .selbox.off { border-color:#cbd0d8; }
+  .scard .t { font-size:0.92rem; font-weight:600; }
+  .scard .d { font-size:0.78rem; color:var(--sub); margin-top:2px; line-height:1.4; }
+  .scard .host { font-size:0.64rem; color:var(--amber-ink); background:var(--amber-bg); border:1px solid var(--amber-line); border-radius:999px; padding:1px 7px; margin-top:5px; display:inline-block; }
+  .footbar { position:sticky; bottom:0; background:#fff; border-top:1px solid var(--line); padding:12px 16px; display:flex; gap:10px; align-items:center; }
+  .footbar .count { font-size:0.82rem; color:var(--sub); flex:1; }
+  .btn { font-size:0.85rem; font-weight:600; padding:9px 14px; border-radius:10px; border:none; }
+  .btn.primary { background:var(--indigo); color:#fff; }
+  .btn.ghost { background:#f3f4f6; color:var(--ink); }
+  .opt { padding:16px; }
+  .optrow { display:flex; align-items:center; gap:12px; padding:13px 14px; background:#fff; border:1px solid var(--line); border-radius:12px; margin-bottom:10px; }
+  .optrow .sw { width:40px; height:24px; border-radius:999px; background:var(--indigo); position:relative; flex:none; }
+  .optrow .sw::after { content:""; position:absolute; top:3px; right:3px; width:18px; height:18px; border-radius:50%; background:#fff; }
+  .optrow .sw.off { background:#cbd0d8; } .optrow .sw.off::after { left:3px; right:auto; }
+  .optrow .tx { font-size:0.88rem; }
+  .optrow .tx small { display:block; color:var(--sub); font-size:0.75rem; margin-top:2px; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="pill">Design B · of 3</div>
+    <h1>Link scrap → <em>Plain text item</em></h1>
+    <p class="lede">The strictest interpretation of "this is a shopping list now." A link scrap becomes a plain grocery row — just the title, no thumbnail — so the list stays visually uniform and scannable while shopping. The original link isn't lost: it survives as a small tap-through 🔗 chip on the row, so you can still open the recipe if you need it.</p>
+  </div>
+
+  <div class="grid">
+    <div class="slot">
+      <div class="slot-label">Converted list<b>Shopping mode</b></div>
+      <div class="phone"><div class="screen">
+        <div class="top"><span class="back">‹</span><h2>Helgmiddag</h2><span class="badge">SHOP</span></div>
+        <div class="cat">Frukt &amp; grönt</div>
+        <div class="row"><span class="check"></span><span class="nothumb"></span><div class="body"><div class="name">Gul lök</div><div class="qty">2 st</div></div></div>
+        <div class="row"><span class="check"></span><span class="nothumb"></span><div class="body"><div class="name">Vitlök</div></div></div>
+        <div class="cat">Övrigt</div>
+        <div class="row"><span class="check"></span><div class="body"><div class="name">Krämig pasta med soltorkade tomater</div></div><a class="linkchip" href="#">🔗 länk</a></div>
+        <div class="row"><span class="check"></span><div class="body"><div class="name">Grön curry med kyckling</div></div><a class="linkchip" href="#">🔗 länk</a></div>
+        <div class="row"><span class="check"></span><span class="nothumb"></span><div class="body"><div class="name">Crème fraiche</div></div></div>
+      </div></div>
+      <p class="note"><b>Pro:</b> cleanest, most "grocery-list" feel; no big recipe photos competing with food rows. <b>Con:</b> loses the visual richness; the 🔗 chip is the only trace of the link.</p>
+    </div>
+
+    <div class="slot">
+      <div class="slot-label">Copy flow<b>Select &amp; send</b></div>
+      <div class="phone"><div class="screen">
+        <div class="top"><span class="back">‹</span><h2>Idéer &amp; recept</h2><span class="badge" style="color:var(--amber-ink);background:var(--amber-bg)">📎 SCRAP</span></div>
+        <div class="selbar"><span class="lbl">Select scraps to copy</span><span class="lnk">Cancel</span></div>
+        <div class="scard"><span class="selbox on">✓</span><div><div class="t">Krämig pasta med soltorkade tomater</div><div class="d">Snabb vardagsmiddag på 20 min.</div><span class="host">📎 ica.se</span></div></div>
+        <div class="scard"><span class="selbox on">✓</span><div><div class="t">Grön curry med kyckling</div><div class="d">Stark och len currygryta.</div><span class="host">📎 koket.se</span></div></div>
+        <div class="scard"><span class="selbox off"></span><div><div class="t">Köp blommor till mormor 🌷</div></div></div>
+        <div class="scard"><span class="selbox on">✓</span><div><div class="t">Crème fraiche</div></div></div>
+        <div class="footbar"><span class="count">3 markerade</span><button class="btn ghost">Avbryt</button><button class="btn primary">Kopiera →</button></div>
+      </div></div>
+      <p class="note">Same multi-select for all three designs — only the resulting row style differs.</p>
+    </div>
+
+    <div class="slot">
+      <div class="slot-label">Copy options<b>How to bring links</b></div>
+      <div class="phone"><div class="screen">
+        <div class="top"><span class="back">‹</span><h2>Kopiera 3 scraps</h2></div>
+        <div class="opt">
+          <div class="optrow"><div class="sw off"></div><div class="tx">Ta med bild från länk<small>Av — länk-scraps blir vanliga textrader</small></div></div>
+          <div class="optrow"><div class="sw"></div><div class="tx">Behåll länk som 🔗-chip<small>På — länken går att öppna i listan</small></div></div>
+          <div class="optrow"><div class="sw off"></div><div class="tx">Ta med beskrivning som anteckning<small>Av</small></div></div>
+          <div style="margin-top:18px"><button class="btn primary" style="width:100%">Kopiera till Helgmiddag</button></div>
+        </div>
+      </div></div>
+      <p class="note">Design B treats the link as text by default; an optional toggle keeps the 🔗 chip. Useful if we want one copy flow that can also produce A or C.</p>
+    </div>
+  </div>
+</body>
+</html>

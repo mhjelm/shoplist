@@ -3,6 +3,8 @@ import { notFound, redirect } from 'next/navigation'
 import ItemList from './ItemList'
 import TaskList from './TaskList'
 import NoteList from './NoteList'
+import ListHeaderMenu from './ListHeaderMenu'
+import { NotesSelectProvider } from './NotesSelectContext'
 import LeaveListButton from './LeaveListButton'
 import { getUserPreferences } from '@/lib/preferences'
 import { EditModeProvider, EditModeToggle } from './EditModeContext'
@@ -86,12 +88,17 @@ export default async function ListPage({ params }: Props) {
   // Scrapbook (notes) lists get their own simple feed view — no store mode /
   // edit-merge / AI, no assignees or due dates. Typed notes, voice memos, links.
   if (list.kind === 'notes') {
+    // Valid copy targets for scraps are shopping lists (scraps copy in as
+    // grocery items). TargetListModal's "create new" also makes a shopping list.
+    const notesCopyTargets = (otherLists ?? []).filter(l => l.kind === 'shopping')
     return (
-      <div data-route-root className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <NotesSelectProvider>
+      <div data-route-root className="relative min-h-screen bg-gray-50 dark:bg-gray-950">
         <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center gap-3">
           <BackLink theme={theme} />
           <h1 className="font-semibold text-gray-900 dark:text-gray-100 flex-1 min-w-0 truncate">{list.name}</h1>
           <OfflineBadge />
+          <ListHeaderMenu listId={id} listName={list.name} isOwner={isOwner} />
           {!isOwner && <LeaveListButton listId={id} />}
         </header>
 
@@ -102,9 +109,11 @@ export default async function ListPage({ params }: Props) {
             currentUserId={user.id}
             lastViewedAt={view?.last_viewed_at ?? null}
             theme={theme}
+            availableLists={notesCopyTargets}
           />
         </main>
       </div>
+      </NotesSelectProvider>
     )
   }
 
