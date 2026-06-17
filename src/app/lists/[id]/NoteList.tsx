@@ -12,7 +12,7 @@ import { log } from '@/lib/log'
 import { useListItemsSync } from './useListItemsSync'
 import { buildLocalItem } from './itemHelpers'
 import { muAddItem, muUpdateItem, muDeleteItem } from '@/lib/sync/mutations'
-import { touchListView, unfurlLink, copyItemsToList } from './actions'
+import { touchListView, unfurlLink, copyItemsToList, categorizeItem } from './actions'
 import { touchListViewLocal } from '@/lib/sync/overviewLocal'
 import { useNotesSelect } from './NotesSelectContext'
 import { NoteCard } from './NoteCard'
@@ -77,6 +77,13 @@ export default function NoteList({ list, listId, currentUserId, lastViewedAt, av
     })
   }
 
+  // Select-all toggle: when every scrap is already marked, clear; otherwise
+  // mark them all.
+  const allSelected = items.length > 0 && selectedIds.size === items.length
+  function toggleSelectAll() {
+    setSelectedIds(allSelected ? new Set() : new Set(items.map(i => i.id)))
+  }
+
   // Copy selected scraps into the chosen shopping list. Representation A:
   // the scrap's title becomes the item name and its unfurled og:image
   // (picture_url) rides along as the item photo. The source url/note ride
@@ -101,7 +108,18 @@ export default function NoteList({ list, listId, currentUserId, lastViewedAt, av
     // Seed the target list's Dexie cache so the receiving view shows the rows
     // immediately (same rationale as the shopping copy path in useItemSelection).
     if ('items' in res && res.items) {
-      try { await localDB.items.bulkPut(res.items as LocalItem[]) } catch { /* best-effort */ }
+      const rows = res.items as LocalItem[]
+      try { await localDB.items.bulkPut(rows) } catch { /* best-effort */ }
+      // Scraps carry no category, so freshly-inserted rows would all land in
+      // "övrigt". Categorize them in the background (mirrors the add-item flow:
+      // optimistic insert → categorizeItem → Gemini → items.category + history),
+      // patching the local row as each result lands.
+      for (const row of rows) {
+        if (row.category) continue
+        categorizeItem(row.id)
+          .then(r => { if (r.category) return localDB.items.update(row.id, { category: r.category }) })
+          .catch(() => { /* best-effort: stays 'övrigt' */ })
+      }
     }
     setToast(`Kopierade ${chosen.length} ${chosen.length === 1 ? 'scrap' : 'scraps'} ✓`)
     setSelecting(false) // also clears selection + picker via the derived effect
@@ -262,9 +280,19 @@ export default function NoteList({ list, listId, currentUserId, lastViewedAt, av
       )}
 
       {selecting && (
-        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          Välj scraps att kopiera till en handlingslista.
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="min-w-0 text-sm font-medium text-gray-700 dark:text-gray-300">
+            Välj scraps att kopiera till en handlingslista.
+          </p>
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            disabled={items.length === 0}
+            className="shrink-0 rounded-lg px-2.5 py-1 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-50 disabled:opacity-40 dark:text-indigo-400 dark:hover:bg-indigo-950/40"
+          >
+            {allSelected ? 'Avmarkera alla' : 'Markera alla'}
+          </button>
+        </div>
       )}
 
       {hasLoaded && sorted.length === 0 && (

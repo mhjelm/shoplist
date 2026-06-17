@@ -4,9 +4,28 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { changeListKind } from '@/app/lists/actions'
+import { categorizeItem } from './actions'
 import { localDB } from '@/lib/db/local'
 import { log } from '@/lib/log'
 import { useNotesSelect } from './NotesSelectContext'
+
+// After converting a Scrapbook to a shopping list, its existing items were
+// never judged as groceries, so they'd all show as "övrigt". Categorize the
+// uncategorized ones in the background (mirrors the add-item / copy flow:
+// categorizeItem → Gemini → items.category + history), patching each local row
+// as its verdict lands. Detached promises — they keep running and updating
+// Dexie after router.refresh() swaps this component out. Best-effort.
+async function categorizeConvertedItems(listId: string) {
+  try {
+    const rows = await localDB.items.where('list_id').equals(listId).toArray()
+    for (const row of rows) {
+      if (row.category) continue
+      categorizeItem(row.id)
+        .then(r => { if (r.category) return localDB.items.update(row.id, { category: r.category }) })
+        .catch(() => { /* stays 'övrigt' */ })
+    }
+  } catch { /* best-effort */ }
+}
 
 // The ⋯ overflow menu in a Scrapbook list's header — the single entry point for
 // promoting scraps to shopping. Owner sees "Convert to shopping list"; everyone
@@ -49,6 +68,8 @@ export default function ListHeaderMenu({
     // Optimistic local update so the /lists markers flip instantly; the
     // revalidate inside changeListKind keeps it correct on next /lists render.
     try { await localDB.list_catalog.update(listId, { kind: 'shopping' }) } catch { /* best-effort */ }
+    // Judge the now-shopping items so they don't all land in "övrigt" (detached).
+    void categorizeConvertedItems(listId)
     log.info('list.converted', { to: 'shopping' })
     // Re-render the server component → page.tsx re-reads the list row and swaps
     // the notes branch for the shopping (ItemList) branch.
