@@ -8,6 +8,10 @@ A standalone, shareable marketing/landing page lives at **`public/welcome.html`*
 
 > Future monetization / go-public strategy (free app + Pro AI paywall, Merchant-of-Record payments, free-tier limits) lives in **`GOING-PUBLIC.md`** — a forward-looking playbook, nothing built yet.
 
+### Standalone World Cup schedule page
+
+A personal, unrelated-to-Shoplist artifact: **`public/vm-2026-schema.html`** — a static, hand-compiled Fotbolls-VM 2026 TV-schedule (Swedish times, SVT/TV4 channels). Like `welcome.html` it is **deliberately unlinked** and **auth-free**: both `vm-2026-schema.html` and its short alias **`/fb`** are excluded from the `proxy.ts` matcher, and `/fb` → `/vm-2026-schema.html` via a rewrite in `next.config.ts`. Served at `https://shoplist-eta.vercel.app/fb` (or `/vm-2026-schema.html`). It is **not** a live feed — just transcribed once from Swedish source sites, so it goes stale and can have gaps (e.g. the 17 June evening matches were missing on first compile). Update the matcher exclusion + rewrite if the filename changes.
+
 ## Pending manual tasks
 
 - ~~**Apply migration `0032_editorial_theme.sql`**~~ — done 2026-06-16 (adds `'editorial'` to the `user_preferences.theme` CHECK; required for the editorial-theme feature).

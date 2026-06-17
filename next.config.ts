@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
     // WAV fallback if Gemini ever rejects webm/opus.
     serverActions: { bodySizeLimit: '5mb' },
   },
+  // Short alias /fb → the (auth-free) World Cup schedule page.
+  async rewrites() {
+    return [{ source: '/fb', destination: '/vm-2026-schema.html' }]
+  },
 };
 
 export default nextConfig;
