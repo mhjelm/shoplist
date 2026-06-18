@@ -315,6 +315,57 @@ function metaContent(html: string, key: string): string | null {
   return null
 }
 
+// Walk a parsed JSON-LD value collecting every node typed as Product (handles
+// bare objects, arrays, `@graph` wrappers, and arbitrary nesting).
+function findProductNodes(node: unknown): Array<Record<string, unknown>> {
+  if (!node || typeof node !== 'object') return []
+  if (Array.isArray(node)) return node.flatMap(findProductNodes)
+  const obj = node as Record<string, unknown>
+  const out: Array<Record<string, unknown>> = []
+  const t = obj['@type']
+  if (t === 'Product' || (Array.isArray(t) && t.includes('Product'))) out.push(obj)
+  for (const k in obj) {
+    const v = obj[k]
+    if (v && typeof v === 'object') out.push(...findProductNodes(v))
+  }
+  return out
+}
+
+// A schema.org `image` value can be a URL string, an ImageObject ({url}/{contentUrl}),
+// or an array of either. Pull the first usable URL.
+function imageUrlFromLdValue(v: unknown): string | null {
+  if (!v) return null
+  if (typeof v === 'string') return v.trim() || null
+  if (Array.isArray(v)) {
+    for (const el of v) {
+      const u = imageUrlFromLdValue(el)
+      if (u) return u
+    }
+    return null
+  }
+  if (typeof v === 'object') {
+    const o = v as Record<string, unknown>
+    if (typeof o.url === 'string' && o.url.trim()) return o.url.trim()
+    if (typeof o.contentUrl === 'string' && o.contentUrl.trim()) return o.contentUrl.trim()
+  }
+  return null
+}
+
+// The canonical product image from a page's JSON-LD Product markup — far more
+// reliable than og:image on retail product pages (see unfurlLink for why).
+function productImageFromJsonLd(html: string): string | null {
+  const matches = html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)
+  for (const m of matches) {
+    let json: unknown
+    try { json = JSON.parse(m[1].trim()) } catch { continue }
+    for (const product of findProductNodes(json)) {
+      const url = imageUrlFromLdValue(product.image)
+      if (url) return url
+    }
+  }
+  return null
+}
+
 // Link unfurling for scrapbook lists: fetch a URL and pull its OpenGraph
 // metadata so a pasted link becomes a rich card (title + description + image).
 // Best-effort — callers fall back to the raw link when this returns nothing.
@@ -341,8 +392,14 @@ export async function unfurlLink(url: string): Promise<{
         'Accept-Language': 'sv-SE,sv;q=0.9,en;q=0.8',
       },
     })
-    if (!res.ok) return { error: `Failed to fetch URL (${res.status})` }
-    const html = (await res.text()).slice(0, 200000)
+    if (!res.ok) {
+      log.warn('unfurl.fetch_failed', { status: res.status })
+      return { error: `Failed to fetch URL (${res.status})` }
+    }
+    // Cap the parse window. og:* meta tags live in <head> (always early), but
+    // JSON-LD Product markup can sit deep in the body — clasohlson.com puts it
+    // ~296 KB in — so the window has to be generous enough to reach it.
+    const html = (await res.text()).slice(0, 1000000)
 
     const title =
       metaContent(html, 'og:title') ??
@@ -351,11 +408,29 @@ export async function unfurlLink(url: string): Promise<{
         : undefined)
     const description =
       metaContent(html, 'og:description') ?? metaContent(html, 'description') ?? undefined
-    let image = metaContent(html, 'og:image') ?? undefined
-    // Resolve a relative og:image against the page URL.
+
+    // Image priority: JSON-LD Product.image first (the canonical product shot),
+    // then OpenGraph, then Twitter. Retail product pages routinely set og:image
+    // to a site logo (clasohlson.com) or to a bot-protected host that 429s when
+    // an <img> tries to load it (elgiganten.se serves the real photo from a
+    // separate CDN reachable only via JSON-LD). Non-product pages (recipes,
+    // articles) have no Product node, so og:image still wins there.
+    const ldImage = productImageFromJsonLd(html)
+    const ogImage = metaContent(html, 'og:image:secure_url') ?? metaContent(html, 'og:image')
+    const twImage = metaContent(html, 'twitter:image') ?? metaContent(html, 'twitter:image:src')
+    const imageSource = ldImage ? 'jsonld' : ogImage ? 'og' : twImage ? 'twitter' : 'none'
+    let image = ldImage ?? ogImage ?? twImage ?? undefined
+    // Resolve a relative image URL against the page URL.
     if (image) {
       try { image = new URL(image, trimmed).href } catch { image = undefined }
     }
+
+    log.info('unfurl.result', {
+      status: res.status,
+      hadTitle: Boolean(title),
+      hadImage: Boolean(image),
+      imageSource,
+    })
 
     return { title, description, image }
   } catch (e) {
