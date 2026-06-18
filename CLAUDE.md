@@ -14,6 +14,8 @@ A personal, unrelated-to-Shoplist artifact: **`public/vm-2026-schema.html`** —
 
 ## Pending manual tasks
 
+- **Apply migration `0033_fix_bump_list_activity_security_definer.sql`** — restores `security definer` (+ `set search_path`) on `bump_list_activity()`, which migration `0019` silently dropped via `create or replace`. Without it, a non-owner member's items write on a shared list never bumps `lists.last_activity` (RLS-filtered to 0 rows), so the other party's reconcile precheck skips the refetch and the write never appears locally (BUG-003 — e.g. sharing a link as a scrap into a shared Scrapbook list you don't own). The migration also heals already-stale `last_activity` rows. Regression-guarded by `tests/db/triggerSecurity.test.ts`.
+
 - ~~**Apply migration `0032_editorial_theme.sql`**~~ — done 2026-06-16 (adds `'editorial'` to the `user_preferences.theme` CHECK; required for the editorial-theme feature).
 
 - ~~**Apply migration `0031_pending_import_unfurl.sql`**~~ — done 2026-06-15 (adds nullable `unfurl jsonb` to `pending_imports` so a shared link's unfurl (title/description/image) is captured at the route, shown in the picker preview, and reused by `confirmShareLink` without a second fetch).
@@ -303,4 +305,4 @@ Realtime publication includes `items`, `lists`, and `list_members`. `items` uses
 
 - **`@/...` imports** resolve to `src/...` (Next.js default).
 - **Tailwind v4** — uses `@tailwindcss/postcss`; no `tailwind.config.js`.
-- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0032_`.
+- **Schema changes** go in a new file under `supabase/migrations/` (do not edit `0001_init.sql`). Next migration number is `0034_`.
