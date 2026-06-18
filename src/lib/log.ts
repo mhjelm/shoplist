@@ -151,10 +151,25 @@ function ensureUnloadFlush() {
 // `server-only` guard, which would either bloat or break the client bundle.
 // Default null means client/test paths are unaffected.
 // ---------------------------------------------------------------------------
-let serverSink: ((rec: LogRecord) => void) | null = null
+// The sink is stored on globalThis (via a Symbol.for registry key) rather than a
+// module-level `let`, because instrumentation.ts — where registerServerSink() is
+// called at Node startup — is bundled by Next.js into a SEPARATE module graph
+// from the application code. A module-level singleton set during register() lives
+// in instrumentation's copy of this module and is invisible to the app's copy, so
+// emit() saw serverSink === null and EVERY server log silently skipped the
+// durable app_logs sink (BUG-002 — confirmed 2026-06-18: server rows never landed
+// since the feature shipped, while client rows via /api/log worked). globalThis is
+// shared across all module instances in the process, so registration is visible
+// everywhere. Symbol.for keeps the key collision-proof across bundles.
+type ServerSink = (rec: LogRecord) => void
+const SINK_KEY = Symbol.for('shoplist.log.serverSink')
 
-export function registerServerSink(fn: (rec: LogRecord) => void) {
-  serverSink = fn
+function getServerSink(): ServerSink | null {
+  return ((globalThis as Record<symbol, unknown>)[SINK_KEY] as ServerSink | undefined) ?? null
+}
+
+export function registerServerSink(fn: ServerSink) {
+  ;(globalThis as Record<symbol, unknown>)[SINK_KEY] = fn
 }
 
 // ---------------------------------------------------------------------------
@@ -181,7 +196,7 @@ function emit(level: LogLevel, event: string, detail?: LogDetail) {
       // Durable capture for ALL levels — DB volume is cheap and pruned, and the
       // extra context is useful. Not subject to the prod info/fallback console
       // suppression below. The sink never throws (it swallows internally).
-      serverSink?.(rec)
+      getServerSink()?.(rec)
       if (env.isProd && PRIORITY[level] < WARN) return
       writeConsole(level, rec)
       return
@@ -219,7 +234,7 @@ export const __test = {
   reset() {
     queue = []
     lastSent.clear()
-    serverSink = null
+    delete (globalThis as Record<symbol, unknown>)[SINK_KEY]
     if (flushTimer) {
       clearTimeout(flushTimer)
       flushTimer = null

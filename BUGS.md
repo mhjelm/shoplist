@@ -45,40 +45,35 @@ Bug tracker for shoplist — the single source of truth for known **functional**
   list's newest item write. Regression guard: `tests/db/triggerSecurity.test.ts` asserts the effective
   (last) definition of every cross-user trigger function is SECURITY DEFINER — would have caught 0019.
 
-### BUG-002 — Server-side `log.error` doesn't reach the durable `app_logs` table
-- **Status:** open — **likely NOT fixed.** Fix applied 2026-06-10; `persistServerLog`
-  (`src/lib/serverLogSink.ts`) now **returns** the (never-rejecting) insert promise instead of detaching it
-  with `void`, so `after(() => persistServerLog(rec))` in `src/instrumentation.ts` should keep the
-  serverless function alive until the write round-trips. Build + tests green; can't repro locally (it's a
-  serverless-freeze bug). **2026-06-18 evidence the fix is still not working:** `node tools/query-logs.mjs
-  --side server --since 60d` returns **zero rows**, while client rows (via `/api/log` →
-  `persistClientLogs`, same admin client + table) flow normally. So the admin client and `app_logs` table
-  are fine; the broken path is specifically the `instrumentation.ts` `after()` server sink — `share.received`
-  (a server `log.info` fired on every share) is entirely absent. Re-investigate whether `register()` runs /
-  the sink is registered in prod, and whether `after()` callbacks scheduled from a sink registered at
-  instrumentation time actually execute. **To close:** confirm a server `log.*` lands via
-  `query-logs.mjs --new --side server`.
-- **Reported:** 2026-06-09
-- **Severity:** medium (observability — silent blind spot, not a user-facing fault)
-- **Symptom:** a server action's `log.error` was visible in **Vercel runtime logs** but **never landed in
-  `app_logs`** (confirmed 2026-06-09: `extract.tasks_image_http_error` from a failed task-image import
-  appeared on Vercel but `query-logs.mjs --new` showed zero server rows for that window). This defeats
-  the durable-logging guarantee precisely for the errors we most want to triage after the ~1h Vercel
-  retention window.
-- **Suspected cause:** the service-role `app_logs` sink (registered by `instrumentation.ts`, writes from
-  `src/lib/serverLogSink.ts`) does its Supabase insert **fire-and-forget**. On Vercel Fluid/serverless,
-  the function can be frozen/suspended the instant the action returns its result, killing the in-flight
-  insert before it round-trips. Synchronous `console.*` (what Vercel captures) survives; the async DB
-  write doesn't.
-- **Notes / possible fixes:** make server-side error/warn sink writes awaitable and flush them before the
-  action returns (e.g. `await log.flush()` or `waitUntil(...)` for the sink promise), or batch + flush via
-  `after()` / `waitUntil` so the runtime keeps the function alive until the write completes. Verify with a
-  deliberately-failing server action that the row shows up via `query-logs.mjs`. Until fixed, client-side
-  breadcrumbs (e.g. `taskimport.image_failed`) are the reliable signal.
-
 ---
 
 ## Fixed
+
+### BUG-002 — Server-side `log.*` never reached the durable `app_logs` table
+- **Status:** fixed — 2026-06-18 (root cause was misdiagnosed twice before).
+- **Reported:** 2026-06-09
+- **Severity:** medium (observability — silent blind spot, not a user-facing fault)
+- **Was:** server-side `log.*` was visible in Vercel runtime logs but **never** landed in `app_logs` —
+  confirmed 2026-06-18: `query-logs.mjs --side server` returned **zero rows for all time**, while client
+  rows (via `/api/log` → `persistClientLogs`, same admin client + table) flowed normally. So durable
+  capture only ever worked for the client tier.
+- **Real root cause (confirmed by a prod-build repro with diagnostics):** `instrumentation.ts` runs
+  `register()` (verified: `runtime=nodejs`, key present) and calls `registerServerSink(...)`, **but** Next
+  bundles `instrumentation.ts` into a **separate module graph** from the app. `serverSink` was a
+  module-level `let` in `log.ts`, so the registration set it in *instrumentation's* copy of the module while
+  app code's `emit()` read a *different* copy where it stayed `null` (probe showed `serverSinkNull=true`).
+  `serverSink?.(rec)` therefore no-op'd and the insert was never even attempted — no error, nothing logged.
+  The earlier theories (fire-and-forget detached promise → 2026-06-09; `after()` keeping the function alive
+  → 2026-06-10) treated a callback that was *never invoked in the app instance*, so neither could work.
+- **Fix:** store the sink on a process-global keyed by `Symbol.for('shoplist.log.serverSink')` instead of a
+  module-local variable (`src/lib/log.ts` `registerServerSink` / `getServerSink`), so a sink registered from
+  the instrumentation bundle is visible to every module instance. Verified end-to-end with a temporary
+  prod-build probe route: a server `log.error` now lands in `app_logs` with `side=server` (`next start`,
+  not dev — dev shares module instances and would mask the bug). The 0010-era `after()` +
+  promise-returning `persistServerLog` are kept (still correct for serverless lifetime).
+- **Regression guard:** `src/lib/log.test.ts` ("durable server sink (BUG-002 regression)") asserts a
+  registered sink is invoked for every server level even in production, **and** that the sink is stored on
+  the `Symbol.for` global — a revert to a module-local singleton fails the second test.
 
 ### BUG-001 — Share-image import → 404 when navigating Back
 - **Status:** fixed — 2026-06-10
