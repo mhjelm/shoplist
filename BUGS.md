@@ -15,6 +15,33 @@ Bug tracker for shoplist — the single source of truth for known **functional**
 
 ## Open
 
+### BUG-004 — Link unfurl returns no image for retailers that block Vercel's server IP
+- **Status:** open — **won't-fix for now** (mitigations shipped; root cause is external). Decided to leave 2026-06-18.
+- **Reported:** 2026-06-18
+- **Severity:** low (cosmetic — link still saves as a title-only scrap; only the preview thumbnail is missing)
+- **Symptom:** sharing/pasting some Swedish retail product links into a Scrapbook list saves the scrap but
+  with **no preview image**. Reproduced with elgiganten.se, clasohlson.se (logo only), hornbach.se across
+  two prod test rounds.
+- **Confirmed cause (via `app_logs` `unfurl.result` / `unfurl.fetch_failed`):** these retailers
+  bot/geo-block server-side requests from **Vercel's datacenter IPs** — NOT a parsing bug. Two flavours:
+  - **Hard block** → page fetch returns **429** (e.g. elgiganten.se).
+  - **Soft block** → page returns **200 but a stripped/challenge page** with no Product JSON-LD and no
+    og:image (`imageSource:"none"`).
+  The *same URLs* fetched from a residential IP return full HTML that parses fine — locally all three
+  extract a `jsonld` image; in production two consistently come back empty.
+- **Mitigations already shipped (these work when the page is actually reachable):** commits `399979a` +
+  `48314f6` — prefer JSON-LD `Product.image` over og:image (clasohlson's og:image is a logo; elgiganten's
+  og:image host 429s but its JSON-LD image is on a loadable CDN), 1 MB parse window (clasohlson's Product
+  JSON-LD sits ~296 KB into the body), twitter:image fallback, fuller Chrome navigation headers
+  (Sec-Fetch-*/Sec-CH-UA/Referer), and one retry on 429/403/503. The retry+headers did **not** defeat the
+  IP block (confirmed by re-test).
+- **Only real fix (not built):** route the fetch through a residential-IP link-preview API (e.g.
+  microlink.io — free tier ~50 req/day) as a fallback when the direct fetch 429s/403s or returns no image.
+  Deferred — adds an external dependency for a handful of stubborn sites; not worth it for now.
+- **Notes:** all logic in `unfurlLink` / `fetchPageWithRetry` (`src/app/lists/[id]/actions/import.ts`).
+  When triaging logs, `query-logs.mjs --ev` is **exact-match** (won't catch `unfurl.result` via `--ev unfurl`) —
+  filter unfurl rows by `ev` prefix in `--json` output instead.
+
 ### BUG-003 — Cross-owner writes on a shared list don't bump `last_activity` → silent sync miss
 - **Status:** fixed in code 2026-06-18 (migration `0033_fix_bump_list_activity_security_definer.sql`),
   **awaiting migration apply** (see CLAUDE.md → Pending manual tasks).

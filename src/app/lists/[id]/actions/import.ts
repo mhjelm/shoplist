@@ -286,17 +286,36 @@ export async function transcribeNote(audioBase64: string, mimeType: string) {
   }
 }
 
+// Named HTML entities that turn up in OpenGraph/<title> text. Latin-1 letters
+// (clasohlson.com's <title> uses the named form `Frist&aring;ende infrav&auml;rmare`
+// rather than numeric refs) plus common Western-European letters and typography.
+// Not the full HTML5 set (~2000) — just what realistically appears in product /
+// recipe titles.
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+  // Swedish + Nordic
+  aring: 'å', Aring: 'Å', auml: 'ä', Auml: 'Ä', ouml: 'ö', Ouml: 'Ö',
+  aelig: 'æ', AElig: 'Æ', oslash: 'ø', Oslash: 'Ø',
+  // other common Western-European letters
+  aacute: 'á', eacute: 'é', Eacute: 'É', iacute: 'í', oacute: 'ó', uacute: 'ú',
+  agrave: 'à', egrave: 'è', igrave: 'ì', ograve: 'ò', ugrave: 'ù',
+  acirc: 'â', ecirc: 'ê', icirc: 'î', ocirc: 'ô', ucirc: 'û',
+  uuml: 'ü', Uuml: 'Ü', euml: 'ë', iuml: 'ï', ccedil: 'ç', Ccedil: 'Ç',
+  ntilde: 'ñ', Ntilde: 'Ñ', szlig: 'ß',
+  // punctuation / symbols
+  ndash: '–', mdash: '—', lsquo: '‘', rsquo: '’', sbquo: '‚',
+  ldquo: '“', rdquo: '”', bdquo: '„', hellip: '…',
+  laquo: '«', raquo: '»', bull: '•', middot: '·', deg: '°',
+  copy: '©', reg: '®', trade: '™', euro: '€', pound: '£', cent: '¢',
+  times: '×', divide: '÷', frac12: '½', frac14: '¼', frac34: '¾',
+}
+
 // Decode the HTML entities that show up in OpenGraph/<title> text — named ones
-// plus numeric character references (decimal `&#228;` and hex `&#xE4;`), which
-// Swedish sites like biltema.se use for å/ä/ö.
+// (see NAMED_ENTITIES) plus numeric character references (decimal `&#228;` and
+// hex `&#xE4;`), which Swedish sites use for å/ä/ö.
 function decodeEntities(s: string): string {
   return s
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&nbsp;/g, ' ')
+    .replace(/&([a-zA-Z][a-zA-Z0-9]+);/g, (m, name) => NAMED_ENTITIES[name] ?? m)
     .replace(/&#x([0-9a-f]+);/gi, (m, h) => { try { return String.fromCodePoint(parseInt(h, 16)) } catch { return m } })
     .replace(/&#(\d+);/g, (m, d) => { try { return String.fromCodePoint(parseInt(d, 10)) } catch { return m } })
 }
