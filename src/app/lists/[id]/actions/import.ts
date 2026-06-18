@@ -366,6 +366,46 @@ function productImageFromJsonLd(html: string): string | null {
   return null
 }
 
+// Fetch a page with a full browser-navigation header set, retrying once on a
+// transient/bot-wall response (429/403/503) or a network error after a short
+// jittered backoff. Retail CDNs (elgiganten.se etc.) bot-filter bare fetches; a
+// complete Sec-Fetch-*/Sec-CH-UA set + a retry occasionally slips through. This
+// is best-effort and will NOT beat IP-based blocking of datacenter ranges — the
+// caller still falls back to saving the raw link.
+async function fetchPageWithRetry(url: string): Promise<Response> {
+  const headers: Record<string, string> = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'sv-SE,sv;q=0.9,en;q=0.8',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+    'Sec-CH-UA': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    'Sec-CH-UA-Mobile': '?0',
+    'Sec-CH-UA-Platform': '"Windows"',
+  }
+  // A Referer matching the page's own origin reads like in-site navigation.
+  try { headers.Referer = new URL(url).origin + '/' } catch { /* leave unset */ }
+
+  const RETRY_STATUS = new Set([429, 403, 503])
+  let lastErr: unknown
+  let lastRes: Response | null = null
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 500 + Math.random() * 700))
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(10000), redirect: 'follow', headers })
+      if (res.ok || !RETRY_STATUS.has(res.status)) return res
+      lastRes = res // transient — keep and retry
+    } catch (e) {
+      lastErr = e // network/timeout — keep and retry
+    }
+  }
+  if (lastRes) return lastRes
+  throw lastErr
+}
+
 // Link unfurling for scrapbook lists: fetch a URL and pull its OpenGraph
 // metadata so a pasted link becomes a rich card (title + description + image).
 // Best-effort — callers fall back to the raw link when this returns nothing.
@@ -379,19 +419,10 @@ export async function unfurlLink(url: string): Promise<{
   if (!/^https?:\/\/\S+$/i.test(trimmed)) return { error: 'Not a URL' }
 
   try {
-    // Use a realistic browser User-Agent + Accept headers. A bot-flavoured UA
-    // (e.g. "ShoplistBot") gets a 403 from CDN bot filters on many sites
-    // (biltema.se among them), which used to make the unfurl silently fall back
-    // to saving the raw link.
-    const res = await fetch(trimmed, {
-      signal: AbortSignal.timeout(10000),
-      redirect: 'follow',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'sv-SE,sv;q=0.9,en;q=0.8',
-      },
-    })
+    // Realistic browser navigation headers + one retry on transient bot-wall
+    // responses (see fetchPageWithRetry). A bot-flavoured UA (e.g. "ShoplistBot")
+    // gets 403'd by CDN bot filters on many sites (biltema.se among them).
+    const res = await fetchPageWithRetry(trimmed)
     if (!res.ok) {
       log.warn('unfurl.fetch_failed', { status: res.status })
       return { error: `Failed to fetch URL (${res.status})` }
