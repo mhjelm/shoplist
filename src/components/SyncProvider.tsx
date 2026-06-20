@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { localDB } from '@/lib/db/local'
 import { triggerSync, markOffline, markOnlineIfBrowserAgrees } from '@/lib/sync/engine'
+import { keepRealtimeAuthFresh } from '@/lib/sync/realtime'
 import { log } from '@/lib/log'
 
 export default function SyncProvider() {
@@ -41,11 +42,16 @@ export default function SyncProvider() {
     }
     navigator.serviceWorker?.addEventListener('message', handleMessage)
 
+    // Re-arm the realtime socket with every fresh access token (closes the
+    // "dead page until manual refresh" gap after a long suspend expires the JWT).
+    const stopRealtimeAuth = keepRealtimeAuthFresh()
+
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
       document.removeEventListener('visibilitychange', handleVisible)
       navigator.serviceWorker?.removeEventListener('message', handleMessage)
+      stopRealtimeAuth()
     }
   }, [])
 

@@ -22,6 +22,29 @@ export async function applyRealtimeAuth(supabase: SupabaseClient): Promise<void>
   }
 }
 
+// Push every fresh access token to the realtime socket as soon as the auth
+// client mints one. The per-channel CHANNEL_ERROR → applyRealtimeAuth path is
+// only *reactive*: after a long suspend the socket rejoins with the expired
+// token, errors, and `getSession()` may still return the stale token before the
+// background refresh completes — so the channel can stay errored (dead page)
+// until a manual reload re-runs the middleware cookie refresh. Listening for
+// TOKEN_REFRESHED/SIGNED_IN closes that gap: when GoTrue's visibility-gated
+// refresh finishes, setAuth re-arms the socket and errored channels rejoin (on
+// their backoff) with valid credentials — no reload needed. Mounted once,
+// app-wide, from SyncProvider. Returns an unsubscribe.
+export function keepRealtimeAuthFresh(): () => void {
+  const supabase = createClient()
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    if (
+      session?.access_token &&
+      (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION')
+    ) {
+      supabase.realtime.setAuth(session.access_token)
+    }
+  })
+  return () => subscription.unsubscribe()
+}
+
 export function subscribeToList(
   listId: string,
   onReconnect: () => void,
