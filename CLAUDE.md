@@ -12,6 +12,8 @@ A standalone, shareable marketing/landing page lives at **`public/welcome.html`*
 
 A personal, unrelated-to-Shoplist artifact: **`public/vm-2026-schema.html`** — a static, hand-compiled Fotbolls-VM 2026 TV-schedule (Swedish times, SVT/TV4 channels). Like `welcome.html` it is **deliberately unlinked** and **auth-free**: both `vm-2026-schema.html` and its short alias **`/fb`** are excluded from the `proxy.ts` matcher, and `/fb` → `/vm-2026-schema.html` via a rewrite in `next.config.ts`. Served at `https://shoplist-eta.vercel.app/fb` (or `/vm-2026-schema.html`). It is **not** a live feed — just transcribed once from Swedish source sites, so it goes stale and can have gaps (e.g. the 17 June evening matches were missing on first compile). Update the matcher exclusion + rewrite if the filename changes.
 
+> **Updated 2026-06-28:** group stage removed, knockout bracket filled with real teams (round of 32: Jun 28 – Jul 4, round of 16: Jul 4–7, quarter-finals: Jul 9–12). Sweden vs France Tue Jun 30 23:00 TV4.
+
 ## Pending manual tasks
 
 - **Apply migration `0033_fix_bump_list_activity_security_definer.sql`** — restores `security definer` (+ `set search_path`) on `bump_list_activity()`, which migration `0019` silently dropped via `create or replace`. Without it, a non-owner member's items write on a shared list never bumps `lists.last_activity` (RLS-filtered to 0 rows), so the other party's reconcile precheck skips the refetch and the write never appears locally (BUG-003 — e.g. sharing a link as a scrap into a shared Scrapbook list you don't own). The migration also heals already-stale `last_activity` rows. Regression-guarded by `tests/db/triggerSecurity.test.ts`.
@@ -79,7 +81,7 @@ Family shopping list web app: each user has personal lists; lists can be shared 
 ## Commands
 
 ```
-npm run dev      # next dev (localhost:3000)
+npm run dev      # next dev (localhost:3040)
 npm run build    # next build
 npm run start    # serve production build
 npm run lint     # eslint
@@ -194,6 +196,12 @@ The item list Client Component (`ItemList.tsx`):
 3. Subscribes to a Supabase Realtime channel filtered by `list_id` and merges INSERT/UPDATE/DELETE events into local state. Optimistic INSERTs are matched by `(added_by === '' && name === incoming.name)` and reconciled when the real row arrives.
 
 Realtime subscribes unconditionally for every list — there is no `is_shared` gate. When changing mutation logic, update both the optimistic path *and* ensure the eventual server response/realtime echo doesn't double-apply.
+
+**Realtime auth refresh (don't regress).** The realtime socket needs a non-expired JWT or the server rejects the rejoin (`realtime.subscribe_error` with `Token has expired …`). Two layers keep it fresh, in `src/lib/sync/realtime.ts`:
+1. **At subscribe time + on `CHANNEL_ERROR`** — `applyRealtimeAuth()` does `getSession()` → `realtime.setAuth(token)` (reactive; tightens the post-reconnect race).
+2. **Event-driven** — `keepRealtimeAuthFresh()` (mounted once app-wide from `SyncProvider`) listens on `supabase.auth.onAuthStateChange` and pushes every fresh token to the socket on `TOKEN_REFRESHED`/`SIGNED_IN`/`INITIAL_SESSION`.
+
+Layer 2 is the durable fix for a **"dead page until manual refresh"** bug (2026-06-20): after a suspend past the ~1h JWT lifetime, the socket rejoined with the stale token and errored, but `getSession()` in the error callback often returned the still-stale token before the background refresh finished — so the channel stayed errored, with no later trigger to re-arm it, until a reload re-ran the middleware cookie refresh. Reacting to the auth client's own refresh event closes that gap. This relies on `createBrowserClient` being a **browser singleton** (one shared `auth` + `realtime` instance across all `createClient()` calls) — don't pass per-call options that defeat the singleton. Still pending on-device verification of the long-suspend resume scenario.
 
 ### Local-first item list (`/lists/[id]`)
 
