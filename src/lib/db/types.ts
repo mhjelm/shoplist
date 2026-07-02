@@ -66,7 +66,10 @@ export interface OutboxEntry {
     | 'item.reorder'
     | 'item.merge'
   payload: unknown
-  status: 'pending' | 'in_flight' | 'failed'
+  // 'dead' = dead-lettered: exhausted its retries (or hit an unrecoverable
+  // error) so it is no longer dispatched, and — crucially — no longer blocks the
+  // strictly-ordered entries queued behind it. Kept in Dexie for debugging.
+  status: 'pending' | 'in_flight' | 'failed' | 'dead'
   attempts: number
   last_error?: string
   created_at: number

@@ -45,7 +45,9 @@ Client events appear in the **same Vercel Runtime Logs** as server logs, attribu
 |---|---|---|---|
 | `idb.open_failed` | error | SyncProvider | Dexie won't open — local-first app is dead (quota / blocked upgrade / private mode) |
 | `idb.write_failed` | error | ListsView, useListItemsSync, ItemList | a Dexie write rejected (`detail.table`/`op`) |
-| `outbox.dispatch_failed` | error | engine.ts | a queued mutation failed to push (`detail.type`/`attempts`) |
+| `outbox.dispatch_failed` | error | engine.ts | a queued mutation failed to push (`detail.type`/`attempts`) — retried with backoff |
+| `outbox.entry_dead` | error | engine.ts | a queued mutation was dead-lettered after `MAX_ATTEMPTS` (poison entry) — no longer retried, and no longer blocks the queue behind it |
+| `outbox.version_skew_reload` | warn | engine.ts | a stale, SW-cached bundle hit a server-action version skew; caches cleared + one-time reload forced to load a fresh bundle |
 | `categorize.background_failed` | fallback | engine.ts | background Gemini categorize swallowed; item stays `ovrigt` |
 | `reconcile.precheck_skip` | fallback (5%) | reconcile.ts | healthy fast path — local cache fresh, items refetch skipped |
 | `reconcile.conflict` | info | reconcile.ts | server-vs-local edit collision (`detail.count`) |

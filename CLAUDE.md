@@ -155,6 +155,13 @@ Server Components re-render with fresh data on the next navigation; the client t
 
 The `addItems` batch action (`src/app/lists/[id]/actions.ts`) is used exclusively by `RecipeImportModal` and the share-target route — do not call it from the add-item UI flow.
 
+**Outbox drain resilience (don't regress).** `drainLoop` in `src/lib/sync/engine.ts` dispatches entries in strict `seq` order and stops on the first failure, so a single stuck entry could otherwise (a) retry forever and (b) head-of-line-block everything queued behind it. The catch block classifies the error:
+- **Version skew** (`UnrecognizedActionError` / "Server Action … was not found") — a stale, SW-cached bundle POSTing an action id the deployed server dropped. The entry is *valid*, so it is **never dead-lettered**; instead `healVersionSkew()` clears the caches and forces a one-time reload (a bare reload re-serves the stale SWR shell). It is **not** treated as offline.
+- **Network error** — retries indefinitely (heals when the radio returns).
+- **Everything else** — retried with backoff, then **dead-lettered** (status `'dead'`, excluded from the pending set) after `MAX_ATTEMPTS`, unblocking the queue. Logged `outbox.entry_dead`.
+
+This was added after a real incident: an `item.insert` stuck on a stale action id retried ~28 times over 26h and blocked the user's whole outbox (see `outbox.dispatch_failed` logs, 2026-06-28/29).
+
 ### Task lists (`lists.kind`)
 
 A list is either a grocery `'shopping'` list (default) or a `'task'` list — the `kind` column on `lists` (migration `0025`). Task lists are a shared checklist for chores, with optional per-task **assignee** (`items.assignee_id`) and **due date** (`items.due_date`), both added in `0025`. They reuse the entire sync substrate (outbox mutations, `useListItemsSync`, `reconcileList`, realtime, Dexie) unchanged — only the *presentation* differs.

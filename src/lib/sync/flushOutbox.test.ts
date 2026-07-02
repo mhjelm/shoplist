@@ -215,6 +215,84 @@ describe('flushOutbox — single-flight, no dropped signals', () => {
     expect(updateItem.mock.calls.map(c => c[0])).toEqual(['A', 'B'])
   })
 
+  it('does NOT dead-letter a version-skew error and does not flag the app offline', async () => {
+    vi.useFakeTimers()
+    try {
+      const { flushOutbox, getSyncState } = await import('./engine')
+
+      // A stale, service-worker-cached bundle keeps POSTing an action id the
+      // deployed server no longer knows. The entry is VALID — only the bundle is
+      // stale — so it must be retried, never dropped, and this is not an "offline"
+      // condition.
+      updateItem.mockRejectedValue(
+        new Error('UnrecognizedActionError: Server Action "7f8ede24" was not found on the server.'),
+      )
+
+      const seqA = outboxFake.__seed({ payload: updatePayload('A') })
+      await flushOutbox()
+
+      const entry = outboxFake.__store.find(e => e.seq === seqA)!
+      expect(entry.status).toBe('failed') // retried…
+      expect(entry.status).not.toBe('dead') // …NOT discarded
+      expect(getSyncState().isOffline).toBe(false) // version skew ≠ offline
+      expect(getSyncState().lastSyncError).toContain('Server Action')
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps retrying (never dead-letters) a network error past MAX_ATTEMPTS', async () => {
+    vi.useFakeTimers()
+    try {
+      const { flushOutbox, MAX_ATTEMPTS } = await import('./engine')
+
+      updateItem.mockRejectedValue(new Error('TypeError: Failed to fetch'))
+
+      // Already at the cap: a non-transient error here would dead-letter, but a
+      // network outage must keep waiting for the radio to return.
+      const seqA = outboxFake.__seed({ payload: updatePayload('A'), attempts: MAX_ATTEMPTS })
+      await flushOutbox()
+
+      const entry = outboxFake.__store.find(e => e.seq === seqA)!
+      expect(entry.status).toBe('failed')
+      expect(entry.status).not.toBe('dead')
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
+
+  it('dead-letters a poison entry after MAX_ATTEMPTS and keeps draining the rest', async () => {
+    const { flushOutbox, getSyncState } = await import('./engine')
+    const { MAX_ATTEMPTS } = await import('./engine')
+
+    // 'poison' always fails with a non-transient (server-rejection) error;
+    // 'healthy' — queued strictly behind it — succeeds.
+    updateItem.mockImplementation(async (id: string) => {
+      if (id === 'poison') throw new Error('boom: permanent server rejection')
+      return undefined
+    })
+
+    const poisonSeq = outboxFake.__seed({
+      payload: updatePayload('poison'),
+      attempts: MAX_ATTEMPTS - 1, // next failure hits the cap
+    })
+    outboxFake.__seed({ payload: updatePayload('healthy') })
+
+    await flushOutbox()
+
+    const poison = outboxFake.__store.find(e => e.seq === poisonSeq)!
+    expect(poison.status).toBe('dead')
+    expect(poison.attempts).toBe(MAX_ATTEMPTS)
+
+    // The head-of-line block is gone: the entry queued BEHIND the poison one
+    // still drained instead of being stranded forever.
+    expect(updateItem.mock.calls.map(c => c[0])).toContain('healthy')
+    expect(outboxFake.__store.find(e => (e.payload as { id?: string }).id === 'healthy')).toBeUndefined()
+    expect(getSyncState().pendingCount).toBe(0)
+  })
+
   it('marks failed + schedules a backoff retry, then drains on the next flush', async () => {
     vi.useFakeTimers()
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')

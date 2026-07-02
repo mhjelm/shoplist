@@ -99,6 +99,59 @@ export function getActiveList(): string | null {
 
 const RETRY_DELAYS = [1_000, 5_000, 30_000, 300_000]
 
+// After this many failed attempts a non-transient entry is dead-lettered
+// (status → 'dead') instead of retried forever. This bounds two failure modes a
+// single poison entry used to cause: (1) infinite retry, and (2) because the
+// drain is strictly seq-ordered and stops on the first failure, permanently
+// blocking every entry queued behind it. Transient failures — a down radio, or a
+// stale-bundle version skew — are exempt (see the catch block): they heal on
+// their own, so dropping them would lose valid writes.
+export const MAX_ATTEMPTS = 8
+
+// A Next.js server-action version-skew error: the deployed server no longer
+// recognizes the action id baked into this (stale, service-worker-cached) client
+// bundle. Only loading a fresh bundle can heal it, so we never dead-letter it
+// (that would discard still-valid pending writes — and a wholly-stale bundle
+// would fail *every* entry) and instead force a one-time bundle refresh.
+function isVersionSkewError(msg: string): boolean {
+  return /Server Action.+(?:was not found|not found on the server)|UnrecognizedActionError|Failed to find Server Action/i.test(msg)
+}
+
+// A connectivity failure — the request never reached the server. Heals when the
+// radio returns, so it also retries indefinitely rather than dead-lettering.
+function isNetworkError(msg: string): boolean {
+  return /Failed to fetch|NetworkError|Load failed|network ?request failed|fetch failed|ERR_INTERNET|ERR_NETWORK/i.test(msg)
+}
+
+const SKEW_HEAL_KEY = 'sl_sa_skew_reload'
+let skewHealTriggered = false
+
+// Heal a version skew by swapping in a fresh bundle. The service worker serves
+// the HTML shell stale-while-revalidate, so a bare reload would just re-serve the
+// OLD shell (old chunk hashes → old action ids) and fix nothing — we must clear
+// the caches first so the reload fetches a fresh shell + chunks. We know we're
+// online (the server just answered, with the skew error). Guarded to fire at most
+// once per tab (module flag) and once per browser session (sessionStorage) so a
+// genuinely-broken deploy can't reload-loop. Prod-only: the SW — and therefore
+// this class of skew — doesn't exist in dev/test.
+function healVersionSkew(): void {
+  if (typeof window === 'undefined') return
+  if (process.env.NODE_ENV !== 'production') return
+  if (skewHealTriggered) return
+  skewHealTriggered = true
+  try {
+    if (sessionStorage.getItem(SKEW_HEAL_KEY)) return
+    sessionStorage.setItem(SKEW_HEAL_KEY, String(Date.now()))
+  } catch { /* private-mode storage block: the module flag still holds for this tab */ }
+
+  log.warn('outbox.version_skew_reload', {})
+
+  const clearCaches = typeof caches !== 'undefined'
+    ? caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).then(() => {}, () => {})
+    : Promise.resolve()
+  void clearCaches.then(() => { try { window.location.reload() } catch { /* jsdom / blocked */ } })
+}
+
 // Single-flight outbox drain. `draining` is non-null while a drain loop is
 // running; `resyncRequested` records that new work (or a fresh flush request)
 // arrived during the loop so we re-read the queue instead of dropping the
@@ -230,20 +283,50 @@ async function drainLoop(): Promise<void> {
         markOnlineIfBrowserAgrees()
       } catch (err) {
         const errMsg = String(err)
+        const attempts = entry.attempts + 1
+        const skew = isVersionSkewError(errMsg)
+        // Network outages and version skew both heal on their own (the radio
+        // returns / a fresh bundle loads), so they retry indefinitely and are
+        // never dead-lettered. Anything else is a poison-entry candidate.
+        const transient = skew || isNetworkError(errMsg)
+
+        if (!transient && attempts >= MAX_ATTEMPTS) {
+          // Dead-letter: stop retrying AND stop blocking the queue. Keep the row
+          // in Dexie (status 'dead') for debugging, then skip it and keep
+          // draining — one poison entry must not strand the rest.
+          log.error('outbox.entry_dead', {
+            type: entry.type,
+            seq: entry.seq,
+            attempts,
+            error: errMsg,
+          })
+          await localDB.outbox.update(entry.seq!, { status: 'dead', attempts, last_error: errMsg })
+          const remaining = await localDB.outbox.where('status').anyOf(['pending', 'failed']).count()
+          setSync({ pendingCount: remaining, lastSyncError: errMsg })
+          markOnlineIfBrowserAgrees()
+          continue
+        }
+
         // Note: no payload (PII) — type + attempt count + error message only.
         log.error('outbox.dispatch_failed', {
           type: entry.type,
           seq: entry.seq,
-          attempts: entry.attempts + 1,
+          attempts,
           error: errMsg,
         })
         await localDB.outbox.update(entry.seq!, {
           status: 'failed',
-          attempts: entry.attempts + 1,
+          attempts,
           last_error: errMsg,
         })
         setSync({ lastSyncError: errMsg })
-        markOffline()
+        if (skew) {
+          // Not a connectivity problem — don't flag the app offline. Force a
+          // fresh bundle so the retry can actually succeed.
+          healVersionSkew()
+        } else {
+          markOffline()
+        }
         // Hand the retry to the backoff timer and stop this loop. The timer
         // re-enters via flushOutbox once draining has cleared.
         const delay = RETRY_DELAYS[Math.min(entry.attempts, RETRY_DELAYS.length - 1)]
