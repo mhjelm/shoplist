@@ -13,6 +13,8 @@ A standalone, shareable marketing/landing page lives at **`public/welcome.html`*
 A personal, unrelated-to-Shoplist artifact: **`public/vm-2026-schema.html`** — a static, hand-compiled Fotbolls-VM 2026 TV-schedule (Swedish times, SVT/TV4 channels). Like `welcome.html` it is **deliberately unlinked** and **auth-free**: both `vm-2026-schema.html` and its short alias **`/fb`** are excluded from the `proxy.ts` matcher, and `/fb` → `/vm-2026-schema.html` via a rewrite in `next.config.ts`. Served at `https://shoplist-eta.vercel.app/fb` (or `/vm-2026-schema.html`). It is **not** a live feed — just transcribed once from Swedish source sites, so it goes stale and can have gaps (e.g. the 17 June evening matches were missing on first compile). Update the matcher exclusion + rewrite if the filename changes.
 
 > **Updated 2026-06-28:** group stage removed, knockout bracket filled with real teams (round of 32: Jun 28 – Jul 4, round of 16: Jul 4–7, quarter-finals: Jul 9–12). Sweden vs France Tue Jun 30 23:00 TV4.
+>
+> **Updated 2026-07-10:** verified QF pairings/dates against ESPN/FIFA/Al Jazeera (not Wikipedia, per user). Fixed a swap — Fri 10 Jul is **Spanien–Belgien** (was wrongly Norge–England), Sat 11 Jul is **Norge–England**. QF1 result filled: **Frankrike 2–0 Marocko** (9 Jul, Mbappé + Dembélé). Semifinal participants labelled: SF1 (Tue 14 Jul, Dallas) Frankrike–[Spanien/Belgien]; SF2 (Wed 15 Jul) [Norge/England]–[Argentina/Schweiz].
 
 ## Pending manual tasks
 
