@@ -79,7 +79,20 @@
       "Bash(echo \"=== With ShoplistBot UA ===\")",
       "Bash(echo \"=== og: tags \\(bot\\) ===\")",
       "Read(//tmp/**)",
-      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -Last 15)"
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -Last 15)",
+      "WebFetch(domain:www.vm-fotboll.se)",
+      "WebFetch(domain:www.svt.se)",
+      "WebFetch(domain:www.fotbollskanalen.se)",
+      "Bash(claude --version)",
+      "Read(//c/Users/mh/**)",
+      "Read(//c/Users/mh/.claude/**)",
+      "WebFetch(domain:www.skysports.com)",
+      "Bash(git -C C:/proj/shoplist status)",
+      "Bash(git -C C:/proj/shoplist diff HEAD -- public/vm-2026-schema.html)",
+      "Bash(sed 's/^[^=]*=//')",
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:www.olympics.com)",
+      "WebFetch(domain:www.aljazeera.com)"
     ]
   }
 }
