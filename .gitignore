@@ -28,3 +28,6 @@ Thumbs.db
 
 # machine-local log-review watermark (tools/query-logs.mjs --new/--mark)
 tools/.logs-watermark.json
+
+# Claude Code machine-local settings
+.claude/settings.local.json
