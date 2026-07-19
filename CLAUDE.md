@@ -2,40 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Public marketing page
+## Standalone unlinked pages
 
-A standalone, shareable marketing/landing page lives at **`public/welcome.html`** — served statically at **`https://shoplist-eta.vercel.app/welcome.html`**. It is **deliberately unlinked** from the app (no nav/footer reference) and is excluded from the edge-middleware auth gate via the `welcome.html` entry in the `proxy.ts` matcher, so it loads without login. Self-contained (only external dep is Google Fonts); CSS/SVG mockups stand in for screenshots, reusing the Shoplist theme palette. Update the matcher exclusion if the filename changes.
-
-> Future monetization / go-public strategy (free app + Pro AI paywall, Merchant-of-Record payments, free-tier limits) lives in **`GOING-PUBLIC.md`** — a forward-looking playbook, nothing built yet.
-
-### Standalone World Cup schedule page
-
-A personal, unrelated-to-Shoplist artifact: **`public/vm-2026-schema.html`** — a static, hand-compiled Fotbolls-VM 2026 TV-schedule (Swedish times, SVT/TV4 channels). Like `welcome.html` it is **deliberately unlinked** and **auth-free**: both `vm-2026-schema.html` and its short alias **`/fb`** are excluded from the `proxy.ts` matcher, and `/fb` → `/vm-2026-schema.html` via a rewrite in `next.config.ts`. Served at `https://shoplist-eta.vercel.app/fb` (or `/vm-2026-schema.html`). It is **not** a live feed — just transcribed once from Swedish source sites, so it goes stale and can have gaps (e.g. the 17 June evening matches were missing on first compile). Update the matcher exclusion + rewrite if the filename changes.
-
-> **Updated 2026-06-28:** group stage removed, knockout bracket filled with real teams (round of 32: Jun 28 – Jul 4, round of 16: Jul 4–7, quarter-finals: Jul 9–12). Sweden vs France Tue Jun 30 23:00 TV4.
->
-> **Updated 2026-07-10:** verified QF pairings/dates against ESPN/FIFA/Al Jazeera (not Wikipedia, per user). Fixed a swap — Fri 10 Jul is **Spanien–Belgien** (was wrongly Norge–England), Sat 11 Jul is **Norge–England**. QF1 result filled: **Frankrike 2–0 Marocko** (9 Jul, Mbappé + Dembélé). Semifinal participants labelled: SF1 (Tue 14 Jul, Dallas) Frankrike–[Spanien/Belgien]; SF2 (Wed 15 Jul) [Norge/England]–[Argentina/Schweiz].
+Two deliberately-unlinked, auth-free static pages live in `public/` — the marketing page (`welcome.html`) and a personal World Cup schedule (`vm-2026-schema.html`, aliased `/fb`). Both are excluded from the `proxy.ts` auth matcher. Details (URLs, matcher/rewrite gotchas, staleness caveats) → **`docs/standalone-pages.md`**. Monetization playbook → `GOING-PUBLIC.md`.
 
 ## Pending manual tasks
 
 - **Apply migration `0033_fix_bump_list_activity_security_definer.sql`** — restores `security definer` (+ `set search_path`) on `bump_list_activity()`, which migration `0019` silently dropped via `create or replace`. Without it, a non-owner member's items write on a shared list never bumps `lists.last_activity` (RLS-filtered to 0 rows), so the other party's reconcile precheck skips the refetch and the write never appears locally (BUG-003 — e.g. sharing a link as a scrap into a shared Scrapbook list you don't own). The migration also heals already-stale `last_activity` rows. Regression-guarded by `tests/db/triggerSecurity.test.ts`.
 
-- ~~**Apply migration `0032_editorial_theme.sql`**~~ — done 2026-06-16 (adds `'editorial'` to the `user_preferences.theme` CHECK; required for the editorial-theme feature).
-
-- ~~**Apply migration `0031_pending_import_unfurl.sql`**~~ — done 2026-06-15 (adds nullable `unfurl jsonb` to `pending_imports` so a shared link's unfurl (title/description/image) is captured at the route, shown in the picker preview, and reused by `confirmShareLink` without a second fetch).
-
-- ~~**Apply migration `0030_share_link_payload.sql`**~~ — done 2026-06-15 (extends `pending_imports.source` CHECK to include `'link'`; adds nullable `url`/`title` columns. Required for the share-link-as-scrap plan).
-
 - **Reinstall PWA on family member's phone** — code + manifest are correct; share target was lost device-side (WebAPK dropped). Uninstall + reinstall to get share target back. Confirm with `share.received` log entries.
 
-- ~~**Apply migration `0029_notes_lists.sql`**~~ — done 2026-06-15 (adds the `'notes'` list kind to the `lists.kind` CHECK, `items.url` + `items.note` for scrapbook lists, and extends the `bump_item_history` guard to skip notes too).
-
-- ~~**Apply migration `0028_list_views_task_sort.sql`**~~ — done (applied earlier, noted 2026-06-15; adds `list_views.task_sort` `'manual' | 'date'`, default `'manual'`, persisting the per-user-per-list task-list sort view).
-
-- ~~**Apply migration `0025_task_lists.sql`**~~ — done 2026-06-08 (adds `lists.kind`, `items.assignee_id` + `items.due_date`, and the `get_list_people` RPC; required for the task-lists feature).
-- ~~**Apply migration `0026_skip_task_history.sql`**~~ — done 2026-06-08 (guards `bump_item_history` so task-list items don't pollute the grocery autocomplete history).
-- ~~**Apply migration `0027_app_logs.sql`**~~ — done 2026-06-08 (durable `app_logs` table; `pg_cron` 30-day prune `prune_app_logs` scheduled separately).
-- ~~**Set `SUPABASE_SERVICE_ROLE_KEY` env var**~~ — done 2026-06-08 (log persistence now actually captures logs).
+> Migrations `0025`–`0032` are all applied (history in `docs/PLAN-ARCHIVE.md` and the migration files themselves).
 
 > Signup is now invitation-only (done 2026-05-17). See `docs/how-to-add-new-user.html` for the invite flow and how to re-enable public signup if ever needed.
 
@@ -49,27 +26,13 @@ Functional bugs are tracked in **`BUGS.md`** (single source of truth; e.g. BUG-0
 
 ### Back-nav from `/lists/[id]` visibly scrolls to top before `/lists` appears
 
-**MASKED, not fixed** (overlay in `BackLink.tsx`). Full history — 8 failed fix attempts, untested hypotheses, what's confirmed working, and the store-mode Back interception — lives in **`docs/known-issues/back-nav-scroll-jump.md`**. **Read it before attempting another fix** (every attempt so far either failed or fixed the symptom while introducing a worse one). **Update 2026-06-12:** the *slowness* of the masked transition (seconds-long overlay) was a separate, self-inflicted issue — our own `revalidatePath`/`router.refresh()` calls purged the Next.js router cache that makes back/forward instant by default — fixed by the instant-back-nav plan (`f7985ee`); the overlay stays to hide the (now very brief) scroll-jump.
+**MASKED, not fixed** (overlay in `BackLink.tsx`). Full history — 8 failed fix attempts, untested hypotheses, what's confirmed working, and the store-mode Back interception — lives in **`docs/known-issues/back-nav-scroll-jump.md`**. **Read it before attempting another fix** (every attempt so far either failed or fixed the symptom while introducing a worse one). The transition's earlier *slowness* was a separate, since-fixed issue (our own `revalidatePath`/`router.refresh()` purged the router cache — instant-back-nav plan `f7985ee`); the overlay stays to hide the now-brief scroll-jump.
 
 ## Active plan
 
 **Editorial theme + shop-mode progress bar** — plan at `PLAN.md`, **executed 2026-06-16**, migration `0032` applied 2026-06-16. Adds `'editorial'` theme (cream paper, Fraunces serif, hairline rows, dark store-edition shop mode) and a universal **shop-mode** progress bar (N/N picked up — store mode only; the earlier browse-view stats line was removed 2026-06-17). Theme CSS is scoped to `data-item-row` / `data-add-item` / `data-item-list` / `li[data-sl-color]` anchors so it can't leak into task/notes lists or modals. Editorial is **non-decorative** (not in `hasDecorativeTheme`); item names use serif font-family only — size still driven by `list_text_size`. **Dark "store edition" inverted shop mode** exists for both `editorial` and `dusk` (2026-06-17): store-mode rows must stay opaque, or the emerald swipe-reveal layer shows through (see globals.css notes). Committed `0a73f45` + follow-ups.
 
-_Prior:_ **Fix sharing + share a link as a scrap (Web Share Target)** — plan at `PLAN.md`, **executed 2026-06-15**, migration `0030` applied 2026-06-15. Route branches: image → grocery; link (url field OR a URL found in text via `firstUrlIn`) → link path (stores raw link, **no route-time extraction, no empty-bail**); plain text → grocery. Items are extracted at the route (best-effort, no empty-bail). `LinkImportMode` shows **all lists** and the **destination kind decides**: shopping/task → show the extracted items as an **accept/reject checklist** → `confirmShareImport` (same reviewed path as image/text), notes → hide checklist → `confirmShareLink` (unfurl → scrap). `shareError` surfaced as dismissible toast (`ShareErrorToast.tsx`). `share.received` log for Bug #3. **Two same-day regressions fixed:** (1) first pass forced *every* link to a notes-only scrap, killing recipe-link sharing; (2) second pass deferred extraction and dropped the item-review checklist. The checklist requirement is now locked by the `REQUIREMENT:` block in `tests/components/ShareImportClient.test.tsx` (do not rewrite it to match new logic — fix the code). Still awaiting PWA reinstall on family phone. See `docs/architecture/share-target.md`.
-
-_Prior:_ **Scrapbook (notes) lists** — plan archived in git history (was at `PLAN.md`), **executed 2026-06-15**. A third `lists.kind` value `'notes'` (UI name "Scrapbook"): a freeform feed of saved scraps — typed notes, voice memos, and links auto-unfurled into rich cards. Reuses the entire sync substrate like task lists; page-level branch in `page.tsx` renders `NoteList`. See "Scrapbook (notes) lists" under Architecture. Migration `0029` applied 2026-06-15. Follow-ups (link unfurl UA/entity fix, rich preview card, clipboard auto-paste, inline trash) shipped `bf816dd`/`0cc9c1e`.
-
-_Prior:_ **Instant back-nav: /lists/[id] → /lists paints from local cache** — plan archived to `docs/PLAN-ARCHIVE.md` (was at `PLAN.md`), **executed 2026-06-12**, first pass committed `f7985ee`, **verified 2026-06-13** (`app_logs` `nav.back_overlay_ms` p50 ~75ms, range 59–86ms — down from the old seconds-long overlay). Root cause: Next.js serves back/forward from the client router cache even when stale, but our own `revalidatePath('/lists')` (in `touchListView`, fired on every list mount/hide/unmount + after every outbox mutation), `router.refresh()` on ItemList/TaskList unmount, and per-mutation `revalidatePath('/lists/${id}')` purged it. Fix: unread-marker freshness moved local — `src/lib/sync/overviewLocal.ts` (`seedListsOverview` non-regressive Dexie merge + `touchListViewLocal`) — and all 17 hot-path revalidates removed (rare direct flows in `lists/actions.ts`, settings, auth keep theirs). Overlay removal now gated on Dexie readiness; logs `nav.back_overlay_ms` / `nav.back_overlay_timeout`.
-
-_Prior:_ **Service-worker resume hardening — kill the "blank page on cold wake-up"** — executed + committed 2026-06-12 (`8e61117`); archived → `docs/PLAN-ARCHIVE.md`. Still awaiting on-device verification of the in-store suspend/resume scenario.
-
-_Prior:_ **Fix BUG-002: server-side `log.error` doesn't reach durable `app_logs`** executed + committed 2026-06-10 (`d61a9c2`) — `persistServerLog` now returns its promise so `after()` awaits the insert.
-
-_Prior:_ **Task-list polish — done animation, drag-reorder, by-date sort view** executed 2026-06-10 (plan at `C:\Users\mh\.claude\plans\some-things-related-to-dynamic-mochi.md`; design exploration `docs/task-sort-exploration.html`). Needs migration `0028` applied (see Pending manual tasks).
-
-_Prior:_ Fix BUG-001: share-import → 404 on Back executed 2026-06-10 (graceful `ShareGone`; see `BUGS.md` → Fixed). Image Gemini calls routed through the failover chain (503 fix) + BUG-002 recorded — 2026-06-10. Task-list kind on share-import + picture import inside task lists — executed 2026-06-09 (plan at `C:\Users\mh\.claude\plans\some-things-related-to-dynamic-mochi.md`). SpeechModal `useAudioRecorder` dedup executed 2026-06-08 (see `REFACTOR.md` Completed). ESLint mutation-path rule (REFACTOR #3) executed 2026-06-08. Durable log persistence executed 2026-06-08.
-
-  Completed-plan history → **`docs/PLAN-ARCHIVE.md`** (durable log persistence 2026-06-08; speech-to-task 2026-06-08; observability/logging plan archived there 2026-06-08; task-lists 2026-06-07).
+> Completed-plan history → **`docs/PLAN-ARCHIVE.md`** (newest first). Everything previously listed here under `_Prior:_` now lives there.
 
 ## Project
 
@@ -162,31 +125,25 @@ The `addItems` batch action (`src/app/lists/[id]/actions.ts`) is used exclusivel
 - **Network error** — retries indefinitely (heals when the radio returns).
 - **Everything else** — retried with backoff, then **dead-lettered** (status `'dead'`, excluded from the pending set) after `MAX_ATTEMPTS`, unblocking the queue. Logged `outbox.entry_dead`.
 
-This was added after a real incident: an `item.insert` stuck on a stale action id retried ~28 times over 26h and blocked the user's whole outbox (see `outbox.dispatch_failed` logs, 2026-06-28/29).
+Added after a real incident (2026-06-28/29): an `item.insert` stuck on a stale action id retried ~28 times over 26h and blocked the whole outbox.
 
 ### Task lists (`lists.kind`)
 
-A list is either a grocery `'shopping'` list (default) or a `'task'` list — the `kind` column on `lists` (migration `0025`). Task lists are a shared checklist for chores, with optional per-task **assignee** (`items.assignee_id`) and **due date** (`items.due_date`), both added in `0025`. They reuse the entire sync substrate (outbox mutations, `useListItemsSync`, `reconcileList`, realtime, Dexie) unchanged — only the *presentation* differs.
+A list's `kind` (migration `0025`) is `'shopping'` (default) or `'task'` — a shared chore checklist with optional per-task `assignee_id` + `due_date`. Task lists reuse the entire sync substrate unchanged — only presentation differs. **Extend via a page-level branch, not in-component flags:** `page.tsx` renders a separate `TaskList` tree for `kind === 'task'`; don't thread `kind` conditionals through `ItemList`/its hooks.
 
-- **Page-level branch, not in-component flags.** `src/app/lists/[id]/page.tsx` renders a separate, simpler `TaskList` tree for `kind === 'task'` (no `StoreModeProvider`/`EditModeProvider`, no AI/measurement/category/store-mode). Don't thread `kind` conditionals through `ItemList` and its hooks. Task UI lives in `TaskList.tsx` / `TaskRow.tsx` / `SortableTaskRow.tsx` / `TaskEditModal.tsx` / `TaskAvatar.tsx`; pure date logic (pill bucket + due sort + date sections) is in `src/lib/taskView.ts` (`dueStatus`, `formatDueLabel`, `sortTasks`, `sortTasksManual`, `taskDateSections`).
-- **Two sort views (2026-06-10).** A segmented switcher toggles `TaskList` between **Manual** (`sortTasksManual` = `sort_order` then `created_at`; drag-to-reorder via dnd-kit `SortableTaskRow` → `muReorderItem`, reusing shopping's `computeNewSortOrder`) and **By date** (`taskDateSections` → Overdue/Today/Tomorrow/weekday/Later/No date, colored header bars). The choice is per-user-per-list, persisted on `list_views.task_sort` (migration `0028`, read in `page.tsx`, written by `setTaskSort` in `actions/views.ts`). Completing a task reuses the shopping celebration (`useItemCelebrations` + `GhostOverlay` + `FireworkCanvas`, fireworks only on decorative themes), gated on `reduce-motion`. Design exploration: `docs/task-sort-exploration.html`.
 - **GOTCHA — new item columns need the `itemUpdate.ts` whitelist.** Any column the outbox forwards through `item.update` must be added to `ItemUpdatePatch` + `buildItemUpdatePayload` in `src/lib/itemUpdate.ts`, or the local Dexie write succeeds while the server write silently no-ops. `assignee_id`/`due_date` are already there; future task fields must follow suit. (Reads need nothing — `reconcileList` does `select('*')` + raw `put`.)
-- **No Gemini / no history for tasks.** Task adds call `muAddItem(item, { skipCategorize: true })`, which sets `skip_categorize` on the `item.insert` outbox payload so the dispatcher's background `categorizeItem` fallback (`engine.ts`) is skipped. Server-side, the `bump_item_history` trigger is guarded (migration `0026`) to skip task lists, so task names don't leak into the grocery autocomplete. Both gates are because tasks aren't groceries.
-- **Assignees** come from the `get_list_people(p_list_id)` RPC (owner ∪ members with emails; the existing `get_list_members` excludes the owner), fetched server-side in `page.tsx` and passed to `TaskList`.
-- **`/lists` (Mixed·A):** both kinds share one recency-sorted stream; `ListsView`'s `ListRow` renders a 🛒/✓ `KindIcon` + `SHOP`/`TASK` `KindPill` from `list.kind`. `kind` rides along on `LocalListCatalog` (seeded in `page.tsx`, refreshed by `reconcileListsOverview`). The NEW marker / `last_add_*` logic is kind-agnostic and unchanged.
-- Copy/move is shopping-only: `page.tsx` filters the `availableLists` passed to `ItemList` to `kind !== 'task'`.
+- **Tasks skip Gemini + autocomplete:** adds use `muAddItem(item, { skipCategorize: true })` (→ `skip_categorize` on the insert payload) and the `bump_item_history` trigger is guarded (migration `0026`) to skip task lists — don't regress either. Copy/move is shopping-only (`page.tsx` filters `availableLists` to `kind !== 'task'`).
+
+Full detail (sort views, file inventory, `get_list_people` RPC, `/lists` Mixed·A rendering) → **`docs/architecture/task-lists.md`**.
 
 ### Scrapbook (notes) lists (`kind === 'notes'`)
 
-The third `lists.kind` value (migration `0029`), UI name **"Scrapbook"**: a freeform feed of saved scraps — typed notes, voice memos, and links. Like task lists it reuses the whole sync substrate unchanged and is a **page-level branch** in `page.tsx` (no store/edit-mode, no AI/category/measurement, no assignees/due dates).
+The third `lists.kind` value `'notes'` (migration `0029`), UI name **"Scrapbook"**: a freeform newest-first feed of saved scraps — typed notes, voice memos, and links. Like task lists it reuses the whole sync substrate unchanged and is a **page-level branch** in `page.tsx`. Two notes-only columns (0029): `url` (the link) and `note` (a longer body); `name` is the title, `picture_url` the unfurled/photo image.
 
-- **Two new `items` columns (0029):** `url` (the link) and `note` (a longer typed/spoken body). `name` is the title/short label. `picture_url` (existing) holds the link's unfurled preview image or a photo. A scrap is a link (`url` set) or a plain note; both render as a `NoteCard`.
-- **UI:** `NoteList.tsx` (feed + add textarea + voice button), `NoteCard.tsx` (title/link + body + host pill + thumbnail), `NoteEditModal.tsx` (title/body/url/remove-image), `NoteSpeechModal.tsx` (record → `transcribeNote` → editable transcript → add). Pure helpers in `src/lib/notesView.ts` (`isUrl`, `splitNoteText`, `noteHostname`). Sorted newest-first (no reorder, no done-section).
-- **GOTCHA enforced:** `url`/`note` are in the `ItemUpdatePatch` whitelist (`itemUpdate.ts`) and the `muAddItem` `item.insert` payload (conditional spread — shopping/task payloads byte-unchanged) and the `addItem` dispatch args. Same rule as task fields — miss any and the server write silently no-ops.
-- **Link unfurling:** adding a bare URL calls the `unfurlLink` server action (fetch + OpenGraph `og:title`/`og:description`/`og:image`, `<title>` fallback) → fills `name`/`note`/`picture_url`. Best-effort: skipped offline or on failure, the raw link is still saved.
-- **No Gemini-categorize / no history:** notes adds use `muAddItem(item, { skipCategorize: true })`; the `bump_item_history` guard (0029) skips `'notes'` too, so scraps stay out of grocery autocomplete.
-- **`addItem` merge gate:** the name-merge + cached-category fast path in `addItem` (`actions/items.ts`) now runs **only for `kind === 'shopping'`** (one cheap kind read) — notes (and tasks) must never dedupe by name, since titles can repeat or be empty.
-- **`/lists`:** `ListsView` renders a 📎 `NoteMarker` and a 📎 glyph in the nav loading overlay (`navGlyph`). `CreateListForm` offers a third "📎 Scrapbook" kind.
+- **GOTCHA enforced:** `url`/`note` must be in the `ItemUpdatePatch` whitelist (`itemUpdate.ts`), the `muAddItem` `item.insert` payload (conditional spread — shopping/task payloads byte-unchanged), and the `addItem` dispatch args. Same rule as task fields — miss any and the server write silently no-ops.
+- **`addItem` merge gate:** the name-merge + cached-category fast path in `addItem` (`actions/items.ts`) runs **only for `kind === 'shopping'`** (one cheap kind read) — notes (and tasks) must never dedupe by name, since titles can repeat or be empty.
+
+Full detail (UI components, link unfurling via `unfurlLink`, no-Gemini/no-history gate, `/lists` rendering) → **`docs/architecture/scrapbook.md`**.
 
 ### Optimistic UI + Realtime
 
@@ -210,7 +167,7 @@ Realtime subscribes unconditionally for every list — there is no `is_shared` g
 1. **At subscribe time + on `CHANNEL_ERROR`** — `applyRealtimeAuth()` does `getSession()` → `realtime.setAuth(token)` (reactive; tightens the post-reconnect race).
 2. **Event-driven** — `keepRealtimeAuthFresh()` (mounted once app-wide from `SyncProvider`) listens on `supabase.auth.onAuthStateChange` and pushes every fresh token to the socket on `TOKEN_REFRESHED`/`SIGNED_IN`/`INITIAL_SESSION`.
 
-Layer 2 is the durable fix for a **"dead page until manual refresh"** bug (2026-06-20): after a suspend past the ~1h JWT lifetime, the socket rejoined with the stale token and errored, but `getSession()` in the error callback often returned the still-stale token before the background refresh finished — so the channel stayed errored, with no later trigger to re-arm it, until a reload re-ran the middleware cookie refresh. Reacting to the auth client's own refresh event closes that gap. This relies on `createBrowserClient` being a **browser singleton** (one shared `auth` + `realtime` instance across all `createClient()` calls) — don't pass per-call options that defeat the singleton. Still pending on-device verification of the long-suspend resume scenario.
+Layer 2 fixes a **"dead page until manual refresh"** bug (2026-06-20): after a suspend past the ~1h JWT lifetime the socket rejoined stale and errored, and `getSession()` in the error callback often returned the still-stale token — so the channel stayed errored with nothing to re-arm it until a reload. Reacting to the auth client's own refresh event closes that gap. **Relies on `createBrowserClient` being a browser singleton** (one shared `auth` + `realtime` across all `createClient()` calls) — don't pass per-call options that defeat it. Still pending on-device verification of the long-suspend resume.
 
 ### Local-first item list (`/lists/[id]`)
 
@@ -219,7 +176,7 @@ Layer 2 is the durable fix for a **"dead page until manual refresh"** bug (2026-
 How freshness is kept:
 
 1. **`reconcileList(listId)`** runs on mount (from `useListItemsSync`) and on Realtime reconnect. It pulls server items and merges them into Dexie, respecting any pending outbox entries.
-2. **Cheap precheck** at the top of `reconcileList`: query `list_activity.last_activity` (one row), compare to local `sync_meta.last_sync_at`. If the local watermark is ≥ server activity, **skip the full items refetch entirely**. `last_activity` is a **monotonic** `timestamptz` column on `lists`, bumped by the `bump_list_activity_on_items` trigger (migration `0017`) on every items INSERT/UPDATE/**DELETE**. The `list_activity` view is now a thin wrapper that just exposes that column. Earlier the view was `max(updated_at) from items group by list_id`, which was non-monotonic under deletes and caused a sync bug where clearing shopped items on a shared list left stale rows in other users' Dexie cache. Caveat: `last_activity` is only bumped by items writes, not by edits to the `lists` row itself (e.g. renames). The per-list Realtime channel (`subscribeToList`) also only watches `items`, not `lists`. So a rename made while you're sitting on `/lists/[id]` won't update the header live — it propagates only when you next navigate to the list, since `page.tsx` re-fetches the list row fresh on every visit. Renames are rare enough that we accept this; if it becomes a problem, add `lists` to the per-list subscription.
+2. **Cheap precheck** at the top of `reconcileList`: query `list_activity.last_activity` (one row), compare to local `sync_meta.last_sync_at`. If the local watermark is ≥ server activity, **skip the full items refetch entirely**. `last_activity` is a **monotonic** `timestamptz` column on `lists`, bumped by the `bump_list_activity_on_items` trigger (migration `0017`) on every items INSERT/UPDATE/**DELETE**; the `list_activity` view is a thin wrapper over it. (It must stay monotonic — the earlier `max(updated_at)` view regressed under deletes and left stale rows in other users' Dexie cache.) **Caveat:** it's only bumped by *items* writes, and `subscribeToList` only watches `items` — so a `lists`-row edit like a rename won't update the header live; it propagates on next navigation (`page.tsx` re-fetches the list row every visit). Accepted as rare; add `lists` to the per-list subscription if it becomes a problem.
 3. **Realtime** keeps Dexie reactive while the user is on the page; reconnect triggers a reconcile so missed events get healed.
 
 The back-link uses a **DOM snapshot overlay** to prevent Next.js's React-tree teardown from causing a visible scroll jump: `BackLink.tsx` clones the `[data-route-root]` wrapper into a `position: fixed; top: -scrollY` overlay on `<body>`, hides the original via `visibility: hidden`, calls `window.history.back()`, and removes the clone after 250 ms. The clone is detached DOM (not React-managed), so it survives the popstate-driven unmount until cleanup. `page.tsx`'s outer wrapper carries the `data-route-root` attribute so the snapshot has a target — keep it there. There is no `loading.tsx` for this route: an earlier attempt at one introduced a scroll-reset bug when Next.js swapped the loading tree for the page tree, and removing it (combined with the local-first model above) was the fix.
@@ -239,23 +196,11 @@ The **screen-reveal animation** itself (`/lists` and `/lists/[id]`): `useRevealF
 
 **Writes** go through `src/app/settings/actions.ts` and call `revalidatePath('/', 'layout')` so the next render reflects the new preference without a reload.
 
-### Categories: a closed enum + Gemini auto-tagging
+### Categories + smart add-item input
 
-`src/lib/categories.ts` defines the 11 grocery categories (slugs + Swedish labels) as a `const` array — `frukt-gront`, `mejeri`, `kott-fisk`, `brod`, `frys`, `skafferi`, `drycker`, `snacks`, `hushall`, `hygien`, `ovrigt`. The slug type `CategorySlug` and the validator `isValidCategorySlug()` are the single source of truth — never accept a free-form category string from clients without running it through the validator.
+`src/lib/categories.ts` defines the 11 grocery categories (slugs + Swedish labels) as a `const` array. The slug type `CategorySlug` and the validator `isValidCategorySlug()` are the single source of truth — **never accept a free-form category string from clients without running it through the validator.**
 
-How items get categorised:
-1. **Cached fast path**: when adding an item, look it up in `user_item_history.category` (case-insensitive) and use that.
-2. **Gemini fallback**: if no cached category, fire `categorizeItem()` server action in the background after the optimistic insert; it calls Gemini and writes the result to both `items.category` and `user_item_history.category`. UI updates via the realtime echo or the awaited result.
-3. **Recipe import**: Gemini returns categories in the same call that extracts ingredients (no extra round-trip). These bypass the per-item categorize call.
-4. **Manual override**: the edit modal has a category dropdown; `setItemCategory()` writes both `items.category` and `user_item_history.category` so future adds inherit the user's choice.
-
-### Smart add-item input
-
-The add-item textarea (`ItemList.tsx`) auto-grows and supports three modes:
-
-1. **Single plain name** (no digits, no separators) → instant optimistic local insert, then background Gemini categorization.
-2. **Multi-segment, no digits** (newline or comma separators, no quantities) → deterministic split via `splitPlainItems()` → `addItems()`.
-3. **Anything with digits or ambiguous quantity** → `extractAddItems()` server action calls Gemini, which returns `{ name, quantity, measurement, category }` per item → `addItems()` with per-item quantities.
+How items get categorised (cached `user_item_history.category` fast path → background `categorizeItem()` Gemini fallback → recipe-import inline → manual override via `setItemCategory()`) and the three add-item input modes (plain single / deterministic multi-split / digit-bearing `extractAddItems` Gemini) → **`docs/architecture/categories-and-add.md`**.
 
 ### Feature subsystems (detailed docs)
 
@@ -265,6 +210,9 @@ These are documented in full under `docs/architecture/` — read the file when w
 - **PWA installability** (`manifest.ts`, `sw.js`, the two WebAPK gotchas) → `docs/architecture/pwa.md`
 - **Android share-to-Shoplist (Web Share Target)** (`/share` route, `pending_imports`, `ShareImportClient`) → `docs/architecture/share-target.md`
 - **Measurement system** (`src/lib/measurement.ts` — free-form text, `parseMeasurement` / `tryCombine`) → `docs/architecture/measurement.md`
+- **Task lists** (`kind === 'task'` — `TaskList` tree, sort views, assignees/due dates) → `docs/architecture/task-lists.md`
+- **Scrapbook (notes) lists** (`kind === 'notes'` — `NoteList`, link unfurling) → `docs/architecture/scrapbook.md`
+- **Categories + smart add-item** (11-category enum, categorise flow, add-input modes) → `docs/architecture/categories-and-add.md`
 
 ### Edit mode (`EditModeContext.tsx`)
 
