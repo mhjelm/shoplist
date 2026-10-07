@@ -7,7 +7,7 @@ import type { LocalItem, OutboxEntry, SyncMeta } from '@/lib/db/types'
 let itemsStore: LocalItem[] = []
 let outboxStore: OutboxEntry[] = []
 let syncMeta: Record<string, SyncMeta> = {}
-let serverRows: Record<string, unknown>[] = []
+let serverRows: object[] = []
 let serverActivity: { last_activity: string } | null = null
 
 const conflictSpy = vi.fn()
@@ -83,6 +83,10 @@ function makeItem(overrides: Partial<LocalItem> & { id: string }): LocalItem {
     category: null,
     measurement: null,
     shared_group_id: null,
+    assignee_id: null,
+    due_date: null,
+    url: null,
+    note: null,
     ...overrides,
   }
 }

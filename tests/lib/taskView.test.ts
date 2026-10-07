@@ -20,6 +20,8 @@ function task(partial: Partial<Item>): Item {
     shared_group_id: null,
     assignee_id: partial.assignee_id ?? null,
     due_date: partial.due_date ?? null,
+    url: null,
+    note: null,
   }
 }
 

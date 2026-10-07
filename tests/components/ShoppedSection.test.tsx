@@ -35,6 +35,10 @@ function makeItem(id: string, name: string): Item {
     category: null,
     measurement: null,
     shared_group_id: null,
+    assignee_id: null,
+    due_date: null,
+    url: null,
+    note: null,
   }
 }
 

@@ -92,7 +92,7 @@ const mockRenameList = vi.mocked(renameList)
 // ---------------------------------------------------------------------------
 
 function mkList(id: string, ownerId = 'me', name = `List ${id}`): List {
-  return { id, name, owner_id: ownerId, created_at: '2024-01-01T00:00:00.000Z' }
+  return { id, name, owner_id: ownerId, created_at: '2024-01-01T00:00:00.000Z', kind: 'shopping' }
 }
 
 function mkItem(id: string, listId: string): LocalItem {
@@ -100,7 +100,7 @@ function mkItem(id: string, listId: string): LocalItem {
     id, list_id: listId, name: 'x', is_checked: false,
     created_at: '', updated_at: '', picture_url: null, sort_order: null,
     quantity: 1, category: null, measurement: null, added_by: 'me',
-    shared_group_id: null,
+    shared_group_id: null, assignee_id: null, due_date: null, url: null, note: null,
   }
 }
 

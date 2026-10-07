@@ -7,7 +7,7 @@ const db = vi.hoisted(() => ({
 }))
 
 const serverData = vi.hoisted(() => ({
-  rows: [] as Array<Record<string, unknown>> | null,
+  rows: [] as object[] | null,
   shouldThrow: false,
 }))
 
@@ -44,7 +44,7 @@ vi.mock('@/lib/db/local', () => ({
       where: (field: string) => ({
         equals: (val: string) => ({
           toArray: async () =>
-            db.items.filter(i => (i as Record<string, unknown>)[field] === val),
+            db.items.filter(i => (i as unknown as Record<string, unknown>)[field] === val),
         }),
       }),
       bulkDelete: async (ids: string[]) => {
@@ -79,6 +79,10 @@ function makeItem(id: string, listId: string): LocalItem {
     measurement: null,
     added_by: 'user-1',
     shared_group_id: null,
+    assignee_id: null,
+    due_date: null,
+    url: null,
+    note: null,
   }
 }
 

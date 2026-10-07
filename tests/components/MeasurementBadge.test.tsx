@@ -17,6 +17,10 @@ function makeItem(overrides: Partial<Item> = {}): Item {
     category: null,
     measurement: null,
     shared_group_id: null,
+    assignee_id: null,
+    due_date: null,
+    url: null,
+    note: null,
     ...overrides,
   }
 }

@@ -18,7 +18,7 @@ const mockCreateListAndOpen = vi.mocked(createListAndOpen)
 beforeEach(() => {
   vi.clearAllMocks()
   sync.isOffline = false
-  mockCreateListAndOpen.mockResolvedValue(undefined)
+  mockCreateListAndOpen.mockResolvedValue(undefined as never)
 })
 
 describe('CreateListForm', () => {

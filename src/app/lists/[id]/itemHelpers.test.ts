@@ -30,6 +30,10 @@ function makeItem(overrides: Partial<Item> = {}): Item {
     category: null,
     measurement: null,
     shared_group_id: null,
+    assignee_id: null,
+    due_date: null,
+    url: null,
+    note: null,
     ...overrides,
   }
 }
@@ -49,6 +53,10 @@ function makeLocalItem(overrides: Partial<LocalItem> = {}): LocalItem {
     category: null,
     measurement: null,
     shared_group_id: null,
+    assignee_id: null,
+    due_date: null,
+    url: null,
+    note: null,
     ...overrides,
   }
 }
@@ -167,7 +175,7 @@ describe('groupByCategory', () => {
   })
 
   it('puts items with unknown category slug into ovrigt', () => {
-    const items = [makeItem({ id: '1', category: 'okänd-kategori' })]
+    const items = [makeItem({ id: '1', category: 'okänd-kategori' as unknown as Item['category'] })]
     const groups = groupByCategory(items, DEFAULT_CATEGORY_ORDER)
     const ovrigt = groups.find(([cat]) => cat === 'ovrigt')
     expect(ovrigt?.[1]).toHaveLength(1)

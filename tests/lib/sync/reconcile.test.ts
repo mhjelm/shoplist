@@ -61,7 +61,7 @@ vi.mock('@/lib/db/local', () => ({
           filter: (fn: (e: OutboxEntry) => boolean) => ({
             toArray: async () =>
               db.outboxEntries
-                .filter(e => (e as Record<string, unknown>)[field] === val)
+                .filter(e => (e as unknown as Record<string, unknown>)[field] === val)
                 .filter(fn),
           }),
         }),
@@ -75,7 +75,7 @@ vi.mock('@/lib/db/local', () => ({
       where: (field: string) => ({
         equals: (val: string) => ({
           toArray: async () =>
-            db.localItems.filter(e => (e as Record<string, unknown>)[field] === val),
+            db.localItems.filter(e => (e as unknown as Record<string, unknown>)[field] === val),
         }),
       }),
       put: async (item: LocalItem) => {
@@ -140,6 +140,10 @@ function makeLocalItem(id: string, name: string): LocalItem {
     measurement: null,
     added_by: 'user-1',
     shared_group_id: null,
+    assignee_id: null,
+    due_date: null,
+    url: null,
+    note: null,
   }
 }
 

@@ -104,7 +104,7 @@ describe('ShareImportClient — items mode', () => {
   })
 
   it('confirm calls confirmShareImport with the existing list destination', async () => {
-    mockConfirm.mockResolvedValue(undefined as unknown as { error?: string })
+    mockConfirm.mockResolvedValue(undefined as never)
     renderClient()
     fireEvent.click(screen.getByText('Fest'))
     fireEvent.click(screen.getByText('Smör').closest('li')!) // deselect Smör
@@ -146,7 +146,7 @@ describe('ShareImportClient — items mode', () => {
     })
 
     it('confirm calls confirmShareImport with the new-list destination (always shopping)', async () => {
-      mockConfirm.mockResolvedValue(undefined as unknown as { error?: string })
+      mockConfirm.mockResolvedValue(undefined as never)
       renderClient()
       fireEvent.click(screen.getByText(/skapa ny lista/i))
       fireEvent.change(screen.getByPlaceholderText(/listnamn/i), { target: { value: '  Picnic  ' } })
@@ -175,7 +175,7 @@ describe('ShareImportClient — items mode', () => {
   })
 
   it('surfaces an error returned by confirmShareImport', async () => {
-    mockConfirm.mockResolvedValue({ error: 'Database is on fire' } as unknown as void)
+    mockConfirm.mockResolvedValue({ error: 'Database is on fire' })
     renderClient()
     fireEvent.click(screen.getByText('Veckohandling'))
     fireEvent.click(screen.getByRole('button', { name: /lägg till 2/i }))
@@ -183,7 +183,7 @@ describe('ShareImportClient — items mode', () => {
   })
 
   it('cancel calls cancelShareImport with just the import id', async () => {
-    mockCancel.mockResolvedValue(undefined as unknown as { error?: string })
+    mockCancel.mockResolvedValue(undefined as never)
     renderClient()
     fireEvent.click(screen.getByRole('button', { name: /avbryt/i }))
     await waitFor(() => expect(mockCancel).toHaveBeenCalledWith('imp-1'))
@@ -260,7 +260,7 @@ describe('ShareImportClient — link mode', () => {
     })
 
     it('imports the reviewed items (minus any deselected) into the chosen list', async () => {
-      mockConfirm.mockResolvedValue(undefined as unknown as { error?: string })
+      mockConfirm.mockResolvedValue(undefined as never)
       renderLink()
       fireEvent.click(screen.getByText('Veckohandling'))        // pick a shopping list
       fireEvent.click(screen.getByText('Smör'))                 // deselect one item
@@ -286,7 +286,7 @@ describe('ShareImportClient — link mode', () => {
   })
 
   it('create-new shopping list imports the reviewed items', async () => {
-    mockConfirm.mockResolvedValue(undefined as unknown as { error?: string })
+    mockConfirm.mockResolvedValue(undefined as never)
     renderLink({ lists: [] })
     fireEvent.change(screen.getByPlaceholderText(/listnamn/i), { target: { value: 'Recept' } })
     fireEvent.click(screen.getByRole('button', { name: /lägg till 2/i }))
@@ -300,7 +300,7 @@ describe('ShareImportClient — link mode', () => {
   })
 
   it('choosing a scrapbook hides the checklist and saves the link as a scrap', async () => {
-    mockConfirmLink.mockResolvedValue(undefined as unknown as { error?: string })
+    mockConfirmLink.mockResolvedValue(undefined as never)
     renderLink()
     fireEvent.click(screen.getByText('Min scrapbook'))
     // Checklist is irrelevant for a scrap, so it's hidden.
@@ -317,7 +317,7 @@ describe('ShareImportClient — link mode', () => {
   })
 
   it('create-new with the Scrap toggle saves a scrap', async () => {
-    mockConfirmLink.mockResolvedValue(undefined as unknown as { error?: string })
+    mockConfirmLink.mockResolvedValue(undefined as never)
     renderLink({ lists: [] })
     fireEvent.change(screen.getByPlaceholderText(/listnamn/i), { target: { value: 'Klipp' } })
     fireEvent.click(screen.getByRole('radio', { name: /scrap/i }))
@@ -343,7 +343,7 @@ describe('ShareImportClient — link mode', () => {
   })
 
   it('surfaces an error from the confirm action', async () => {
-    mockConfirm.mockResolvedValue({ error: 'Database is on fire' } as unknown as void)
+    mockConfirm.mockResolvedValue({ error: 'Database is on fire' })
     renderLink()
     fireEvent.click(screen.getByText('Veckohandling'))
     fireEvent.click(screen.getByRole('button', { name: /lägg till 2/i }))
@@ -351,7 +351,7 @@ describe('ShareImportClient — link mode', () => {
   })
 
   it('cancel calls cancelShareImport', async () => {
-    mockCancel.mockResolvedValue(undefined as unknown as { error?: string })
+    mockCancel.mockResolvedValue(undefined as never)
     renderLink()
     fireEvent.click(screen.getByRole('button', { name: /avbryt/i }))
     await waitFor(() => expect(mockCancel).toHaveBeenCalledWith('imp-2'))

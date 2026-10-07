@@ -21,7 +21,7 @@ function makeEntry(seq: number, overrides: Partial<OutboxEntry> = {}): OutboxEnt
 
 function createOutboxMock(entries: OutboxEntry[]) {
   const byField = (field: string, val: string) =>
-    entries.filter(e => (e as Record<string, unknown>)[field] === val)
+    entries.filter(e => (e as unknown as Record<string, unknown>)[field] === val)
 
   return {
     where: (field: string) => ({
@@ -33,14 +33,14 @@ function createOutboxMock(entries: OutboxEntry[]) {
       anyOf: (vals: string[]) => ({
         sortBy: vi.fn().mockImplementation(async (key: string) =>
           [...entries]
-            .filter(e => vals.includes((e as Record<string, unknown>)[field] as string))
+            .filter(e => vals.includes((e as unknown as Record<string, unknown>)[field] as string))
             .sort((a, b) =>
-              ((a as Record<string, unknown>)[key] as number ?? 0) -
-              ((b as Record<string, unknown>)[key] as number ?? 0)
+              ((a as unknown as Record<string, unknown>)[key] as number ?? 0) -
+              ((b as unknown as Record<string, unknown>)[key] as number ?? 0)
             )
         ),
         count: vi.fn().mockImplementation(async () =>
-          entries.filter(e => vals.includes((e as Record<string, unknown>)[field] as string)).length
+          entries.filter(e => vals.includes((e as unknown as Record<string, unknown>)[field] as string)).length
         ),
       }),
     }),

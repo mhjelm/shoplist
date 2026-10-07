@@ -47,7 +47,7 @@ function makeTask(o: Partial<Item> = {}): Item {
     list_id: 'l1', added_by: 'u-anna', name: o.name ?? 'task', is_checked: o.is_checked ?? false,
     created_at: o.created_at ?? '2026-06-01T00:00:00Z', picture_url: null, sort_order: null,
     quantity: 1, category: null, measurement: null, shared_group_id: null,
-    assignee_id: o.assignee_id ?? null, due_date: o.due_date ?? null,
+    assignee_id: o.assignee_id ?? null, due_date: o.due_date ?? null, url: null, note: null,
   }
 }
 

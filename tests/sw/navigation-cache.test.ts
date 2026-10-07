@@ -22,7 +22,7 @@ interface SwHandle {
 function loadSW(): SwHandle {
   const listeners: Record<string, FetchListener> = {}
   const cachePut = vi.fn(async () => undefined)
-  const cacheMatch = vi.fn(async (): Promise<Response | null> => null)
+  const cacheMatch = vi.fn(async (_url: string): Promise<Response | null> => null)
   const fetchMock = vi.fn(async () => new Response('', { status: 200 }))
 
   const cacheOpen = vi.fn(async () => ({ put: cachePut, addAll: async () => undefined }))

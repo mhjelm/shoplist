@@ -25,6 +25,8 @@ function makeTask(overrides: Partial<Item> = {}): Item {
     shared_group_id: null,
     assignee_id: null,
     due_date: null,
+    url: null,
+    note: null,
     ...overrides,
   }
 }

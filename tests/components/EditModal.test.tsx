@@ -21,6 +21,10 @@ function makeItem(overrides: Partial<Item> = {}): Item {
     category: 'mejeri',
     measurement: '1 l',
     shared_group_id: null,
+    assignee_id: null,
+    due_date: null,
+    url: null,
+    note: null,
     ...overrides,
   }
 }
