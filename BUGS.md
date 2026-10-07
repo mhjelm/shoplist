@@ -43,8 +43,7 @@ Bug tracker for shoplist — the single source of truth for known **functional**
   filter unfurl rows by `ev` prefix in `--json` output instead.
 
 ### BUG-003 — Cross-owner writes on a shared list don't bump `last_activity` → silent sync miss
-- **Status:** fixed in code 2026-06-18 (migration `0033_fix_bump_list_activity_security_definer.sql`),
-  **awaiting migration apply** (see CLAUDE.md → Pending manual tasks).
+- **Status:** fixed 2026-06-18 (migration `0033_fix_bump_list_activity_security_definer.sql`, applied).
 - **Reported:** 2026-06-18
 - **Severity:** high (silent data-not-appearing on every shared list, not just scraps)
 - **Symptom:** sharing an open page from Chrome (Android) into a **shared Scrapbook list the user does

@@ -8,11 +8,9 @@ Two deliberately-unlinked, auth-free static pages live in `public/` — the mark
 
 ## Pending manual tasks
 
-- **Apply migration `0033_fix_bump_list_activity_security_definer.sql`** — restores `security definer` (+ `set search_path`) on `bump_list_activity()`, which migration `0019` silently dropped via `create or replace`. Without it, a non-owner member's items write on a shared list never bumps `lists.last_activity` (RLS-filtered to 0 rows), so the other party's reconcile precheck skips the refetch and the write never appears locally (BUG-003 — e.g. sharing a link as a scrap into a shared Scrapbook list you don't own). The migration also heals already-stale `last_activity` rows. Regression-guarded by `tests/db/triggerSecurity.test.ts`.
+None.
 
-- **Reinstall PWA on family member's phone** — code + manifest are correct; share target was lost device-side (WebAPK dropped). Uninstall + reinstall to get share target back. Confirm with `share.received` log entries.
-
-> Migrations `0025`–`0032` are all applied (history in `docs/PLAN-ARCHIVE.md` and the migration files themselves).
+> Migrations `0025`–`0033` are all applied (`0033` restored `security definer` on `bump_list_activity()` — BUG-003; regression-guarded by `tests/db/triggerSecurity.test.ts`) (history in `docs/PLAN-ARCHIVE.md` and the migration files themselves).
 
 > Signup is now invitation-only (done 2026-05-17). See `docs/how-to-add-new-user.html` for the invite flow and how to re-enable public signup if ever needed.
 
