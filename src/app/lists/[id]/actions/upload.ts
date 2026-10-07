@@ -14,7 +14,7 @@ export async function suggestItemName(formData: FormData) {
   const prompt = 'Identify the product in this image as a short shopping-list item name (1-4 words, e.g. "Bananer", "Flingor", "Toalettpapper"). Reply in Swedish. If unclear, use "unknown". Return JSON only: {"name": "..."}'
 
   try {
-    const parsed = (await callGeminiWithImage(prompt, base64, mimeType, { temperature: 0.1 })) as { name?: unknown }
+    const parsed = (await callGeminiWithImage(prompt, base64, mimeType)) as { name?: unknown }
     const name = typeof parsed.name === 'string' ? parsed.name.trim().replace(/^["']|["']$/g, '') : ''
     if (!name || name.toLowerCase() === 'unknown') return {}
     return { name }

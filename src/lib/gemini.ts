@@ -20,7 +20,8 @@ const AUDIO_MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash']
 const IMAGE_MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash']
 
 // 3.x uses thinkingConfig.thinkingLevel; 2.x uses thinkingConfig.thinkingBudget.
-// Derive per model so a chain can mix generations.
+// Derive per model so a chain can mix generations. Never send thinkingBudget to
+// a 3.x+ model: upcoming models reject it (400).
 function thinkingConfigFor(model: string): Record<string, unknown> {
   return model.startsWith('gemini-3') ? { thinkingLevel: 'low' } : { thinkingBudget: 0 }
 }
@@ -37,7 +38,6 @@ type GeminiPart = { text: string } | { inline_data: { mime_type: string; data: s
 async function callGeminiOnce(
   model: string,
   parts: GeminiPart[],
-  options: { temperature?: number },
 ): Promise<unknown> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured')
@@ -47,8 +47,9 @@ async function callGeminiOnce(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts }],
+      // No temperature/topP/topK: ignored since Gemini 3.6 Flash and rejected
+      // by upcoming models.
       generationConfig: {
-        temperature: options.temperature ?? 0.1,
         // Headroom so any thinking can't starve the JSON output.
         maxOutputTokens: 8192,
         thinkingConfig: thinkingConfigFor(model),
@@ -102,7 +103,6 @@ const RETRY_BACKOFFS_MS = [1200]
 async function callGeminiChain(
   models: string[],
   parts: GeminiPart[],
-  options: { temperature?: number },
 ): Promise<unknown> {
   let lastErr: unknown
   for (let m = 0; m < models.length; m++) {
@@ -110,7 +110,7 @@ async function callGeminiChain(
     const hasFallback = m < models.length - 1
     for (let attempt = 0; ; attempt++) {
       try {
-        return await callGeminiOnce(model, parts, options)
+        return await callGeminiOnce(model, parts)
       } catch (e) {
         lastErr = e
         const status = (e as { status?: number }).status
@@ -132,20 +132,18 @@ async function callGeminiChain(
   throw lastErr
 }
 
-export async function callGemini(prompt: string, options: { temperature?: number } = {}): Promise<unknown> {
-  return callGeminiChain(TEXT_MODELS, [{ text: prompt }], options)
+export async function callGemini(prompt: string): Promise<unknown> {
+  return callGeminiChain(TEXT_MODELS, [{ text: prompt }])
 }
 
 export async function callGeminiWithAudio(
   prompt: string,
   audioBase64: string,
   mimeType: string,
-  options: { temperature?: number } = {},
 ): Promise<unknown> {
   return callGeminiChain(
     AUDIO_MODELS,
     [{ inline_data: { mime_type: mimeType, data: audioBase64 } }, { text: prompt }],
-    options,
   )
 }
 
@@ -156,12 +154,10 @@ export async function callGeminiWithImage(
   prompt: string,
   imageBase64: string,
   mimeType: string,
-  options: { temperature?: number } = {},
 ): Promise<unknown> {
   return callGeminiChain(
     IMAGE_MODELS,
     [{ inline_data: { mime_type: mimeType, data: imageBase64 } }, { text: prompt }],
-    options,
   )
 }
 

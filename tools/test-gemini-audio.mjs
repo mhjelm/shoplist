@@ -97,12 +97,12 @@ const SHAPES = {
   // Proven image-import shape: snake_case, binary-first.
   'image-shape': (mime, b64, model) => ({
     contents: [{ parts: [{ inline_data: { mime_type: mime, data: b64 } }, { text: PROMPT }] }],
-    generationConfig: { temperature: 0, maxOutputTokens: 4000, thinkingConfig: thinkingFor(model), responseMimeType: 'application/json' },
+    generationConfig: { maxOutputTokens: 4000, thinkingConfig: thinkingFor(model), responseMimeType: 'application/json' },
   }),
   // Original failing shape: camelCase, text-first.
   'camel-shape': (mime, b64, model) => ({
     contents: [{ parts: [{ text: PROMPT }, { inlineData: { mimeType: mime, data: b64 } }] }],
-    generationConfig: { temperature: 0, maxOutputTokens: 4000, thinkingConfig: thinkingFor(model), responseMimeType: 'application/json' },
+    generationConfig: { maxOutputTokens: 4000, thinkingConfig: thinkingFor(model), responseMimeType: 'application/json' },
   }),
 }
 

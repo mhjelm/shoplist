@@ -151,8 +151,7 @@ export async function extractAddItems(text: string) {
       `${buildExtractionPrompt('this user-typed shopping list')}
 
 Input:
-${text}`,
-      { temperature: 0 }
+${text}`
     )) as { items?: unknown }
 
     return { items: normalizeExtractedItems(parsed) }
@@ -170,8 +169,7 @@ export async function extractItemsFromAudio(audioBase64: string, mimeType: strin
     const parsed = (await callGeminiWithAudio(
       buildExtractionPrompt('the spoken shopping list in the attached audio'),
       audioBase64,
-      mimeType,
-      { temperature: 0 }
+      mimeType
     )) as { items?: unknown }
 
     return { items: normalizeExtractedItems(parsed) }
@@ -209,8 +207,7 @@ export async function extractTasksFromAudio(audioBase64: string, mimeType: strin
     const parsed = (await callGeminiWithAudio(
       TASK_AUDIO_PROMPT,
       audioBase64,
-      mimeType,
-      { temperature: 0 }
+      mimeType
     )) as { tasks?: unknown }
 
     return { tasks: normalizeTaskNames(parsed) }
@@ -245,7 +242,7 @@ export async function extractTasksFromImage(formData: FormData) {
   const base64 = Buffer.from(await file.arrayBuffer()).toString('base64')
 
   try {
-    const parsed = (await callGeminiWithImage(TASK_IMAGE_PROMPT, base64, mimeType, { temperature: 0 })) as { tasks?: unknown }
+    const parsed = (await callGeminiWithImage(TASK_IMAGE_PROMPT, base64, mimeType)) as { tasks?: unknown }
     return { tasks: normalizeTaskNames(parsed) }
   } catch (e) {
     log.error('extract.tasks_image_failed', { error: e instanceof Error ? e.message : String(e) })
@@ -275,8 +272,7 @@ export async function transcribeNote(audioBase64: string, mimeType: string) {
     const parsed = (await callGeminiWithAudio(
       NOTE_AUDIO_PROMPT,
       audioBase64,
-      mimeType,
-      { temperature: 0 },
+      mimeType
     )) as { text?: unknown }
     const text = typeof parsed.text === 'string' ? parsed.text.trim() : ''
     return { text }
@@ -566,8 +562,7 @@ export async function extractRecipeItems(input: string) {
 
   try {
     const parsed = (await callGemini(
-      `Extract grocery shopping list items from this recipe or shopping list. Return only items someone needs to buy at a store. Skip common pantry staples like water, salt, pepper, basic cooking oil. Reply in Swedish. Keep names short (1-4 words each). Also classify each item into one of these category slugs: ${categoryList}.\n\nFor each item, include a "measurement" field with the quantity/unit phrase from the input. CRITICAL: copy the measurement VERBATIM from the input. Never modify, round, paraphrase, or invent numbers. If the input says "5 dl" the output must be "5 dl" — not "2 dl", not "3 dl". Preserve fractions (½, ¼), ranges (350-400), approximations (ca), parentheticals (à 500 g), and Swedish decimal commas (1,5) exactly as written. If the input lists the ingredient and its amount on separate lines, associate them. Set "measurement" to null when no amount is given in the input.\n\nExample input:\n${exampleInput}\n\nExample output:\n${exampleOutput}\n\nReturn JSON only in this exact shape: {"items": [{"name": "...", "category": "slug", "measurement": "..." or null}, ...]}\n\nInput:\n${fetched.text}`,
-      { temperature: 0 }
+      `Extract grocery shopping list items from this recipe or shopping list. Return only items someone needs to buy at a store. Skip common pantry staples like water, salt, pepper, basic cooking oil. Reply in Swedish. Keep names short (1-4 words each). Also classify each item into one of these category slugs: ${categoryList}.\n\nFor each item, include a "measurement" field with the quantity/unit phrase from the input. CRITICAL: copy the measurement VERBATIM from the input. Never modify, round, paraphrase, or invent numbers. If the input says "5 dl" the output must be "5 dl" — not "2 dl", not "3 dl". Preserve fractions (½, ¼), ranges (350-400), approximations (ca), parentheticals (à 500 g), and Swedish decimal commas (1,5) exactly as written. If the input lists the ingredient and its amount on separate lines, associate them. Set "measurement" to null when no amount is given in the input.\n\nExample input:\n${exampleInput}\n\nExample output:\n${exampleOutput}\n\nReturn JSON only in this exact shape: {"items": [{"name": "...", "category": "slug", "measurement": "..." or null}, ...]}\n\nInput:\n${fetched.text}`
     )) as { items?: unknown }
 
     if (!Array.isArray(parsed.items)) return { items: [] }
@@ -603,7 +598,7 @@ export async function extractListItemsFromImage(formData: FormData) {
   const prompt = `Extract grocery shopping list items from this image of a shopping list or recipe. Reply in Swedish. Keep names short (1-4 words each). Classify each item into one of these category slugs: ${categoryList}.\n\nFor each item, include a "measurement" field with the quantity/unit phrase if visible in the image. CRITICAL: copy the measurement VERBATIM from the image. Never modify, round, paraphrase, or invent numbers. Preserve fractions (½, ¼), ranges (350-400), approximations (ca), parentheticals (à 500 g), and Swedish decimal commas (1,5) exactly as shown. Set "measurement" to null when no amount is shown.\n\nSkip handwritten strikethroughs or crossed-out items. Skip header text, dates, or store names.\n\nReturn JSON only in this exact shape: {"items": [{"name": "...", "category": "slug", "measurement": "..." or null}, ...]}`
 
   try {
-    const parsed = (await callGeminiWithImage(prompt, base64, mimeType, { temperature: 0 })) as { items?: unknown }
+    const parsed = (await callGeminiWithImage(prompt, base64, mimeType)) as { items?: unknown }
     if (!Array.isArray(parsed.items)) return { items: [] }
 
     const items = (parsed.items as unknown[])
