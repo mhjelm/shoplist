@@ -28,7 +28,7 @@ Functional bugs are tracked in **`BUGS.md`** (single source of truth; e.g. BUG-0
 
 ## Active plan
 
-**Editorial theme + shop-mode progress bar** — plan at `PLAN.md`, **executed 2026-06-16**, migration `0032` applied 2026-06-16. Adds `'editorial'` theme (cream paper, Fraunces serif, hairline rows, dark store-edition shop mode) and a universal **shop-mode** progress bar (N/N picked up — store mode only; the earlier browse-view stats line was removed 2026-06-17). Theme CSS is scoped to `data-item-row` / `data-add-item` / `data-item-list` / `li[data-sl-color]` anchors so it can't leak into task/notes lists or modals. Editorial is **non-decorative** (not in `hasDecorativeTheme`); item names use serif font-family only — size still driven by `list_text_size`. **Dark "store edition" inverted shop mode** exists for both `editorial` and `dusk` (2026-06-17): store-mode rows must stay opaque, or the emerald swipe-reveal layer shows through (see globals.css notes). Committed `0a73f45` + follow-ups.
+None.
 
 > Completed-plan history → **`docs/PLAN-ARCHIVE.md`** (newest first). Everything previously listed here under `_Prior:_` now lives there.
 
