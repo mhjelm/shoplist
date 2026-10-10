@@ -4,20 +4,20 @@ import { log } from './log'
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 // Text/recipe/categorize calls. flash-lite is cheap and handles these fine;
-// gemini-3.5-flash is the overload backstop. Tried in order.
-const TEXT_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash']
+// gemini-3.6-flash is the overload backstop. Tried in order.
+const TEXT_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.6-flash']
 
 // Audio (speech-to-list) calls. Verified via tools/test-gemini-audio.mjs:
-// gemini-3.5-flash returns 200 on inline audio; gemini-3.1-flash-lite returns
+// gemini-3.6-flash (and 3.5 before it) returns 200 on inline audio; gemini-3.1-flash-lite returns
 // 500 INTERNAL (can't do inline audio); the 2.5 models work but are frequently
-// 503-overloaded. So 3.5-flash is the audio primary, 2.5-flash the fallback.
-const AUDIO_MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash']
+// 503-overloaded. So 3.6-flash is the audio primary, 2.5-flash the fallback.
+const AUDIO_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash']
 
 // Image (picture-import / item-naming) calls. Same story as audio: 2.5-flash is
 // frequently 503-overloaded (it was the sole, un-failed-over model behind the
-// image extractors and caused hard failures), so 3.5-flash is primary with
+// image extractors and caused hard failures), so 3.6-flash is primary with
 // 2.5-flash as the overload fallback.
-const IMAGE_MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash']
+const IMAGE_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash']
 
 // 3.x uses thinkingConfig.thinkingLevel; 2.x uses thinkingConfig.thinkingBudget.
 // Derive per model so a chain can mix generations. Never send thinkingBudget to

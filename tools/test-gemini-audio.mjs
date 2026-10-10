@@ -88,7 +88,7 @@ function buildSamples() {
 }
 
 // --- matrix ---------------------------------------------------------------
-const MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.5-flash']
+const MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-3.6-flash']
 const PROMPT = 'Transcribe any spoken items in the attached audio and return JSON {"items":[{"name":"..."}]}. If there is no speech, return {"items":[]}. JSON only.'
 
 const thinkingFor = model => (model.startsWith('gemini-3') ? { thinkingLevel: 'low' } : { thinkingBudget: 0 })
