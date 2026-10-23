@@ -33,10 +33,13 @@ export function ShoppedSection({
         {!storeMode && (
           <button
             onClick={onClearShopped}
-            className="text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 transition-colors text-lg leading-none"
+            className="inline-flex items-center gap-1.5 min-h-9 px-3 -my-1 rounded-full border border-gray-300 dark:border-gray-600 text-sm font-medium leading-none text-gray-600 dark:text-gray-300 hover:text-red-500 hover:border-red-400 active:text-red-500 active:border-red-400 transition-colors"
             aria-label="Clear shopped items"
           >
-            ×
+            <svg aria-hidden="true" viewBox="0 0 12 12" className="w-3 h-3 shrink-0 -translate-y-[1.5px]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
+              <path d="M2 2l8 8M10 2l-8 8" />
+            </svg>
+            <span>Clear</span>
           </button>
         )}
       </div>
